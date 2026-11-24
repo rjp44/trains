@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f4f3ed" />
+    <title>Hemel Hempstead · Traintimes</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="brandbar">
+      <div class="wrap mast">
+        <div class="wordmark">
+          <span class="railmark" aria-hidden="true"><i></i><i></i><i></i></span>Traintimes
+        </div>
+        <span class="mast-meta">West Coast Main Line <b>/</b> South</span>
+      </div>
+    </header>
+    <main class="wrap">
+      <div class="hero">
+        <div>
+          <p class="kicker">West Coast South</p>
+          <h1>Hemel Hempstead<span class="crs">HML</span></h1>
+          <p class="subtitle" id="extent">Apsley to Berkhamsted <span>·</span> Four running lines</p>
+        </div>
+        <div class="modebox">
+          <div class="modes" aria-label="Data source">
+            <button id="live" aria-pressed="true">Live feed</button
+            ><button id="replay" aria-pressed="false">Recorded replay</button>
+          </div>
+          <div class="source-status" role="status">
+            <i id="indicator"></i><b id="status">Connecting</b><time id="asof"></time>
+          </div>
+        </div>
+      </div>
+      <section class="panel" aria-labelledby="diagram-title">
+        <div class="panelhead">
+          <div>
+            <h2 id="diagram-title">Track diagram</h2>
+            <span class="panel-sub"><span id="areas">R1 / WJ / WS</span></span>
+          </div>
+          <div class="zoom">
+            <button id="sector">15-mile view</button><button id="junction">Watford Junction</button
+            ><button id="zoomout" aria-label="Zoom out">−</button><button id="home">Centre on Hemel</button
+            ><button id="zoomin" aria-label="Zoom in">+</button>
+          </div>
+          <div class="diagram-tools">
+            <button
+              id="diagram-theme"
+              class="icon-control"
+              type="button"
+              aria-label="Switch to light diagram"
+              title="Switch to light diagram"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <g class="sun">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+                </g>
+                <path class="moon" d="M20.5 13.1A8.6 8.6 0 0 1 10.9 3.5a8.6 8.6 0 1 0 9.6 9.6Z" />
+              </svg>
+            </button>
+            <a
+              id="diagram-view"
+              class="icon-control"
+              href="?display=diagram"
+              aria-label="Open diagram-only view"
+              title="Open diagram-only view"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path class="expand" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" />
+                <path class="collapse" d="M4 9h5V4m6 0v5h5M9 20v-5H4m16 0h-5v5" />
+              </svg>
+            </a>
+          </div>
+        </div>
+        <div id="drawing">
+          <svg
+            id="map"
+            viewBox="0 0 1140 368"
+            aria-label="Interactive WCML, Watford DC and Abbey line track diagram. Select a station to zoom, or a train or signal for details."
+          ></svg>
+          <dialog id="train-popout" aria-labelledby="popout-title">
+            <header>
+              <h2 id="popout-title">Train details</h2>
+              <button id="close-train" aria-label="Close train details" autofocus>×</button>
+            </header>
+            <div id="train-content"></div>
+          </dialog>
+        </div>
+        <div class="branch-note" id="branch-status" hidden></div>
+        <div class="legend">
+          <span><i class="key train"></i>Train headcode</span><span><i class="key on"></i>Signal on</span
+          ><span><i class="key off"></i>Signal off</span><span><i class="key unknown"></i>Unknown</span
+          ><small id="diagram-hint">Berth spacing · Tap a train or signal</small>
+          <small id="signal-readout" role="status" hidden></small>
+        </div>
+      </section>
+      <div id="replaybar" hidden>
+        <select id="sample" aria-label="Recording">
+          <option value="/data/replay.json">Default recording</option>
+          <option value="/data/watford-replay.json">Watford branches</option>
+        </select>
+        <button id="run">Pause</button><label for="scrub">Replay position</label
+        ><input id="scrub" type="range" min="0" step="1000" value="0" /><span id="elapsed"></span
+        ><select id="speed" aria-label="Replay speed">
+          <option value="1">1×</option>
+          <option value="4">4×</option>
+          <option value="12">12×</option>
+        </select>
+      </div>
+      <p id="notice" role="status"></p>
+      <div class="lower">
+        <section class="side">
+          <div class="sectionhead">
+            <h2 id="inspect-title">Signal details</h2>
+            <span id="count" class="mini"></span>
+          </div>
+          <div id="inspection"></div>
+          <div id="trains"></div>
+        </section>
+        <section class="side">
+          <div class="sectionhead">
+            <h2>Recent changes</h2>
+            <span class="mini">London time</span>
+          </div>
+          <ol id="events"></ol>
+        </section>
+      </div>
+      <footer>
+        <span
+          >Network Rail data via <a href="https://signalmaps.co.uk/about/">Signal Maps</a>. Abbey station
+          reports via <a href="https://railinfo.uk/developers">railinfo</a>. Contains public sector
+          information licensed under the
+          <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/">OGL v3.0</a
+          >.</span
+        ><span
+          ><a href="https://github.com/Shwam3/EASMData">Signal mappings</a> ·
+          <a href="/data/EASM-LICENSE.txt">GPLv3</a></span
+        >
+      </footer>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

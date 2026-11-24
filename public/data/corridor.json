@@ -1,0 +1,1756 @@
+{
+  "stations": [
+    {
+      "name": "Harrow & Wealdstone",
+      "code": "HRW",
+      "mile": -13.1125
+    },
+    {
+      "name": "Bushey",
+      "code": "BSH",
+      "mile": -8.5
+    },
+    {
+      "name": "Watford Junction",
+      "code": "WFJ",
+      "mile": -7.0625
+    },
+    {
+      "name": "Kings Langley",
+      "code": "KGL",
+      "mile": -3.5625
+    },
+    {
+      "name": "Apsley",
+      "code": "APS",
+      "mile": -1.4125
+    },
+    {
+      "name": "Hemel Hempstead",
+      "code": "HML",
+      "mile": 0.0
+    },
+    {
+      "name": "Berkhamsted",
+      "code": "BKM",
+      "mile": 3.45
+    },
+    {
+      "name": "Tring",
+      "code": "TRI",
+      "mile": 7.1375
+    },
+    {
+      "name": "Cheddington",
+      "code": "CED",
+      "mile": 11.6125
+    }
+  ],
+  "tracks": [
+    {
+      "id": "DF",
+      "name": "Down fast",
+      "platform": 1,
+      "direction": 1,
+      "berths": [
+        {
+          "id": "WJ0143",
+          "mile": -14.578,
+          "signal": "WM143",
+          "bit": "WJ11:4"
+        },
+        {
+          "id": "WJ0145",
+          "mile": -13.815,
+          "signal": "WM145",
+          "bit": "WJ11:6"
+        },
+        {
+          "id": "WJ0147",
+          "mile": -13.134,
+          "signal": "WM147",
+          "bit": "WJ11:7"
+        },
+        {
+          "id": "WJ0149",
+          "mile": -11.7,
+          "signal": "WM149",
+          "bit": "WJ12:1"
+        },
+        {
+          "id": "WJ0151",
+          "mile": -10.979,
+          "signal": "WM151",
+          "bit": "WJ12:2"
+        },
+        {
+          "id": "WJ0153",
+          "mile": -10.378,
+          "signal": "WM153",
+          "bit": "WJ12:3"
+        },
+        {
+          "id": "WJ0157",
+          "mile": -9.897,
+          "signal": "WM157",
+          "bit": "WJ12:5"
+        },
+        {
+          "id": "WJ0159",
+          "mile": -9.176,
+          "signal": "WM159",
+          "bit": "WJ14:5"
+        },
+        {
+          "id": "WJ0161",
+          "mile": -8.482,
+          "signal": "WM161",
+          "bit": "WJ15:1"
+        },
+        {
+          "id": "WJ0163",
+          "mile": -8.097,
+          "signal": "WM163",
+          "bit": "WJ15:5"
+        },
+        {
+          "id": "WJ0165",
+          "mile": -7.664,
+          "signal": "WM165",
+          "bit": "WJ16:2"
+        },
+        {
+          "id": "WJ0526",
+          "mile": -7.231,
+          "signal": "WM526",
+          "bit": "WJ16:4",
+          "platform": "6"
+        },
+        {
+          "id": "WJ3113",
+          "mile": -7.01,
+          "signal": "WT3113",
+          "bit": "WJ17:2",
+          "platform": "6"
+        },
+        {
+          "id": "WJ3119",
+          "mile": -5.959,
+          "signal": "WT3119",
+          "bit": "WJ18:3"
+        },
+        {
+          "id": "WJ3121",
+          "mile": -5.434,
+          "signal": "WT3121",
+          "bit": "WJ18:5"
+        },
+        {
+          "id": "WJ3123",
+          "mile": -4.909,
+          "signal": "WT3123",
+          "bit": "WJ18:7"
+        },
+        {
+          "id": "WJ3125",
+          "mile": -4.068,
+          "signal": "WT3125",
+          "bit": "WJ1A:2"
+        },
+        {
+          "id": "WJ3129",
+          "mile": -3.531,
+          "signal": "WT3129",
+          "bit": "WJ1A:6"
+        },
+        {
+          "id": "WJ3131",
+          "mile": -2.692,
+          "signal": "WT3131",
+          "bit": "WJ1B:2"
+        },
+        {
+          "id": "R13133",
+          "mile": -2.021,
+          "signal": "WT3133",
+          "bit": "R103:1"
+        },
+        {
+          "id": "R13137",
+          "signal": "WT3137",
+          "bit": "R103:3",
+          "pilot": true,
+          "mile": -1.413
+        },
+        {
+          "id": "R13139",
+          "signal": "WT3139",
+          "bit": "R103:5",
+          "pilot": true,
+          "mile": -0.706
+        },
+        {
+          "id": "R13143",
+          "signal": "WT3143",
+          "bit": "R103:7",
+          "pilot": true,
+          "mile": 0.0
+        },
+        {
+          "id": "R13145",
+          "signal": "WT3145",
+          "bit": "R111:1",
+          "pilot": true,
+          "mile": 0.802
+        },
+        {
+          "id": "R13149",
+          "signal": "WT3149",
+          "bit": "R111:2",
+          "pilot": true,
+          "mile": 1.484
+        },
+        {
+          "id": "R13151",
+          "signal": "WT3151",
+          "bit": "R111:3",
+          "pilot": true,
+          "mile": 2.126
+        },
+        {
+          "id": "R13153",
+          "signal": "WT3153",
+          "bit": "R111:4",
+          "pilot": true,
+          "mile": 2.728
+        },
+        {
+          "id": "R13157",
+          "signal": "WT3157",
+          "bit": "R111:5",
+          "pilot": true,
+          "mile": 3.45
+        },
+        {
+          "id": "R13159",
+          "mile": 3.842,
+          "signal": "WT3159",
+          "bit": "R111:6"
+        },
+        {
+          "id": "R13161",
+          "mile": 4.413,
+          "signal": "WT3161",
+          "bit": "R111:7"
+        },
+        {
+          "id": "R13165",
+          "mile": 5.098,
+          "signal": "WT3165",
+          "bit": "R111:8"
+        },
+        {
+          "id": "R13167",
+          "mile": 5.554,
+          "signal": "WT3167",
+          "bit": "R12D:1"
+        },
+        {
+          "id": "R13169",
+          "mile": 7.353,
+          "signal": "TK3169",
+          "bit": "R12D:2"
+        },
+        {
+          "id": "R13171",
+          "mile": 8.35,
+          "signal": "TK3171",
+          "bit": "R12D:4"
+        },
+        {
+          "id": "R13175",
+          "mile": 9.28,
+          "signal": "TK3175",
+          "bit": "R12D:5"
+        },
+        {
+          "id": "R13177",
+          "mile": 9.811,
+          "signal": "TK3177",
+          "bit": "R12D:6"
+        },
+        {
+          "id": "R13179",
+          "mile": 10.475,
+          "signal": "TK3179",
+          "bit": "R12D:7"
+        },
+        {
+          "id": "R13183",
+          "mile": 11.006,
+          "signal": "TK3183",
+          "bit": "R140:2"
+        },
+        {
+          "id": "R13187",
+          "mile": 11.538,
+          "signal": "TK3187",
+          "bit": "R140:4"
+        },
+        {
+          "id": "R13189",
+          "mile": 12.095,
+          "signal": "TK3189",
+          "bit": "R140:6"
+        },
+        {
+          "id": "R13191",
+          "mile": 13.54,
+          "signal": "TK3191",
+          "bit": "R140:8"
+        },
+        {
+          "id": "R13193",
+          "mile": 14.113,
+          "signal": "TK3193",
+          "bit": "R141:2"
+        },
+        {
+          "id": "R13197",
+          "mile": 14.972,
+          "signal": "TK3197",
+          "bit": "R141:4"
+        }
+      ]
+    },
+    {
+      "id": "UF",
+      "name": "Up fast",
+      "platform": 2,
+      "direction": -1,
+      "berths": [
+        {
+          "id": "WJ0138",
+          "mile": -14.686,
+          "signal": "WM138",
+          "bit": "WJ1E:8"
+        },
+        {
+          "id": "WJ0140",
+          "mile": -13.815,
+          "signal": "WM140",
+          "bit": "WJ11:1"
+        },
+        {
+          "id": "WJ0142",
+          "mile": -13.474,
+          "signal": "WM142",
+          "bit": "WJ11:3"
+        },
+        {
+          "id": "WJ0144",
+          "mile": -11.7,
+          "signal": "WM144",
+          "bit": "WJ11:5"
+        },
+        {
+          "id": "WJ0148",
+          "mile": -10.618,
+          "signal": "WM148",
+          "bit": "WJ11:8"
+        },
+        {
+          "id": "WJ0154",
+          "mile": -9.897,
+          "signal": "WM154",
+          "bit": "WJ12:4"
+        },
+        {
+          "id": "WJ0158",
+          "mile": -9.416,
+          "signal": "WM158",
+          "bit": "WJ12:6"
+        },
+        {
+          "id": "WJ0160",
+          "mile": -8.482,
+          "signal": "WM160",
+          "bit": "WJ14:7"
+        },
+        {
+          "id": "WJ0162",
+          "mile": -8.241,
+          "signal": "WM162",
+          "bit": "WJ15:3"
+        },
+        {
+          "id": "WJ1301",
+          "mile": -7.905
+        },
+        {
+          "id": "WJ0168",
+          "mile": -7.231,
+          "signal": "WM168",
+          "bit": "WJ16:5",
+          "platform": "7"
+        },
+        {
+          "id": "WJ9815",
+          "mile": -7.01,
+          "signal": "WT9815",
+          "bit": "WJ17:8",
+          "platform": "7"
+        },
+        {
+          "id": "WJ3120",
+          "mile": -5.959,
+          "signal": "WT3120",
+          "bit": "WJ18:2"
+        },
+        {
+          "id": "WJ3122",
+          "mile": -5.434,
+          "signal": "WT3122",
+          "bit": "WJ18:4"
+        },
+        {
+          "id": "WJ3124",
+          "mile": -4.909,
+          "signal": "WT3124",
+          "bit": "WJ18:6"
+        },
+        {
+          "id": "WJ3126",
+          "mile": -4.383,
+          "signal": "WT3126",
+          "bit": "WJ19:7"
+        },
+        {
+          "id": "WJ3130",
+          "mile": -3.531,
+          "signal": "WT3130",
+          "bit": "WJ1A:4"
+        },
+        {
+          "id": "WJ3132",
+          "mile": -2.692,
+          "signal": "WT3132",
+          "bit": "WJ1A:8"
+        },
+        {
+          "id": "R13134",
+          "mile": -2.021,
+          "signal": "WT3134",
+          "bit": "R103:2"
+        },
+        {
+          "id": "R13138",
+          "signal": "WT3138",
+          "bit": "R103:4",
+          "pilot": true,
+          "mile": -1.413
+        },
+        {
+          "id": "R13140",
+          "signal": "WT3140",
+          "bit": "R103:6",
+          "pilot": true,
+          "mile": -0.706
+        },
+        {
+          "id": "R13144",
+          "signal": "WT3144",
+          "bit": "R103:8",
+          "pilot": true,
+          "mile": 0.0
+        },
+        {
+          "id": "R13146",
+          "signal": "WT3146",
+          "bit": "R112:1",
+          "pilot": true,
+          "mile": 0.802
+        },
+        {
+          "id": "R13150",
+          "signal": "WT3150",
+          "bit": "R112:2",
+          "pilot": true,
+          "mile": 1.484
+        },
+        {
+          "id": "R13152",
+          "signal": "WT3152",
+          "bit": "R112:3",
+          "pilot": true,
+          "mile": 2.487
+        },
+        {
+          "id": "R13154",
+          "signal": "WT3154",
+          "bit": "R112:4",
+          "pilot": true,
+          "mile": 3.45
+        },
+        {
+          "id": "R13160",
+          "mile": 3.842,
+          "signal": "WT3160",
+          "bit": "R112:5"
+        },
+        {
+          "id": "R13162",
+          "mile": 4.755,
+          "signal": "WT3162",
+          "bit": "R112:6"
+        },
+        {
+          "id": "R13166",
+          "mile": 5.212,
+          "signal": "WT3166",
+          "bit": "R112:7"
+        },
+        {
+          "id": "R13168",
+          "mile": 5.896,
+          "signal": "WT3168",
+          "bit": "R12D:8"
+        },
+        {
+          "id": "R13170",
+          "mile": 6.866,
+          "signal": "WT3170",
+          "bit": "R12E:1"
+        },
+        {
+          "id": "R11429",
+          "mile": 7.685
+        },
+        {
+          "id": "R13172",
+          "mile": 8.881,
+          "signal": "TK3172",
+          "bit": "R12E:2"
+        },
+        {
+          "id": "R13176",
+          "mile": 9.412,
+          "signal": "TK3176",
+          "bit": "R12E:3"
+        },
+        {
+          "id": "R13178",
+          "mile": 10.342,
+          "signal": "TK3178",
+          "bit": "R12E:4"
+        },
+        {
+          "id": "R13180",
+          "mile": 10.874,
+          "signal": "TK3180",
+          "bit": "R140:1"
+        },
+        {
+          "id": "R13184",
+          "mile": 11.405,
+          "signal": "TK3184",
+          "bit": "R140:3"
+        },
+        {
+          "id": "R13188",
+          "mile": 11.986,
+          "signal": "TK3188",
+          "bit": "R140:5"
+        },
+        {
+          "id": "R13190",
+          "mile": 12.42,
+          "signal": "TK3190",
+          "bit": "R140:7"
+        },
+        {
+          "id": "R13192",
+          "mile": 13.97,
+          "signal": "TK3192",
+          "bit": "R141:1"
+        },
+        {
+          "id": "R13194",
+          "mile": 14.542,
+          "signal": "TK3194",
+          "bit": "R141:3"
+        }
+      ]
+    },
+    {
+      "id": "DS",
+      "name": "Down slow",
+      "platform": 3,
+      "direction": 1,
+      "berths": [
+        {
+          "id": "WJ0347",
+          "mile": -14.578,
+          "signal": "WM347",
+          "bit": "WJ13:2"
+        },
+        {
+          "id": "WJ0349",
+          "mile": -13.815,
+          "signal": "WM349",
+          "bit": "WJ13:4"
+        },
+        {
+          "id": "WJ0351",
+          "mile": -13.134,
+          "signal": "WM351",
+          "bit": "WJ13:6"
+        },
+        {
+          "id": "WJ0353",
+          "mile": -11.7,
+          "signal": "WM353",
+          "bit": "WJ13:7"
+        },
+        {
+          "id": "WJ0355",
+          "mile": -10.979,
+          "signal": "WM355",
+          "bit": "WJ13:8"
+        },
+        {
+          "id": "WJ0357",
+          "mile": -10.378,
+          "signal": "WM357",
+          "bit": "WJ14:2"
+        },
+        {
+          "id": "WJ0359",
+          "mile": -9.897,
+          "signal": "WM359",
+          "bit": "WJ14:3"
+        },
+        {
+          "id": "WJ0361",
+          "mile": -9.176,
+          "signal": "WM361",
+          "bit": "WJ14:6"
+        },
+        {
+          "id": "WJ0363",
+          "mile": -8.482,
+          "signal": "WM363",
+          "bit": "WJ15:2"
+        },
+        {
+          "id": "WJ0365",
+          "mile": -8.097
+        },
+        {
+          "id": "WJ0530",
+          "mile": -7.231,
+          "signal": "WM530",
+          "bit": "WJ16:7",
+          "platform": "8"
+        },
+        {
+          "id": "WJ5117",
+          "mile": -7.01,
+          "signal": "WT5117",
+          "bit": "WJ17:4",
+          "platform": "8"
+        },
+        {
+          "id": "WJ5121",
+          "mile": -5.959,
+          "signal": "WT5121",
+          "bit": "WJ19:1"
+        },
+        {
+          "id": "WJ5123",
+          "mile": -5.434,
+          "signal": "WT5123",
+          "bit": "WJ19:3"
+        },
+        {
+          "id": "WJ5125",
+          "mile": -4.909,
+          "signal": "WT5125",
+          "bit": "WJ19:5"
+        },
+        {
+          "id": "WJ5127",
+          "mile": -4.068,
+          "signal": "WT5127",
+          "bit": "WJ1A:3"
+        },
+        {
+          "id": "WJ5131",
+          "mile": -3.531,
+          "signal": "WT5131",
+          "bit": "WJ1A:7"
+        },
+        {
+          "id": "WJ5133",
+          "mile": -2.692,
+          "signal": "WT5133",
+          "bit": "WJ1B:3"
+        },
+        {
+          "id": "R15135",
+          "mile": -2.021,
+          "signal": "WT5135",
+          "bit": "R104:2"
+        },
+        {
+          "id": "R15139",
+          "signal": "WT5139",
+          "bit": "R104:4",
+          "pilot": true,
+          "mile": -1.413
+        },
+        {
+          "id": "R15141",
+          "signal": "WT5141",
+          "bit": "R104:6",
+          "pilot": true,
+          "mile": -0.706
+        },
+        {
+          "id": "R19880",
+          "mile": -0.298,
+          "signal": "WT9880",
+          "bit": "R105:2"
+        },
+        {
+          "id": "R15145",
+          "signal": "WT5145",
+          "bit": "R104:8",
+          "pilot": true,
+          "mile": 0.0
+        },
+        {
+          "id": "R15147",
+          "signal": "WT5147",
+          "bit": "R112:8",
+          "pilot": true,
+          "mile": 0.802
+        },
+        {
+          "id": "R15151",
+          "signal": "WT5151",
+          "bit": "R113:1",
+          "pilot": true,
+          "mile": 1.484
+        },
+        {
+          "id": "R15153",
+          "signal": "WT5153",
+          "bit": "R113:2",
+          "pilot": true,
+          "mile": 2.126
+        },
+        {
+          "id": "R15155",
+          "signal": "WT5155",
+          "bit": "R113:3",
+          "pilot": true,
+          "mile": 2.728
+        },
+        {
+          "id": "R15159",
+          "signal": "WT5159",
+          "bit": "R113:4",
+          "pilot": true,
+          "mile": 3.45
+        },
+        {
+          "id": "R15161",
+          "mile": 3.842,
+          "signal": "WT5161",
+          "bit": "R113:5"
+        },
+        {
+          "id": "R15163",
+          "mile": 4.413,
+          "signal": "WT5163",
+          "bit": "R113:6"
+        },
+        {
+          "id": "R15167",
+          "mile": 5.098,
+          "signal": "WT5167",
+          "bit": "R113:7"
+        },
+        {
+          "id": "R15169",
+          "mile": 5.554,
+          "signal": "WT5169",
+          "bit": "R12E:5"
+        },
+        {
+          "id": "R15173",
+          "mile": 7.353,
+          "signal": "TK5173",
+          "bit": "R12E:6"
+        },
+        {
+          "id": "R15175",
+          "mile": 8.35,
+          "signal": "TK5175",
+          "bit": "R12E:7"
+        },
+        {
+          "id": "R15177",
+          "mile": 9.28,
+          "signal": "TK5177",
+          "bit": "R12E:8"
+        },
+        {
+          "id": "R15179",
+          "mile": 9.811,
+          "signal": "TK5179",
+          "bit": "R12F:1"
+        },
+        {
+          "id": "R15181",
+          "mile": 10.475,
+          "signal": "TK5181",
+          "bit": "R12F:2"
+        },
+        {
+          "id": "R15185",
+          "mile": 11.006,
+          "signal": "TK5185",
+          "bit": "R141:7"
+        },
+        {
+          "id": "R15189",
+          "mile": 11.538,
+          "signal": "TK5189",
+          "bit": "R142:1"
+        },
+        {
+          "id": "R15191",
+          "mile": 12.095,
+          "signal": "TK5191",
+          "bit": "R142:4"
+        },
+        {
+          "id": "R15193",
+          "mile": 13.54,
+          "signal": "TK5193",
+          "bit": "R142:6"
+        },
+        {
+          "id": "R15195",
+          "mile": 14.113,
+          "signal": "TK5195",
+          "bit": "R142:8"
+        },
+        {
+          "id": "R15199",
+          "mile": 14.972,
+          "signal": "TK5199",
+          "bit": "R143:2"
+        }
+      ]
+    },
+    {
+      "id": "US",
+      "name": "Up slow",
+      "platform": 4,
+      "direction": -1,
+      "berths": [
+        {
+          "id": "WJ0342",
+          "mile": -14.686,
+          "signal": "WM342",
+          "bit": "WJ1C:1"
+        },
+        {
+          "id": "WJ0344",
+          "mile": -13.815,
+          "signal": "WM344",
+          "bit": "WJ12:7"
+        },
+        {
+          "id": "WJ0346",
+          "mile": -13.474,
+          "signal": "WM346",
+          "bit": "WJ13:1"
+        },
+        {
+          "id": "WJ0348",
+          "mile": -11.7,
+          "signal": "WM348",
+          "bit": "WJ13:3"
+        },
+        {
+          "id": "WJ0350",
+          "mile": -10.618,
+          "signal": "WM350",
+          "bit": "WJ13:5"
+        },
+        {
+          "id": "WJ0356",
+          "mile": -9.897,
+          "signal": "WM356",
+          "bit": "WJ14:1"
+        },
+        {
+          "id": "WJ0360",
+          "mile": -9.416,
+          "signal": "WM360",
+          "bit": "WJ14:4"
+        },
+        {
+          "id": "WJ0362",
+          "mile": -8.482,
+          "signal": "WM362",
+          "bit": "WJ14:8"
+        },
+        {
+          "id": "WJ0364",
+          "mile": -8.241,
+          "signal": "WM364",
+          "bit": "WJ15:4"
+        },
+        {
+          "id": "WJ1303",
+          "mile": -7.856
+        },
+        {
+          "id": "WJ0372",
+          "mile": -7.231,
+          "signal": "WM372",
+          "bit": "WJ16:8",
+          "platform": "9"
+        },
+        {
+          "id": "WJ9819",
+          "mile": -7.01,
+          "signal": "WT9819",
+          "bit": "WJ18:1",
+          "platform": "9"
+        },
+        {
+          "id": "WJ5122",
+          "mile": -5.959,
+          "signal": "WT5122",
+          "bit": "WJ18:8"
+        },
+        {
+          "id": "WJ5124",
+          "mile": -5.434,
+          "signal": "WT5124",
+          "bit": "WJ19:2"
+        },
+        {
+          "id": "WJ5126",
+          "mile": -4.909,
+          "signal": "WT5126",
+          "bit": "WJ19:4"
+        },
+        {
+          "id": "WJ5128",
+          "mile": -4.383,
+          "signal": "WT5128",
+          "bit": "WJ19:8"
+        },
+        {
+          "id": "WJ5132",
+          "mile": -3.531
+        },
+        {
+          "id": "WJ5134",
+          "mile": -2.692,
+          "signal": "WT5134",
+          "bit": "WJ1B:1"
+        },
+        {
+          "id": "R15136",
+          "mile": -2.021,
+          "signal": "WT5136",
+          "bit": "R104:3"
+        },
+        {
+          "id": "R15140",
+          "signal": "WT5140",
+          "bit": "R104:5",
+          "pilot": true,
+          "mile": -1.413
+        },
+        {
+          "id": "R15142",
+          "signal": "WT5142",
+          "bit": "R104:7",
+          "pilot": true,
+          "mile": -0.706
+        },
+        {
+          "id": "R15146",
+          "signal": "WT5146",
+          "bit": "R105:1",
+          "pilot": true,
+          "mile": 0.0
+        },
+        {
+          "id": "R15148",
+          "signal": "WT5148",
+          "bit": "R113:8",
+          "pilot": true,
+          "mile": 0.802
+        },
+        {
+          "id": "R15152",
+          "signal": "WT5152",
+          "bit": "R114:1",
+          "pilot": true,
+          "mile": 1.484
+        },
+        {
+          "id": "R15154",
+          "signal": "WT5154",
+          "bit": "R114:2",
+          "pilot": true,
+          "mile": 2.487
+        },
+        {
+          "id": "R15156",
+          "signal": "WT5156",
+          "bit": "R114:3",
+          "pilot": true,
+          "mile": 3.45
+        },
+        {
+          "id": "R15162",
+          "mile": 3.842,
+          "signal": "WT5162",
+          "bit": "R114:4"
+        },
+        {
+          "id": "R15164",
+          "mile": 4.755,
+          "signal": "WT5164",
+          "bit": "R114:5"
+        },
+        {
+          "id": "R15168",
+          "mile": 5.212,
+          "signal": "WT5168",
+          "bit": "R114:6"
+        },
+        {
+          "id": "R15170",
+          "mile": 5.896,
+          "signal": "WT5170",
+          "bit": "R12F:4"
+        },
+        {
+          "id": "R19874",
+          "mile": 6.866,
+          "signal": "WT9874",
+          "bit": "R130:2"
+        },
+        {
+          "id": "R19877",
+          "mile": 7.353
+        },
+        {
+          "id": "R15174",
+          "mile": 8.881,
+          "signal": "TK5174",
+          "bit": "R12F:7"
+        },
+        {
+          "id": "R15178",
+          "mile": 9.412,
+          "signal": "TK5178",
+          "bit": "R12F:8"
+        },
+        {
+          "id": "R15180",
+          "mile": 10.342,
+          "signal": "TK5180",
+          "bit": "R130:1"
+        },
+        {
+          "id": "R15182",
+          "mile": 10.874,
+          "signal": "TK5182",
+          "bit": "R141:6"
+        },
+        {
+          "id": "R15186",
+          "mile": 11.405,
+          "signal": "TK5186",
+          "bit": "R141:8"
+        },
+        {
+          "id": "R15190",
+          "mile": 11.986,
+          "signal": "TK5190",
+          "bit": "R142:3"
+        },
+        {
+          "id": "R15192",
+          "mile": 12.42,
+          "signal": "TK5192",
+          "bit": "R142:5"
+        },
+        {
+          "id": "R15194",
+          "mile": 13.97,
+          "signal": "TK5194",
+          "bit": "R142:7"
+        },
+        {
+          "id": "R15196",
+          "mile": 14.542,
+          "signal": "TK5196",
+          "bit": "R143:1"
+        }
+      ]
+    }
+  ],
+  "areas": [
+    "R1",
+    "WJ",
+    "WS"
+  ],
+  "branches": [
+    {
+      "id": "dc",
+      "name": "Watford DC lines",
+      "stations": [
+        {
+          "code": "WFJ",
+          "name": "Watford Junction",
+          "distance": 0.0
+        },
+        {
+          "code": "WFH",
+          "name": "Watford High Street",
+          "distance": 0.8875
+        },
+        {
+          "code": "BSH",
+          "name": "Bushey",
+          "distance": 1.675
+        },
+        {
+          "code": "CPK",
+          "name": "Carpenders Park",
+          "distance": 3.0125
+        },
+        {
+          "code": "HTE",
+          "name": "Hatch End",
+          "distance": 4.4125
+        },
+        {
+          "code": "HDL",
+          "name": "Headstone Lane",
+          "distance": 5.1625
+        },
+        {
+          "code": "HRW",
+          "name": "Harrow & Wealdstone",
+          "distance": 6.35
+        },
+        {
+          "code": "KNT",
+          "name": "Kenton",
+          "distance": 7.425
+        }
+      ],
+      "tracks": [
+        {
+          "id": "down",
+          "name": "DC towards Watford",
+          "berths": [
+            {
+              "id": "WS0051",
+              "distance": 7.425,
+              "signal": "WS51",
+              "bit": "WS12:8"
+            },
+            {
+              "id": "WS0053",
+              "distance": 7.0667,
+              "signal": "WS53",
+              "bit": "WS13:2"
+            },
+            {
+              "id": "WS0055",
+              "distance": 6.35,
+              "signal": "WS55",
+              "bit": "WS13:5"
+            },
+            {
+              "id": "WS0056",
+              "distance": 6.7083,
+              "signal": "WS56",
+              "bit": "WS13:6"
+            },
+            {
+              "id": "WS0057",
+              "distance": 5.4792,
+              "signal": "WS57",
+              "bit": "WS13:7"
+            },
+            {
+              "id": "WS0061",
+              "distance": 5.1625,
+              "signal": "WS61",
+              "bit": "WS14:1"
+            },
+            {
+              "id": "WS0063",
+              "distance": 4.4125,
+              "signal": "WS63",
+              "bit": "WS14:3"
+            },
+            {
+              "id": "WS0065",
+              "distance": 3.0125,
+              "signal": "WS65",
+              "bit": "WS14:5"
+            },
+            {
+              "id": "WS0067",
+              "distance": 1.675,
+              "signal": "WS67",
+              "bit": "WS14:7"
+            },
+            {
+              "id": "WS0071",
+              "distance": 1.2812,
+              "signal": "WS71",
+              "bit": "WS15:1"
+            },
+            {
+              "id": "WS0075",
+              "distance": 0.8875,
+              "signal": "WS75",
+              "bit": "WS15:4"
+            },
+            {
+              "id": "WS0077",
+              "distance": 0.6982,
+              "signal": "WS77",
+              "bit": "WS15:7"
+            }
+          ]
+        },
+        {
+          "id": "up",
+          "name": "DC towards Euston",
+          "berths": [
+            {
+              "id": "WS0052",
+              "distance": 7.425,
+              "signal": "WS52",
+              "bit": "WS13:1"
+            },
+            {
+              "id": "WS0054",
+              "distance": 6.7083,
+              "signal": "WS54",
+              "bit": "WS13:3"
+            },
+            {
+              "id": "WS0058",
+              "distance": 5.4792,
+              "signal": "WS58",
+              "bit": "WS13:8"
+            },
+            {
+              "id": "WS0062",
+              "distance": 5.1625,
+              "signal": "WS62",
+              "bit": "WS14:2"
+            },
+            {
+              "id": "WS0064",
+              "distance": 4.4125,
+              "signal": "WS64",
+              "bit": "WS14:4"
+            },
+            {
+              "id": "WS0066",
+              "distance": 3.0125,
+              "signal": "WS66",
+              "bit": "WS14:6"
+            },
+            {
+              "id": "WS0068",
+              "distance": 1.675,
+              "signal": "WS68",
+              "bit": "WS14:8"
+            },
+            {
+              "id": "WS0072",
+              "distance": 0.8875,
+              "signal": "WS72",
+              "bit": "WS15:2"
+            },
+            {
+              "id": "WS0074",
+              "distance": 0.5562,
+              "signal": "WS74",
+              "bit": "WS15:3"
+            },
+            {
+              "id": "WS0309",
+              "distance": 0.5562,
+              "location": "Watford DC approach",
+              "signal": "WS309",
+              "bit": "WS16:6"
+            },
+            {
+              "id": "WS0305",
+              "distance": 7.0667,
+              "signal": "WS305",
+              "bit": "WS16:3"
+            },
+            {
+              "id": "WS0306",
+              "distance": 6.35,
+              "signal": "WS306",
+              "bit": "WS16:4"
+            }
+          ]
+        },
+        {
+          "id": "harrow",
+          "name": "Harrow reversing siding",
+          "berths": [
+            {
+              "id": "WS0307",
+              "distance": 5.7958,
+              "signal": "WS307",
+              "bit": "WS16:5"
+            }
+          ]
+        },
+        {
+          "id": "terminal",
+          "name": "Watford DC platforms",
+          "berths": [
+            {
+              "id": "WSA076",
+              "distance": 0,
+              "platform": "1",
+              "signal": "WS76",
+              "bit": "WS15:5",
+              "offset": -0.09
+            },
+            {
+              "id": "WSB076",
+              "distance": 0,
+              "platform": "1",
+              "offset": 0.09
+            },
+            {
+              "id": "WSA078",
+              "distance": 0,
+              "platform": "2",
+              "signal": "WS78",
+              "bit": "WS15:8",
+              "offset": -0.09
+            },
+            {
+              "id": "WSB078",
+              "distance": 0,
+              "platform": "2",
+              "offset": 0.09
+            },
+            {
+              "id": "WSA082",
+              "distance": 0,
+              "platform": "3",
+              "signal": "WS82",
+              "bit": "WS16:1",
+              "offset": -0.09
+            },
+            {
+              "id": "WSB082",
+              "distance": 0,
+              "platform": "3",
+              "offset": 0.09
+            },
+            {
+              "id": "WSA084",
+              "distance": 0,
+              "platform": "4",
+              "signal": "WS84",
+              "bit": "WS16:2",
+              "offset": -0.09
+            },
+            {
+              "id": "WSB084",
+              "distance": 0,
+              "platform": "4",
+              "offset": 0.09
+            }
+          ]
+        }
+      ],
+      "limit": 7.9375
+    },
+    {
+      "id": "abbey",
+      "name": "Abbey line",
+      "stations": [
+        {
+          "code": "WFJ",
+          "name": "Watford Junction",
+          "distance": 0.0
+        },
+        {
+          "code": "WFN",
+          "name": "Watford North",
+          "distance": 0.75
+        },
+        {
+          "code": "GSN",
+          "name": "Garston",
+          "distance": 1.6375
+        },
+        {
+          "code": "BWO",
+          "name": "Bricket Wood",
+          "distance": 3.275
+        },
+        {
+          "code": "HWW",
+          "name": "How Wood",
+          "distance": 4.2625
+        },
+        {
+          "code": "PKT",
+          "name": "Park Street",
+          "distance": 4.8375
+        },
+        {
+          "code": "SAA",
+          "name": "St Albans Abbey",
+          "distance": 6.375
+        }
+      ],
+      "tracks": [
+        {
+          "id": "single",
+          "name": "Abbey line",
+          "berths": [
+            {
+              "id": "WJ0856",
+              "distance": 0,
+              "platform": "11",
+              "signal": "WM856",
+              "bit": "WJ17:1"
+            },
+            {
+              "id": "ABWFJ",
+              "kind": "station-report",
+              "station": "WFJ",
+              "location": "Watford Junction",
+              "distance": 0.0
+            },
+            {
+              "id": "ABWFN",
+              "kind": "station-report",
+              "station": "WFN",
+              "location": "Watford North",
+              "distance": 0.75
+            },
+            {
+              "id": "ABGSN",
+              "kind": "station-report",
+              "station": "GSN",
+              "location": "Garston",
+              "distance": 1.6375
+            },
+            {
+              "id": "ABBWO",
+              "kind": "station-report",
+              "station": "BWO",
+              "location": "Bricket Wood",
+              "distance": 3.275
+            },
+            {
+              "id": "ABHWW",
+              "kind": "station-report",
+              "station": "HWW",
+              "location": "How Wood",
+              "distance": 4.2625
+            },
+            {
+              "id": "ABPKT",
+              "kind": "station-report",
+              "station": "PKT",
+              "location": "Park Street",
+              "distance": 4.8375
+            },
+            {
+              "id": "ABSAA",
+              "kind": "station-report",
+              "station": "SAA",
+              "location": "St Albans Abbey",
+              "distance": 6.375
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "junction": {
+    "code": "WFJ",
+    "platforms": [
+      {
+        "number": "1",
+        "track": "terminal"
+      },
+      {
+        "number": "2",
+        "track": "terminal"
+      },
+      {
+        "number": "3",
+        "track": "terminal"
+      },
+      {
+        "number": "4",
+        "track": "terminal"
+      },
+      {
+        "number": "6",
+        "track": "Down fast"
+      },
+      {
+        "number": "7",
+        "track": "Up fast"
+      },
+      {
+        "number": "8",
+        "track": "Down slow"
+      },
+      {
+        "number": "9",
+        "track": "Up slow"
+      },
+      {
+        "number": "10",
+        "track": "bay"
+      },
+      {
+        "number": "11",
+        "track": "single"
+      }
+    ],
+    "tracks": [
+      {
+        "id": "bay",
+        "name": "Watford bay platform 10",
+        "berths": [
+          {
+            "id": "WJA374",
+            "offset": -0.09,
+            "platform": "10",
+            "signal": "WM374",
+            "bit": "WJ16:6"
+          },
+          {
+            "id": "WJB374",
+            "offset": 0.09,
+            "platform": "10"
+          }
+        ]
+      }
+    ],
+    "paths": [
+      {
+        "route": "dc",
+        "name": "Down DC to platform 2",
+        "slots": [
+          [
+            "downEdge",
+            2
+          ],
+          [
+            1,
+            2
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "Up DC and platform 3",
+        "slots": [
+          [
+            "upEdge",
+            3
+          ],
+          [
+            1,
+            3
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "Platform 1 turnout",
+        "slots": [
+          [
+            -1.65,
+            2
+          ],
+          [
+            -0.85,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "Platform 4 turnout",
+        "slots": [
+          [
+            -1.6,
+            3
+          ],
+          [
+            -0.85,
+            4
+          ],
+          [
+            1,
+            4
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "DC crossover",
+        "slots": [
+          [
+            -2.7,
+            2
+          ],
+          [
+            -2,
+            3
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "DC crossover",
+        "slots": [
+          [
+            -2.3,
+            3
+          ],
+          [
+            -1.65,
+            2
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "DC connection to the Down Fast at platform 6",
+        "slots": [
+          [
+            -2.0,
+            3
+          ],
+          [
+            -1.55,
+            3
+          ],
+          [
+            -0.7,
+            5
+          ]
+        ]
+      },
+      {
+        "route": "dc",
+        "name": "Harrow reversing siding",
+        "slots": [
+          [
+            0,
+            2
+          ],
+          [
+            0.4,
+            2.5
+          ],
+          [
+            1.15,
+            2.5
+          ]
+        ],
+        "origin": "HRW"
+      },
+      {
+        "route": "dc",
+        "name": "Harrow reversing siding access",
+        "slots": [
+          [
+            0,
+            3
+          ],
+          [
+            0.4,
+            2.5
+          ]
+        ],
+        "origin": "HRW"
+      },
+      {
+        "route": "bay",
+        "name": "Up Slow to bay platform 10",
+        "slots": [
+          [
+            -2.5,
+            8
+          ],
+          [
+            -1.45,
+            9
+          ],
+          [
+            1,
+            9
+          ]
+        ]
+      },
+      {
+        "route": "abbey",
+        "name": "Watford yard connection and Abbey single line",
+        "slots": [
+          [
+            -1.45,
+            9
+          ],
+          [
+            -0.8,
+            10
+          ],
+          [
+            "SAA",
+            10
+          ]
+        ]
+      }
+    ]
+  }
+}
