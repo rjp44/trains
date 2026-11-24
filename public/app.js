@@ -34,12 +34,15 @@ window.addEventListener('storage', (e) => {
   if (e.key === themeKey || e.key === null) setTheme(e.newValue === 'light');
 });
 const viewLink = $('diagram-view');
+const recordedPreview = document.documentElement.hasAttribute('data-recorded-preview');
+const defaultDisplay = recordedPreview ? 'diagram' : 'dashboard';
 function readDisplayMode() {
   const url = new URL(location.href);
-  const only = url.searchParams.get('display') === 'diagram';
+  const only = (url.searchParams.get('display') ?? defaultDisplay) === 'diagram';
   document.documentElement.classList.toggle('diagram-only', only);
-  if (only) url.searchParams.delete('display');
-  else url.searchParams.set('display', 'diagram');
+  const next = only ? 'dashboard' : 'diagram';
+  if (next === defaultDisplay) url.searchParams.delete('display');
+  else url.searchParams.set('display', next);
   viewLink.href = url.href;
   viewLink.title = only ? 'Return to dashboard' : 'Open diagram-only view';
   viewLink.setAttribute('aria-label', viewLink.title);
@@ -405,7 +408,7 @@ function stationLabel(plot, { station, column, labelX, width, size, label }, y) 
       visit();
     }
   });
-  shape(button, 'rect', { x: labelX - width / 2, y: y - size, width, height: size + 4, fill: 'transparent' });
+  shape(button, 'rect', { x: labelX - width / 2, y: y - size, width, height: size + 5, rx: 3 });
   textAt(button, labelX, y, label, {
     fill: station.code === 'WFJ' ? 'var(--junction-label)' : 'var(--board-text)',
     style: 'font:600 ' + size + 'px var(--sans)',
@@ -1028,7 +1031,7 @@ if (initialView === 'sector') {
   centre = junction;
   zoom = 2;
 }
-if (document.documentElement.hasAttribute('data-recorded-preview')) {
+if (recordedPreview) {
   $('live').disabled = true;
   $('live').title = 'Live feed is available with the local Node server';
   $('live').setAttribute('aria-pressed', 'false');

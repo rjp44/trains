@@ -565,6 +565,16 @@ button:disabled {
 .station-target {
   cursor: zoom-in;
 }
+.station-target rect {
+  fill: var(--board);
+  stroke: var(--control-edge);
+  stroke-width: 1;
+}
+.station-target:hover rect,
+.station-target:focus-visible rect {
+  fill: var(--control-hover);
+  stroke: var(--selection);
+}
 .station-target:focus-visible {
   outline: 2px solid var(--selection);
 }

@@ -327,7 +327,7 @@ export function fitStationNames(items, left, right, measure) {
   const sorted = items.slice().sort((a, b) => a.x - b.x);
   function forms(station) {
     const words = station.name.split(' ');
-    const prefix = (w, n) => (w.length > n ? w.slice(0, n) + '.' : w);
+    const prefix = (w, n) => (w.length > n + 1 ? w.slice(0, n) + '.' : w);
     const shorten = (n) => [words[0], ...words.slice(1).map((w) => prefix(w, n))].join(' ');
     const shorter =
       words.length > 1
@@ -346,13 +346,14 @@ export function fitStationNames(items, left, right, measure) {
     return [...new Set([station.name, ...shorter, station.code])];
   }
   function pack(row, size, abbreviate, centred = false) {
-    const gap = 5;
+    const gap = 6;
     let states = [{ end: left - gap, cost: 0 }];
     for (const item of row) {
       const next = [];
       const names = abbreviate ? forms(item.station) : [item.station.name];
       for (const [rank, label] of names.entries()) {
-        const width = measure(label, size);
+        // Pack the whole sign, including four units of padding on each side.
+        const width = measure(label, size) + 8;
         const inset = Math.min(width / 2, 3);
         const preferred = Math.max(left, Math.min(right - width, item.x - width / 2));
         const slack = centred ? 3 : width / 2;
@@ -392,11 +393,15 @@ export function fitStationNames(items, left, right, measure) {
       return { ...s, labelX: start + s.width / 2 };
     });
   }
-  const single = pack(sorted, 15, false, true);
+  const single = pack(sorted, 15, false, true) ?? pack(sorted, 13, false, true);
   if (single) return single.map((s) => ({ ...s, row: 0 }));
   return [0, 1].flatMap((row) => {
     const entries = sorted.filter((s, i) => i % 2 === row);
-    const placed = pack(entries, 15, false) ?? pack(entries, 12, true) ?? pack(entries, 10, true);
+    const placed =
+      pack(entries, 13, false) ??
+      pack(entries, 12, false) ??
+      pack(entries, 11, true) ??
+      pack(entries, 10, true);
     return (placed ?? []).map((s) => ({ ...s, row }));
   });
 }

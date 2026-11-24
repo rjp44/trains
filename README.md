@@ -4,7 +4,7 @@ Run `node server.mjs` in this directory with Node.js 22.4 or later. Open [the lo
 
 ## Netlify preview
 
-Import this repository into Netlify and select the `main` branch. The included `netlify.toml` runs `node build-preview.mjs` and publishes `dist`. The static preview plays the bundled recordings and includes both the dashboard and diagram-only view. Open `/?display=diagram&view=watford` for the Watford recording. Run the Node server locally for the live feed. [Netlify build configuration](https://docs.netlify.com/build/configure-builds/file-based-configuration/)
+Import this repository into Netlify and select the `main` branch. The included `netlify.toml` runs `node build-preview.mjs` and publishes `dist`. The site root opens the full-window diagram playing the Hemel recording. Use the toolbar to return to the dashboard, or bookmark `/?display=dashboard`. Open `/?view=watford` for the Watford recording. Run the Node server locally for the live feed. [Netlify build configuration](https://docs.netlify.com/build/configure-builds/file-based-configuration/)
 
 ## Using the diagram
 

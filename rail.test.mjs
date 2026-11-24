@@ -366,6 +366,7 @@ test('station labels use full names when space permits and keep shortened names 
     );
     assert.equal(result.length, stations.length);
     if (spacing === 140) assert.ok(result.every((item) => item.label === item.station.name));
+    if (spacing <= 50) assert.ok(result.every((item) => item.size <= 13));
     if (spacing === 50)
       assert.ok(
         result.some(
@@ -377,7 +378,8 @@ test('station labels use full names when space permits and keep shortened names 
       let end = -Infinity;
       for (const item of result.filter((item) => item.row === row)) {
         const start = item.labelX - item.width / 2;
-        assert.ok(start >= end + 4.99 && start >= -1e-8);
+        assert.ok(item.width >= measure(item.label, item.size) + 8);
+        assert.ok(start >= end + 5.99 && start >= -1e-8);
         end = start + item.width;
         assert.ok(end <= right + 1e-8 && start <= item.x && end >= item.x);
       }
