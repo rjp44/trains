@@ -65,6 +65,7 @@ const svgNS = 'http://www.w3.org/2000/svg';
 let mode = 'live',
   playing = true,
   recording,
+  replayStart,
   replayBoard,
   index = 0,
   cursor = 0,
@@ -652,7 +653,7 @@ function drawMap(values) {
   $('zoomin').disabled = zoom === 4;
   $('zoomout').disabled = zoom === minZoom;
   const target = new URL(viewLink.href);
-  if (zoom === minZoom) target.searchParams.set('view', 'sector');
+  if (centre === home && zoom === 1) target.searchParams.set('view', 'hemel');
   else if (centre === junction && zoom === 2) target.searchParams.set('view', 'watford');
   else target.searchParams.delete('view');
   viewLink.href = target.href;
@@ -904,14 +905,14 @@ function seek(time) {
   cursor = time;
   while (index < recording.frames.length && recording.frames[index].time <= cursor)
     replayBoard.apply(recording.frames[index++]);
-  $('scrub').value = cursor - recording.frames[0].time;
+  $('scrub').value = cursor - replayStart;
   const seconds = Math.floor(Number($('scrub').value) / 1000);
   $('elapsed').textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
   render();
 }
 const recordings = new Map();
 let modeRequest = 0;
-async function switchMode(next, fitRecording = true) {
+async function switchMode(next, fitRecording = false) {
   const requestId = ++modeRequest;
   if (next === 'replay') {
     const sample = $('sample').value;
@@ -923,9 +924,11 @@ async function switchMode(next, fitRecording = true) {
     }
     if (requestId !== modeRequest) return;
     recording = recordings.get(sample);
-    if (fitRecording && sample.includes('watford')) {
-      centre = overview;
-      zoom = minZoom;
+    replayStart = recording.startTime ?? recording.frames[0].time;
+    if (fitRecording) {
+      const pilot = $('sample').selectedOptions[0].dataset.view === 'hemel';
+      centre = pilot ? home : overview;
+      zoom = pilot ? 1 : minZoom;
     }
   }
   if (requestId !== modeRequest) return;
@@ -937,23 +940,23 @@ async function switchMode(next, fitRecording = true) {
   for (const name of ['live', 'replay']) $(name).setAttribute('aria-pressed', String(name === mode));
   $('replaybar').hidden = mode !== 'replay';
   if (mode === 'replay') {
-    $('scrub').max = recording.frames.at(-1).time - recording.frames[0].time;
+    $('scrub').max = recording.frames.at(-1).time - replayStart;
     replayBoard = null;
     playing = true;
     $('run').textContent = 'Pause';
-    seek(recording.frames[0].time);
+    seek(replayStart);
   }
   render(true);
 }
 $('live').onclick = () => switchMode('live');
 $('replay').onclick = () => switchMode('replay');
-$('sample').onchange = () => switchMode('replay');
+$('sample').onchange = () => switchMode('replay', true);
 $('run').onclick = () => {
-  if (cursor >= recording.frames.at(-1).time) seek(recording.frames[0].time);
+  if (cursor >= recording.frames.at(-1).time) seek(replayStart);
   playing = !playing;
   $('run').textContent = playing ? 'Pause' : 'Play';
 };
-$('scrub').oninput = (e) => seek(recording.frames[0].time + Number(e.target.value));
+$('scrub').oninput = (e) => seek(replayStart + Number(e.target.value));
 $('speed').onchange = (e) => {
   rate = Number(e.target.value);
 };
@@ -1023,7 +1026,7 @@ new ResizeObserver(() => {
   else positionPopout();
 }).observe(drawing);
 new ResizeObserver(positionPopout).observe(popout);
-const initialView = new URLSearchParams(location.search).get('view');
+const initialView = new URLSearchParams(location.search).get('view') ?? 'sector';
 if (initialView === 'sector') {
   centre = overview;
   zoom = minZoom;
@@ -1035,8 +1038,9 @@ if (recordedPreview) {
   $('live').disabled = true;
   $('live').title = 'Live feed is available with the local Node server';
   $('live').setAttribute('aria-pressed', 'false');
-  if (initialView === 'watford' || initialView === 'sector') $('sample').value = '/data/watford-replay.json';
-  await switchMode('replay', false);
+  if (initialView === 'watford') $('sample').value = '/data/watford-replay.json';
+  if (initialView === 'hemel') $('sample').value = '/data/hemel-replay.json';
+  await switchMode('replay');
 } else {
   render(true);
   poll();

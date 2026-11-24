@@ -21,7 +21,9 @@
         <div>
           <p class="kicker">West Coast South</p>
           <h1>Hemel Hempstead<span class="crs">HML</span></h1>
-          <p class="subtitle" id="extent">Apsley to Berkhamsted <span>·</span> Four running lines</p>
+          <p class="subtitle" id="extent">
+            15 rail miles each way <span>·</span> WCML, Watford DC &amp; Abbey line
+          </p>
         </div>
         <div class="modebox">
           <div class="modes" aria-label="Data source">
@@ -98,8 +100,9 @@
       </section>
       <div id="replaybar" hidden>
         <select id="sample" aria-label="Recording">
-          <option value="/data/replay.json">Default recording</option>
+          <option value="/data/replay.json">15-mile sector</option>
           <option value="/data/watford-replay.json">Watford branches</option>
+          <option value="/data/hemel-replay.json" data-view="hemel">Hemel pilot</option>
         </select>
         <button id="run">Pause</button><label for="scrub">Replay position</label
         ><input id="scrub" type="range" min="0" step="1000" value="0" /><span id="elapsed"></span

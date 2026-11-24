@@ -117,8 +117,38 @@ test('a pinned train follows a matching service across berths and area boundarie
   assert.equal(result.service.id, service.id);
   assert.equal(result.marker.id, 'WJ0143');
 });
+test('the sector replay opens with all three areas and contains train and signal changes beyond the pilot', () => {
+  const { startTime, frames } = JSON.parse(
+    readFileSync(new URL('./public/data/replay.json', import.meta.url)),
+  );
+  const board = new Corridor(layout);
+  assert.ok(frames[0].time <= startTime && startTime < frames.at(-1).time);
+  assert.ok(frames.every((frame, i) => !i || frame.time >= frames[i - 1].time));
+  for (const frame of frames.filter((f) => f.time <= startTime)) board.apply(frame);
+  assert.deepEqual(Object.keys(board.areaTimes).sort(), layout.areas.slice().sort());
+  assert.ok(board.abbey.available && board.abbey.reports.length);
+  for (const area of layout.areas) {
+    const berths = corridorTracks(layout)
+      .flatMap((t) => t.berths)
+      .filter((b) => !b.pilot && b.id.startsWith(area));
+    assert.ok(
+      berths.some((b) => board.values[b.id]),
+      area + ' has an occupied outer berth at the start',
+    );
+    const changes = frames.filter((f) => !f.full && f.area === area && f.time > startTime);
+    assert.ok(
+      changes.some((f) => berths.some((b) => f.values[b.id])),
+      area + ' has a train movement',
+    );
+    assert.ok(
+      changes.some((f) => berths.some((b) => b.bit && f.values[b.bit])),
+      area + ' has a signal change',
+    );
+  }
+});
+
 test('real replay preserves train order, direction and the two observed signal transitions', () => {
-  const recording = JSON.parse(readFileSync(new URL('./public/data/replay.json', import.meta.url)));
+  const recording = JSON.parse(readFileSync(new URL('./public/data/hemel-replay.json', import.meta.url)));
   const { frames } = recording;
   assert.ok(frames[0].full);
   const board = new Corridor(layout);

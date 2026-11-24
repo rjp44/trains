@@ -197,6 +197,7 @@ const files = {
   '/rail.mjs': ['../rail.mjs', 'text/javascript'],
   '/data/corridor.json': ['data/corridor.json', 'application/json'],
   '/data/watford-replay.json': ['data/watford-replay.json', 'application/json'],
+  '/data/hemel-replay.json': ['data/hemel-replay.json', 'application/json'],
   '/data/replay.json': ['data/replay.json', 'application/json'],
   '/data/EASM-LICENSE.txt': ['data/EASM-LICENSE.txt', 'text/plain'],
 };
