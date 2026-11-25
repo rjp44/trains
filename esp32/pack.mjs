@@ -203,19 +203,20 @@ function compileView(view) {
         line(x(a), lane(b), x(d), lane(e), 'route-' + path.route, 2.3);
       }
     }
-    for (const branch of [dc, abbey]) {
-      const isDC = branch.id === 'dc',
-        ink = 'route-' + branch.id;
-      for (const s of branch.stations.filter((s) => s.code !== 'WFJ')) {
+    // Watford uses the junction platforms below. Harrow & Wealdstone and Bushey
+    // already share station labels with the WCML.
+    for (const [branch, codes, lanes] of [
+      [dc, ['HRW', 'BSH'], [2, 3]],
+      [abbey, ['SAA'], [10]],
+    ]) {
+      const stops = branch.stations.filter((s) => codes.includes(s.code));
+      const ink = 'route-' + branch.id;
+      for (const s of stops) {
         const at = x(diagram.columns.get(s.code));
-        for (const n of isDC ? [2, 3] : [10])
+        for (const n of lanes)
           line(at - 5 * scale, lane(n) + 5 * scale, at + 5 * scale, lane(n) + 5 * scale, ink, 3);
       }
-      const labels = branch.stations.filter((s) => !layout.stations.some((m) => m.code === s.code));
-      const y = isDC
-        ? Math.max(65 * vertical, 20 * vertical + 44 * scale, 41 * vertical + 22 * scale)
-        : Math.max(lane(10) + 41 * scale, 536 * vertical);
-      names(labels, y, Math.max(22 * scale, (isDC ? 89 : 556) * vertical - y));
+      if (branch === abbey) names(stops, Math.max(lane(10) + 41 * scale, 536 * vertical), 0);
     }
     layout.junction.platforms.forEach((p, i) => {
       if (!visible(x(0))) return;
