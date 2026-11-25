@@ -138,3 +138,30 @@ export function callText(call, reportedDelay) {
   const variation = delay === 0 ? 'on time' : Math.abs(delay) + ' min ' + (delay > 0 ? 'late' : 'early');
   return booked + (observed ? '' : 'Est. ') + variation;
 }
+
+export function stationName(s) {
+  return s?.toLowerCase()
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    .replace(/\bDc\b/g, 'DC') || 'Unknown';
+}
+export const operators = {
+  VT: 'Avanti West Coast',
+  LM: 'WM Trains',
+  LO: 'London Overground',
+  DB: 'DB Cargo UK',
+  GB: 'GB Railfreight',
+  FL: 'Freightliner',
+  SN: 'Southern',
+  ZZ: 'Operator unavailable',
+};
+
+export function describeCard(train) {
+  const { service, stage, track, head, call } = train;
+  const route = service ? stationName(service.origin) + ' → ' + stationName(service.destination) : 'Service details unavailable';
+  const company = service && (operators[service.operator] || service.operator || 'Operator unknown');
+  let location = 'At Hemel';
+  if (stage !== 'station') location = train.immediate ? 'Approaching Hemel' : train.distance.toFixed(1) + ' mi to Hemel';
+  const context = track + ' · ' + location;
+  const timing = callText(call, service?.delay);
+  return { head, route, company, context, timing };
+}

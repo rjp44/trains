@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.24)
+project(hemel_sim LANGUAGES C CXX ASM)
+
+include(FetchContent)
+set(LV_BUILD_CONF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h" CACHE PATH "")
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "")
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "")
+set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "")
+FetchContent_Declare(lvgl
+    URL https://codeload.github.com/lvgl/lvgl/tar.gz/refs/tags/v9.3.0
+    URL_HASH SHA256=4933becfd3603b29158a5d04138139582836ef2bc17beb6c39dccda9cb0d32e7
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(lvgl)
+find_package(SDL2 CONFIG REQUIRED)
+include(component/assets.cmake)
+add_executable(hemel-sim simulator.cpp component/panel.cpp "${PANEL_ASSETS}")
+target_include_directories(hemel-sim PRIVATE component "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(hemel-sim PRIVATE lvgl::lvgl SDL2::SDL2)
+target_compile_features(hemel-sim PRIVATE cxx_std_17)
+
+include(CTest)
+if(BUILD_TESTING AND PANEL_WIDTH EQUAL 1024 AND PANEL_HEIGHT EQUAL 600)
+    find_program(PANEL_NODE node REQUIRED)
+    add_test(NAME recorded_panels
+        COMMAND "${PANEL_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/smoke.mjs" $<TARGET_FILE:hemel-sim>)
+endif()

@@ -1,0 +1,5 @@
+/build/
+/qemu/build/
+/qemu/sdkconfig
+/qemu/sdkconfig.old
+/qemu/managed_components/

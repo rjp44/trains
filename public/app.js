@@ -8,7 +8,7 @@ import {
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
-import { isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, callText } from '/hemel.mjs';
+import { isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, describeCard, stationName, operators } from '/hemel.mjs';
 
 const $ = (id) => document.getElementById(id);
 const panel = document.querySelector('.panel');
@@ -714,11 +714,6 @@ function drawMap(values) {
           : 'Hemel sector · WCML';
 }
 
-function stationName(s) {
-  return s?.toLowerCase()
-    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
-    .replace(/\bDc\b/g, 'DC') || 'Unknown';
-}
 function trainDetails(board) {
   const t = trainSelection;
   const { marker: m, current, service, ambiguous } = locateTrain(t, markers, board);
@@ -788,16 +783,6 @@ function trainDetails(board) {
     );
   }
 }
-const operators = {
-  VT: 'Avanti West Coast',
-  LM: 'WM Trains',
-  LO: 'London Overground',
-  DB: 'DB Cargo UK',
-  GB: 'GB Railfreight',
-  FL: 'Freightliner',
-  SN: 'Southern',
-  ZZ: 'Operator unavailable',
-};
 const activeSchedules = new Map();
 const rotateCard = { fast: cardRotation(), slow: cardRotation() };
 
@@ -880,13 +865,7 @@ function updateHemelCards(board) {
     const train = rotateCard[line](cardCandidates(trains, scheduleFor), performance.now());
     card.hidden = !train;
     if (!train) continue;
-    const { service, stage, track, head, call } = train;
-    const route = service ? stationName(service.origin) + ' → ' + stationName(service.destination) : 'Service details unavailable';
-    const company = service && (operators[service.operator] || service.operator || 'Operator unknown');
-    let location = 'At Hemel';
-    if (stage !== 'station') location = train.immediate ? 'Approaching Hemel' : train.distance.toFixed(1) + ' mi to Hemel';
-    const context = track + ' · ' + location;
-    const timing = callText(call, service?.delay);
+    const { head, route, company, context, timing } = describeCard(train);
     const signature = JSON.stringify([head, route, company, context, timing]);
     if (card.dataset.signature === signature) continue;
     card.dataset.signature = signature;
