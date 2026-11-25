@@ -1,9 +1,29 @@
 export const routes = {
-  505: { name: 'Coniston', via: 'Kendal · Windermere · Hawkshead', colour: '#ad4936' },
-  555: { name: 'Keswick – Lancaster', via: 'Grasmere · Windermere · Kendal', colour: '#82538d' },
-  599: { name: 'Grasmere – Bowness', via: 'Ambleside · Windermere', colour: '#357044' },
-  516: { name: 'Great Langdale', via: 'Kendal · Ambleside · Dungeon Ghyll', colour: '#a6640f' },
-  508: { name: 'Penrith – Patterdale', via: 'Pooley Bridge · Glenridding', colour: '#20689b' },
+  505: { icon: 'single', name: 'Coniston', via: 'Kendal · Windermere · Hawkshead', colour: '#ad4936' },
+  555: {
+    icon: 'closed-decker',
+    name: 'Keswick – Lancaster',
+    via: 'Grasmere · Windermere · Kendal',
+    colour: '#82538d',
+  },
+  599: {
+    icon: 'open-decker',
+    name: 'Grasmere – Bowness',
+    via: 'Ambleside · Windermere',
+    colour: '#357044',
+  },
+  516: {
+    icon: 'single',
+    name: 'Great Langdale',
+    via: 'Kendal · Ambleside · Dungeon Ghyll',
+    colour: '#a6640f',
+  },
+  508: {
+    icon: 'single',
+    name: 'Penrith – Patterdale',
+    via: 'Pooley Bridge · Glenridding',
+    colour: '#20689b',
+  },
   rail: { name: 'Lakes Line', via: 'Oxenholme – Windermere', colour: '#273e53' },
 };
 export const order = ['505', '555', '599', '516', '508', 'rail'];

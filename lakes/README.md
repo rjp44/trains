@@ -8,7 +8,7 @@ Choose **Replay** for snapshots captured on 25 November 2026. The snapshots adva
 
 ## Bus timetables
 
-The double-decker and its front chevron point along the last reported GPS bearing. A front-on bus indicates an unavailable bearing. Tap a bus to open its scheduled stops. The list opens at the next call by timetable and scrolls back to the origin. Times use the London clock and ≈ marks an approximate scheduled time. A live bus needs a unique matching stop pattern for its route, service day, booked departure time and origin and destination stop codes.
+The 505, 508 and 516 share a green-and-white single-decker icon. The 555 uses a blue-and-green double-decker and the 599 a lime-green open-top double-decker. Each icon and its route-coloured chevron point along the last reported GPS bearing. A front-on bus indicates an unavailable bearing. Tap a bus to open its scheduled stops. The list opens at the next call by timetable and scrolls back to the origin. Times use the London clock and ≈ marks an approximate scheduled time. A live bus needs a unique matching stop pattern for its route, service day, booked departure time and origin and destination stop codes.
 
 Tap a white stop circle for the next three scheduled boarding departures in each onward direction. Each row gives the service number, destination and boarding side or stand where available. Zoom for more circles or use **Find a stop**. Selecting a route filters the stop boards. Selecting a bus or stop pauses replay and uses the recorded time. For an example serving both sides of a road, select **Hayes Garden Centre, Ambleside** in the first replay frame.
 

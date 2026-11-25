@@ -624,7 +624,7 @@ function drawMarkers() {
   const occupied = [...labelBoxes];
   for (const vehicle of fixes) {
     const [x, y] = project(vehicle.point, frame);
-    const radius = vehicle.route === 'rail' ? 4 : 13;
+    const radius = vehicle.route === 'rail' ? 4 : 16;
     occupied.push([x - radius * unit, y - radius * unit, 2 * radius * unit, 2 * radius * unit]);
   }
   for (const v of fixes) {
@@ -657,8 +657,8 @@ function drawMarkers() {
       [-31, -31],
       [5, 31],
       [-30, 31],
-      [17, -3],
-      [-44, -3],
+      [21, -3],
+      [-48, -3],
     ];
     const options = candidates.map(([dx, dy]) => [x + dx * unit, y + dy * unit, w, h]);
     const b = options.find((b) => !occupied.some((r) => collides(b, r)));
@@ -718,7 +718,7 @@ function drawMarkers() {
       shape(
         'use',
         {
-          href: known ? '#bus-side' : '#bus-front',
+          href: '#' + routes[v.route].icon + (known ? '-side' : '-front'),
           color: fill,
           transform:
             'translate(' +
@@ -736,7 +736,7 @@ function drawMarkers() {
         g,
       );
     }
-    shape('circle', { cx: x, cy: y, r: (rail ? 9 : 14) * unit, fill: 'transparent' }, g);
+    shape('circle', { cx: x, cy: y, r: (rail ? 9 : 16) * unit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
     g.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
