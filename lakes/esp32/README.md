@@ -6,6 +6,12 @@ The panel opens with a labelled recorded map, then switches to live bus GPS and 
 
 Select route chips to combine lines. **All** restores the whole network. Tap **+** or **−** to zoom, swipe the map to pan and tap **Fit** to recenter the selection. Tap a vehicle for its timetable or rail reporting points. Tap a stop for the next three scheduled departures in each onward direction. **Prev** and **Next** page through the card. The winter timetable, terrain, ten routes, vehicle artwork and replay are embedded in flash.
 
+## On-device settings
+
+Tap **Settings** in the bottom toolbar in either orientation. **Wi-Fi** scans nearby networks and supports a manually entered hidden SSID. **Sound** selects all trains, stopping trains only, or off, and controls horn volume. **Display** adjusts the backlight. Preferences and the saved network carry across restarts and app-only flashes between Lakes and Hemel. [Settings and defaults](../../esp32/crowpanel-p4/README.md#on-device-settings)
+
+The Lakes horn follows a train when its reported location advances on a visible rail route. Stops-only mode requires Railinfo to confirm a passenger stop at that location. Bus updates, initial snapshots, replay and recovery from a stale feed are silent. For older feed deployments that omit the stop flag, the panel checks the matching upstream train and report when needed.
+
 ## Build the application binary
 
 Use ESP-IDF 5.5.3, Node.js 22+, Python 3 with Pillow 10.1+ and the `rsvg-convert` executable from librsvg. From the repository root:
@@ -21,7 +27,7 @@ The binary is `lakes/esp32/build/lakes_crowpanel_p4.bin`. Regenerate the two ass
 With Docker, after generating the assets, the equivalent cross-build from the repository root is:
 
 ```sh
-docker run --rm -v "$PWD/lakes/esp32:/project" -w /project espressif/idf:v5.5.3 idf.py build
+docker run --rm -v "$PWD:/work" -w /work/lakes/esp32 espressif/idf:v5.5.3 idf.py build
 ```
 
 ## Load on the tested Hemel board
@@ -34,7 +40,7 @@ python -m esptool --chip esp32p4 --port /dev/cu.wchusbserial10 verify-flash 0x10
 python lakes/esp32/inspect.py /dev/cu.wchusbserial10 --watch 40
 ```
 
-The UART reports the Wi-Fi link, visible vehicle count, hardware refresh count, submitted frame count and live HTTPS snapshots. For a static display test, `--hold 5` pauses touch and map updates for five seconds, compares the two physical framebuffers, then resumes automatically. If the inspector loses its serial connection during the test, reconnect with `--run` to restore touch and live presentation. For a diagnostic image, run the inspector with `--capture panel.ppm`. The image uses the display's native landscape coordinates. To change networks, run `python lakes/esp32/provision.py /dev/cu.wchusbserial10` and restart the board. The Hemel and Lakes binaries use the same NVS key. To return to Hemel, use its matching P4 application binary at the same address.
+The UART reports the Wi-Fi link, visible vehicle count, hardware refresh count, submitted frame count and live HTTPS snapshots. For a static display test, `--hold 5` pauses touch and map updates for five seconds, compares the two physical framebuffers, then resumes automatically. If the inspector loses its serial connection during the test, reconnect with `--run` to restore touch and live presentation. For a diagnostic image, run the inspector with `--capture panel.ppm`. The image uses the display's native landscape coordinates. To change networks over USB, run `python lakes/esp32/provision.py /dev/cu.wchusbserial10` and restart the board. The Hemel and Lakes binaries use the same NVS key. To return to Hemel, use its matching P4 application binary at the same address.
 
 During the hardware test, the previous Hemel image disappeared after the new LCD initialization. A faint flicker on solid colours remained through a USB reset. Disconnecting all panel power for 30 seconds and reconnecting cleared it in dark mode. Wi-Fi and the live feed resumed on startup. If the same symptom returns after flashing, repeat the full power cycle.
 

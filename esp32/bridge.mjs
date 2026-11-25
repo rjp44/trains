@@ -45,7 +45,7 @@ function sample() {
   if (live) {
     const raw = live.snapshot();
     expire(Date.now());
-    return [projection.project(raw, lookup, true), { Live: 1, Partial: 2, Stale: 3 }[raw.status] ?? 0, arrivals.take(raw.areaStatus.R1 === 'Live')];
+    return [projection.project(raw, lookup, true), { Live: 1, Partial: 2, Stale: 3 }[raw.status] ?? 0, arrivals.take(raw.areaStatus.R1 === 'Live', Date.now(), head => lookup(raw.services['R1/' + head], false)?.booked)];
   }
   const first = recording.startTime ?? recording.frames[0].time;
   const duration = recording.frames.at(-1).time - first;

@@ -22,12 +22,15 @@ inline void render(hemel::Direction direction, unsigned start, unsigned count, i
             const unsigned len = high ? highFrames : lowFrames;
             const float envelope = std::min({1.0f, pos / 192.0f, (len - 1 - pos) / 192.0f});
             const float phase = 6.2831853f * (high ? 554 : 370) * pos / rate;
-            const auto value = static_cast<int16_t>(envelope * (2700 * sinf(phase) + 500 * sinf(phase * 2)));
-            if (high == (direction == hemel::Direction::Down)) left = value;
-            else right = value;
+            const auto value =
+                static_cast<int16_t>(envelope * (2700 * sinf(phase) + 500 * sinf(phase * 2)));
+            if (high == (direction == hemel::Direction::Down))
+                left = value;
+            else
+                right = value;
         }
-        stereo[2*i] = left;
-        stereo[2*i+1] = right;
+        stereo[2 * i] = left;
+        stereo[2 * i + 1] = right;
     }
 }
-}
+} // namespace horn

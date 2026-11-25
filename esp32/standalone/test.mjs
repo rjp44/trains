@@ -74,6 +74,8 @@ try {
     timetableRow('HEMLHMP', '15:25', '') + timetableRow('TRING', '', 'Train finishes') + '</table></html>');
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(frame(), /Approaching Hemel.*Booked 15:25/);
+  msg('TD_UPDATE', { R13143: '1A88' });
+  assert.match(frame('D'), /^S1\t\d+\t1\t\d+\n/);
   if (process.argv[2]) writeFileSync(process.argv[2], packets.join(''));
   console.log('Passed all four tracks, replacement, approach, repeats, service details, rotation, stale, reconnect and gap');
 } finally { rmSync(tmp, { recursive: true, force: true }); }

@@ -14,7 +14,8 @@ std::array<uint32_t, 16> recentArrivals{};
 unsigned nextArrival = 0;
 uint32_t lastSeq = 0, received = 0, frameCrc = 0;
 bool acceptArrival = false;
-void (*arrivalHandler)(Direction) = nullptr;
+uint32_t stopEvent = 0, stopMask = 0;
+void (*arrivalHandler)(Direction, bool) = nullptr;
 
 bool number(Field field, uint32_t &value) {
     auto end = field.data() + field.size();
@@ -100,12 +101,22 @@ bool commit(Field trailer, uint32_t now) {
     return true;
 }
 void lost() {
+    stopMask = 0;
     acceptArrival = false;
     synced = false;
     if (isLive())
         input::stale();
 }
 void readLine(Field s, uint32_t now) {
+    if (s.substr(0, 3) == "S1\t" && packet.empty()) {
+        std::array<Field, 8> f;
+        uint32_t crc, mask;
+        stopMask = 0;
+        if (fields(s, f) == 4 && number(f[1], stopEvent) && number(f[2], mask) && mask < 256 &&
+            number(f[3], crc) && crc == checksum(s.substr(0, s.rfind('\t'))))
+            stopMask = mask;
+        return;
+    }
     if (acceptArrival) {
         acceptArrival = false;
         if (s.substr(0, 3) == "A1\t" && now - received < 1500) {
@@ -117,7 +128,10 @@ void readLine(Field s, uint32_t now) {
                 number(f[4], crc) && crc == checksum(s.substr(0, s.rfind('\t'))) && arrivalHandler &&
                 std::find(recentArrivals.begin(), recentArrivals.end(), crc) == recentArrivals.end()) {
                 recentArrivals[nextArrival++ % recentArrivals.size()] = crc;
-                for (char d : f[3]) arrivalHandler(d == 'D' ? Direction::Down : Direction::Up);
+                for (size_t i = 0; i < f[3].size(); ++i)
+                    arrivalHandler(f[3][i] == 'D' ? Direction::Down : Direction::Up,
+                                   stopEvent == crc && (stopMask & (1u << i)));
+                stopMask = 0;
             }
             return;
         }
@@ -186,7 +200,7 @@ void linkEnded() {
     lost();
 }
 void input::forgetSequence() { synced = acceptArrival = false; }
-void setArrivalHandler(void (*handler)(Direction)) { arrivalHandler = handler; }
+void setArrivalHandler(void (*handler)(Direction, bool)) { arrivalHandler = handler; }
 void updateLive(uint32_t now) {
     if (synced && now - received >= 6500)
         lost();

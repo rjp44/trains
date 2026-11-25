@@ -23,7 +23,7 @@ test('main-line traffic at Oxenholme is excluded while a branch leg gets an esti
     id: 'X',
     lat: 54.32,
     lon: -2.73,
-    last: { crs: 'KEN', time: '12:02' },
+    last: { crs: 'KEN', time: '12:02', stop: true },
     next: { crs: 'OXN', est: '12:06' },
   };
   const data = {
@@ -37,6 +37,9 @@ test('main-line traffic at Oxenholme is excluded while a branch leg gets an esti
   const results = railFixes(data);
   assert.equal(results.length, 1);
   assert.equal(results[0].precision, 'Estimated between stations');
+  assert.equal(results[0].lastStop, true);
+  train.last.stop = false;
+  assert.equal(railFixes(data)[0].lastStop, false);
 });
 test('captured fixes retain their time through errors and expire', () => {
   const vehicles = [

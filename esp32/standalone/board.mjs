@@ -36,7 +36,8 @@ let visibleHeads = '';
 export const cardHeads = () => visibleHeads;
 export function packet(force) {
   const raw = feed.snapshot(), now = Date.now();
-  const entries = arrivals.take(raw.areaStatus.R1 === 'Live', now);
+  const entries = arrivals.take(raw.areaStatus.R1 === 'Live', now,
+    head => schedules.lookup(raw.services['R1/' + head], false)?.booked);
   if (!raw.observed) return '';
   schedules.expire(now);
   const view = project(raw, schedules.lookup, true, now);

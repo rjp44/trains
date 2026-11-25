@@ -21,14 +21,9 @@ static void panel_power(void)
     ESP_ERROR_CHECK(esp_ldo_acquire_channel(&io, &io_supply));
     ESP_ERROR_CHECK(esp_ldo_acquire_channel(&lcd, &panel_supply));
 
-    // This panel has a fixed brightness. Keep the backlight enable steady during scanout.
+    // Keep the backlight dark until the first complete frame and saved level are ready.
     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_31, 0));
     ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_31, GPIO_MODE_OUTPUT));
-}
-
-void crowpanel_backlight_on(void)
-{
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_31, 1));
 }
 
 static esp_lcd_touch_handle_t touch_init(void)

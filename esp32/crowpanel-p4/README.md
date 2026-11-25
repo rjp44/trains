@@ -50,7 +50,7 @@ APP=esp32/crowpanel-p4/build/hemel_crowpanel_p4.bin
 "$PY" -m esptool --chip esp32p4 --port "$PORT" --baud 115200 verify-flash 0x10000 "$APP"
 ```
 
-The factory firmware uses two 1 Gbit/s DSI lanes and a 51 MHz pixel clock. GPIO31 holds the backlight enabled while the diagram is visible. The display uses native RGB565 and two full-screen DSI buffers in 200 MHz PSRAM. LVGL draws into the inactive buffer and presents it at the refresh boundary. In the default theme, the background is dark teal and train badges are amber. In the light theme, the background is off-white.
+The factory firmware uses two 1 Gbit/s DSI lanes and a 51 MHz pixel clock. At full brightness GPIO31 holds the backlight continuously enabled. The display uses native RGB565 and two full-screen DSI buffers in 200 MHz PSRAM. LVGL draws into the inactive buffer and presents it at the refresh boundary. In the default theme, the background is dark teal and train badges are amber. In the light theme, the background is off-white.
 
 ## Feed the panel over USB
 
@@ -79,7 +79,7 @@ idf.py -C /work/esp32/crowpanel-p4 -DPANEL_PREPACKED=/work/esp32/build/p4_assets
   -DFEED_PREPACKED=/work/esp32/build/board_feed.js build
 ```
 
-After loading the feature application on the P4, provision it once from a private local terminal while the USB bridge and monitor are closed. Both prompts suppress echo. The tool waits for the panel to acknowledge a single NVS write in its `hemel` namespace. Restart the panel after the acknowledgement. On the tested panel, a restart with the Mac bridge stopped brought the Wi-Fi live cards back in 12 seconds. The same command replaces the saved network. The build and firmware binary contain no Wi-Fi credentials.
+Use **Settings → Wi-Fi** to provision the panel by touch. For USB provisioning, use a private local terminal while the USB bridge and monitor are closed. Both prompts suppress echo. The tool waits for the panel to acknowledge a single NVS write in its `hemel` namespace. Restart the panel after the acknowledgement. On the tested panel, a restart with the Mac bridge stopped brought the Wi-Fi live cards back in 12 seconds. The same command replaces the saved network. The build and firmware binary contain no Wi-Fi credentials.
 
 ```sh
 esp32/build/board-tools/bin/python esp32/crowpanel-p4/provision.py /dev/cu.wchusbserial10
@@ -87,13 +87,13 @@ esp32/build/board-tools/bin/python esp32/crowpanel-p4/provision.py /dev/cu.wchus
 
 The horn follows real entries in R13143 (Down fast), R13144 (Up fast), R15145 (Down slow) and R15146 (Up slow). Down plays 554 Hz on the left for 650 ms, leaves a 140 ms gap, then plays 370 Hz on the right for 800 ms. Up exchanges the speakers. Both notes use a short ramp and a quiet second harmonic. The peak sample is 2,861 out of 32,768 (about −21 dBFS). Each fresh arrival retains its direction, including opposing trains entering together. The flash replay, USB recordings, initial area snapshots, reconnect baselines, approaches, service lookups and rotating cards are silent. The updated live USB bridge can send arrival directions as an optional checksummed line immediately after an H1 frame. Older bridges still supply display frames.
 
-## To-do: on-device settings
+## On-device settings
 
-- [ ] **Wi-Fi** — List nearby SSIDs, allow manual entry of a hidden SSID, and prompt for the password on the touchscreen. Save the network for the next restart.
-- [ ] **Sound** — Offer “Stopping at Hemel only”, “All trains” and “Off”. Consider a volume slider.
-- [ ] **Brightness** — Add a backlight control and check that the screen stays steady across its usable range.
+Tap **Settings** on either the Hemel or Lakes panel. Both applications use the same saved Wi-Fi credentials, horn mode, volume and backlight level. App-only flashes preserve them.
 
-Remember the selected sound and brightness settings across restarts.
+- **Wi-Fi** lists nearby networks. Choose one and enter its password on the touchscreen, or tap **Hidden network** and enter its name. Open networks connect directly. The panel saves a replacement after it obtains an IP address and returns to the previous saved network if the attempt fails.
+- **Sound** offers **All trains**, **Stopping at Hemel only** (Lakes shows **Stopping trains only**) and **Off**. Volume ranges from 0 to 100%. The first-run defaults are all trains and the previously tested horn level. Hemel checks the train's booked Hemel call on station entry. Lakes uses fresh changes of rail reporting point and the source's passenger-stop flag. An unknown stop stays quiet in stops-only mode.
+- **Display** adjusts backlight brightness from 10% to 100%. The lower limit keeps the controls visible. Intermediate levels use 30 kHz PWM on GPIO31. Full brightness holds the enable pin high. [CrowPanel backlight hardware](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/blob/master/Eagle_SCH%26PCB/1.2/readme.md)
 
 ### Electrical references for the 10.1-inch V1.2
 

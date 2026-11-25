@@ -111,6 +111,7 @@ export function railFixes(data) {
       last: t.last.name,
       lastCode: t.last.crs,
       lastTime: t.last.time,
+      lastStop: typeof t.last.stop === 'boolean' ? t.last.stop : undefined,
       next: t.next.name,
       nextCode: t.next.crs,
       nextTime: t.next.est,

@@ -19,15 +19,15 @@ export function stationArrivals(layout) {
       if (!(id in frame.values)) continue;
       const head = frame.values[id] || '';
       if (seeded && isTrainCode(head) && occupied.get(id) !== head) {
-        pending.push({ time: frame.time, direction: direction === 1 ? 'D' : 'U' });
+        pending.push({ head, time: frame.time, direction: direction === 1 ? 'D' : 'U' });
         if (pending.length > 8) pending.shift();
       }
       occupied.set(id, head);
     }
     seeded = true;
   }
-  function take(live, now = Date.now()) {
-    const directions = live ? pending.filter((e) => Math.abs(now - e.time) < 6500).map((e) => e.direction).join('') : '';
+  function take(live, now = Date.now(), isBooked = () => false) {
+    const directions = live ? pending.filter((e) => Math.abs(now - e.time) < 6500).map((e) => isBooked(e.head) ? e.direction.toLowerCase() : e.direction).join('') : '';
     pending = [];
     return directions;
   }

@@ -1,4 +1,7 @@
 #include "map.h"
+#include "settings_display.h"
+#include "preferences.h"
+#include "rail_events.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -78,6 +81,7 @@ enum Action {
     Fit,
     Rotate,
     Theme,
+    Settings,
     Mode,
     Frame,
     Marker,
@@ -600,6 +604,7 @@ void buttons(uint32_t now) {
     btn(manualReplay ? "Live" : "Replay", 65, Mode);
     if (manualReplay)
         btn("Step", 50, Frame);
+    btn("Settings", 78, Settings);
     auto clock = london(clockMs(now));
     std::string status =
         replaying()
@@ -632,6 +637,12 @@ void init() {
 void receive(Snapshot data, uint32_t now) {
     if (haveLive && data.time < latest.time)
         return;
+    if (haveLive && !liveFailed && !manualReplay) {
+        const int64_t wall = int64_t(time(nullptr)) * 1000;
+        for (const auto &v : data.vehicles)
+            if (visible(v.route) && newRailReport(latest, data, v, wall))
+                panel::trainHorn(v.direction > 0, v.lastStop == 1);
+    }
     haveLive = true;
     latest = std::move(data);
     updated = now;
@@ -718,6 +729,9 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             break;
         case Fit:
             fit();
+            break;
+        case Settings:
+            openPanelSettings(portrait);
             break;
         case Theme:
             dark = !dark;

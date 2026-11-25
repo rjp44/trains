@@ -1,6 +1,6 @@
-idf_component_register(SRCS "main.cpp" "display.c" "source.cpp" "wifi.cpp" "horn.cpp" "feed.cpp" "feed_vm.cpp"
+idf_component_register(SRCS "main.cpp" "display.c" "source.cpp" "feed.cpp" "feed_vm.cpp"
     INCLUDE_DIRS "."
-    PRIV_REQUIRES component esp_lcd esp_driver_gpio esp_driver_i2c esp_driver_i2s
+    PRIV_REQUIRES panel_settings component esp_lcd esp_driver_gpio esp_driver_i2c esp_driver_i2s
     esp_driver_uart esp_hw_support esp_timer esp_wifi esp_netif esp_event esp_http_client nvs_flash mbedtls)
 
 set(feed "${CMAKE_CURRENT_BINARY_DIR}/board_feed.js")

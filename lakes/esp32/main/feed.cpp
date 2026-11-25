@@ -7,8 +7,11 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "map.h"
+#include "preferences.h"
+#include "rail_events.h"
 #include "wifi.h"
 #include <cmath>
+#include <cctype>
 #include <ctime>
 #include <memory>
 
@@ -22,9 +25,10 @@ const char *str(const cJSON *o, const char *k) {
 double num(const cJSON *v, double fallback = -1) {
     return cJSON_IsNumber(v) && std::isfinite(v->valuedouble) ? v->valuedouble : fallback;
 }
-bool readBody(std::string &body) {
+bool readBody(std::string &body, const char *url = "https://lakes-transit.netlify.app/api/vehicles",
+              int maxBytes = 131072) {
     esp_http_client_config_t cfg = {};
-    cfg.url = "https://lakes-transit.netlify.app/api/vehicles";
+    cfg.url = url;
     cfg.crt_bundle_attach = esp_crt_bundle_attach;
     cfg.timeout_ms = 12000;
     cfg.disable_auto_redirect = true;
@@ -36,11 +40,11 @@ bool readBody(std::string &body) {
     if (esp_http_client_open(client, 0) == ESP_OK) {
         auto length = esp_http_client_fetch_headers(client);
         auto status = esp_http_client_get_status_code(client);
-        if (status == 200 && length <= 131072) {
+        if (status == 200 && length <= maxBytes) {
             char block[1536];
             int n;
             while ((n = esp_http_client_read(client, block, sizeof(block))) > 0 &&
-                   body.size() + n <= 131072)
+                   body.size() + n <= size_t(maxBytes))
                 body.append(block, n);
             ok = n == 0 && esp_http_client_is_complete_data_received(client) && !body.empty();
         }
@@ -51,7 +55,44 @@ bool readBody(std::string &body) {
     esp_http_client_cleanup(client);
     return ok;
 }
+// Older deployed Lakes responses omit lastStop. Only consult the upstream map
+// for a new report in stops-only mode, and require the very same train and report.
+void fillMissingStops(const lakes::Snapshot &previous, lakes::Snapshot &current) {
+    if (panel::sound() != panel::Sound::Stops) return;
+    std::vector<lakes::Vehicle *> missing;
+    const int64_t now = int64_t(time(nullptr)) * 1000;
+    for (auto &v : current.vehicles)
+        if (v.lastStop < 0 && lakes::newRailReport(previous, current, v, now)) missing.push_back(&v);
+    if (missing.empty()) return;
+    std::string raw;
+    if (!readBody(raw, "https://api.railinfo.uk/map/trains", 2 * 1024 * 1024)) return;
+    auto name = raw.find("\"trains\"");
+    if (name == raw.npos) return;
+    auto array = raw.find('[', name + 8);
+    if (array == raw.npos) return;
+    const char *pos = raw.data() + array + 1, *end = raw.data() + raw.size();
+    // Parse one vehicle at a time to keep the nationwide DOM out of RAM.
+    while (pos < end && !missing.empty()) {
+        while (pos < end && (*pos == ',' || std::isspace(static_cast<unsigned char>(*pos)))) ++pos;
+        if (pos == end || *pos != '{') break;
+        const char *next = nullptr;
+        std::unique_ptr<cJSON, decltype(&cJSON_Delete)> item(
+            cJSON_ParseWithLengthOpts(pos, end-pos, &next, false), cJSON_Delete);
+        if (!item || !next || next <= pos) break;
+        pos = next;
+        auto last = field(item.get(), "last");
+        auto stop = field(last, "stop");
+        if (!cJSON_IsBool(stop)) continue;
+        auto found = std::find_if(missing.begin(), missing.end(), [&](auto *v) {
+            return v->id.size() > 5 && v->id.compare(5, std::string::npos, str(item.get(),"id")) == 0 &&
+                   v->lastCode == str(last,"crs") && v->last == str(last,"name") &&
+                   v->lastTime == str(last,"time");
+        });
+        if (found != missing.end()) { (*found)->lastStop = cJSON_IsTrue(stop); missing.erase(found); }
+    }
+}
 void worker(void *) {
+    lakes::Snapshot previous;
     ESP_LOGI("lakes", "C6 Wi-Fi associated; waiting for network time");
     for (;;) {
         if (!(wifi_link_state() & 1) || time(nullptr) < 1700000000) {
@@ -60,7 +101,17 @@ void worker(void *) {
         }
         std::string body;
         lakes::Snapshot snapshot;
+        snapshot.link = wifi_link_state();
+        const auto generation = snapshot.link;
         bool ok = readBody(body) && lakes::decode(body.c_str(), snapshot);
+        snapshot.link = generation;
+        if (ok) fillMissingStops(previous, snapshot);
+        ok = ok && generation == wifi_link_state();
+        previous.vehicles.clear();
+        previous.link = generation;
+        previous.railOk = ok && snapshot.railOk;
+        if (previous.railOk)
+            for (const auto &v : snapshot.vehicles) if (v.route >= 8) previous.vehicles.push_back(v);
         unsigned bus = 0, rail = 0;
         for (auto &v : snapshot.vehicles)
             (v.route >= 8 ? rail : bus)++;
@@ -131,6 +182,8 @@ bool decode(const char *body, Snapshot &out) {
             v.lastCode = str(row, "lastCode");
             v.nextCode = str(row, "nextCode");
             v.lastTime = str(row, "lastTime");
+            auto stop = field(row, "lastStop");
+            if (cJSON_IsBool(stop)) v.lastStop = cJSON_IsTrue(stop);
             v.nextTime = str(row, "nextTime");
             result.vehicles.push_back(std::move(v));
         }

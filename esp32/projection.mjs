@@ -102,8 +102,15 @@ export function encoder(fingerprint) {
     let packet = body + '!' + sum + '\n';
     // Legacy H1 readers ignore this optional line outside the committed packet.
     if (arrivals && (status === 1 || status === 2)) {
-      const event = ['A1', sequence, sum, arrivals].join('\t');
-      packet += event + '\t' + crc32(event) + '\n';
+      const event = ['A1', sequence, sum, arrivals.toUpperCase()].join('\t');
+      const eventCrc = crc32(event);
+      const stops = [...arrivals].reduce((mask, d, i) => /[du]/.test(d) ? mask | (1 << i) : mask, 0);
+      if (stops) {
+        // Older readers ignore this preamble and still play the ordinary A1 trailer.
+        const hint = ['S1', eventCrc, stops].join('\t');
+        packet = hint + '\t' + crc32(hint) + '\n' + packet;
+      }
+      packet += event + '\t' + eventCrc + '\n';
     }
     return packet;
   };

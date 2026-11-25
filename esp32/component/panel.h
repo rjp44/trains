@@ -27,6 +27,6 @@ using LocalCommand = void (*)(std::string_view);
 void feedInput(const char *bytes, size_t length, uint32_t wall_ms, LocalCommand provision = nullptr);
 void updateLive(uint32_t wall_ms);
 void linkEnded();
-void setArrivalHandler(void (*handler)(Direction));
+void setArrivalHandler(void (*handler)(Direction, bool));
 void refreshCards(uint32_t wall_ms);
 } // namespace hemel

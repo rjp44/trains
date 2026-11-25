@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 set(IDF_TARGET esp32p4)
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../esp32/panel_settings")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(lakes_crowpanel_p4)

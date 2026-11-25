@@ -35,7 +35,7 @@ extern "C" void app_main() {
     lv_display_set_user_data(display, panel);
     lv_display_set_flush_cb(display, flush);
     ESP_ERROR_CHECK(hemel::attach(display) ? ESP_OK : ESP_ERR_INVALID_SIZE);
-    hemel::setArrivalHandler([](hemel::Direction d) { ESP_LOGI("hemel", "Station entry %s", d == hemel::Direction::Down ? "Down" : "Up"); });
+    hemel::setArrivalHandler([](hemel::Direction d, bool) { ESP_LOGI("hemel", "Station entry %s", d == hemel::Direction::Down ? "Down" : "Up"); });
     hemel::replay(hemel::Sample::Sector);
     // UART0 carries host snapshots and simulated touch on a board-independent link.
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, 16384, 0, 0, nullptr, 0));

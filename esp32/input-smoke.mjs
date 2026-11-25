@@ -79,15 +79,17 @@ try {
   // The optional arrival trailer is usable once, after its own continuous live
   // batch. Repeating a full+delta pair or replaying a recording must stay quiet.
   const liveEncoder = encoder(fingerprint);
-  const seed = liveEncoder(ninety, 2), entries = liveEncoder(later, 2, false, 'DU');
+  const seed = liveEncoder(ninety, 2), entries = liveEncoder(later, 2, false, 'dU');
   const event = entries.slice(entries.indexOf('A1\t'));
   const invalid = entries.replace(/(A1[^\n]*\t)\d+\n$/, '$10\n');
   function heard(bytes) {
     const result = spawnSync(process.argv[2], ['--live', '--output', join(tmp, 'events.bmp')], { input: bytes });
     assert.equal(result.status, 0);
-    return [...result.stderr.toString().matchAll(/Station entry (Up|Down)/g)].map((m) => m[1]);
+    return [...result.stderr.toString().matchAll(/Station entry ((?:Up|Down)(?: booked)?)/g)].map((m) => m[1]);
   }
-  assert.deepEqual(heard(seed + entries + event + seed + entries), ['Down', 'Up']);
+  assert.deepEqual(heard(seed + entries + event + seed + entries), ['Down booked', 'Up']);
+  assert.deepEqual(heard(seed + entries.replace(/^S1[^\n]+\n/, '')), ['Down', 'Up']);
+  assert.deepEqual(heard(seed + entries.replace(/^S1[^\n]+/, 'S1\t1\t3\t0')), ['Down', 'Up']);
   assert.deepEqual(heard(seed + invalid + event), []);
   assert.deepEqual(heard(entries), []);
   assert.deepEqual(heard(initial + delta + event), []);

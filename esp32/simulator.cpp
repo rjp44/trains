@@ -148,7 +148,7 @@ int run(Options o) {
     lv_display_set_flush_cb(display, flush);
     if (!hemel::attach(display))
         throw std::runtime_error("Panel profile does not match the display");
-    hemel::setArrivalHandler([](hemel::Direction d) { std::fprintf(stderr, "Station entry %s\n", d == hemel::Direction::Down ? "Down" : "Up"); });
+    hemel::setArrivalHandler([](hemel::Direction d, bool stopping) { std::fprintf(stderr, "Station entry %s%s\n", d == hemel::Direction::Down ? "Down" : "Up", stopping ? " booked" : ""); });
     hemel::view(o.view);
     hemel::light(o.light);
     hemel::replay(o.sample);

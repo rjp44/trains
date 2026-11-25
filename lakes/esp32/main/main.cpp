@@ -7,6 +7,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "map.h"
+#include "settings_display.h"
+#include "settings_ui.h"
+#include "preferences.h"
 #include "wifi.h"
 #include <algorithm>
 #include <cstdio>
@@ -31,6 +34,11 @@ void touch() {
     bool pressed = false;
     if (!crowpanel_touch(&x, &y, &pressed))
         return;
+    if (panel::settingsOpen()) {
+        if (!held) lakes::settingsPointer(x, y, pressed);
+        down = false;
+        return;
+    }
     if (pressed && !down) {
         startX = x;
         startY = y;
@@ -46,12 +54,13 @@ void report() {
 }
 // Each row of the diagnostic capture is independent of unsolicited UART logs.
 void capture() {
+    const auto *frame = panel::settingsOpen() && lakes::settingsFrame() ? lakes::settingsFrame() : pixels;
     char row[256 * 4 + 1];
     static constexpr char hex[] = "0123456789abcdef";
     puts("LAKES_FRAME 256 150");
     for (int y = 0; y < 150; y++) {
         for (int x = 0; x < 256; x++) {
-            uint16_t p = pixels[(y * 4) * 1024 + x * 4];
+            uint16_t p = frame[(y * 4) * 1024 + x * 4];
             for (int j = 0; j < 4; j++)
                 row[x * 4 + j] = hex[(p >> (12 - 4 * j)) & 15];
         }
@@ -98,7 +107,10 @@ void input(char c) {
     } else if (line.rfind("TAP ", 0) == 0) {
         int x, y;
         if (sscanf(line.c_str() + 4, "%d %d", &x, &y) == 2 && unsigned(x) < 1024 && unsigned(y) < 600) {
-            if (!held)
+            if (!held && panel::settingsOpen()) {
+                lakes::settingsPointer(x, y, true);
+                lakes::settingsPointer(x, y, false);
+            } else if (!held)
                 lakes::gesture(x, y, 0, 0, now());
             puts("LAKES_TAP_OK");
         }
@@ -113,10 +125,12 @@ extern "C" void app_main() {
     lakes::initFeedQueue();
     draw();
     crowpanel_prime_other_buffer();
-    crowpanel_backlight_on();
+    panel::loadPreferences();
+    panel::startBacklight();
+    panel::hornInit();
     ESP_LOGI("lakes", "Both DSI buffers primed, portrait map drawn in %u ms; %d recorded vehicles",
              unsigned(drawMs), lakes::visibleCount());
-    wifi_start();
+    wifi_start(public_feed_start);
     for (;;) {
         char bytes[150];
         int n = uart_read_bytes(UART_NUM_0, bytes, sizeof(bytes), pdMS_TO_TICKS(18));
@@ -124,7 +138,8 @@ extern "C" void app_main() {
             input(bytes[i]);
         touch();
         lakes::consumeFeed(now());
-        if (!held && lakes::needsRender(now()))
+        if (!held && panel::settingsOpen()) lakes::updatePanelSettings();
+        else if (!held && lakes::needsRender(now()))
             draw();
     }
 }
