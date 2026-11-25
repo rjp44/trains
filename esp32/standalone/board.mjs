@@ -28,11 +28,19 @@ const { project, fingerprint } = createProjection(layout);
 const schedules = scheduleCache((html) => parseHTML(html).document.documentElement, formatDay);
 const encode = encoder(fingerprint);
 export const start = () => feed.start();
+export function status() {
+  const { status, error } = feed.snapshot();
+  return error ? status + ' (' + error + ')' : status;
+}
+let visibleHeads = '';
+export const cardHeads = () => visibleHeads;
 export function packet(force) {
   const raw = feed.snapshot(), now = Date.now();
   const entries = arrivals.take(raw.areaStatus.R1 === 'Live', now);
   if (!raw.observed) return '';
   schedules.expire(now);
-  return encode(project(raw, schedules.lookup, true, now), { Live: 1, Partial: 2, Stale: 3 }[raw.status] || 0,
+  const view = project(raw, schedules.lookup, true, now);
+  visibleHeads = view.cards.map((c) => c[0]).filter(Boolean).join(' ');
+  return encode(view, { Live: 1, Partial: 2, Stale: 3 }[raw.status] || 0,
     !!force, force ? '' : entries);
 }

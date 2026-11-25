@@ -85,7 +85,7 @@ After loading the feature application on the P4, provision it once from a privat
 esp32/build/board-tools/bin/python esp32/crowpanel-p4/provision.py /dev/cu.wchusbserial10
 ```
 
-The horn follows real entries in R13143 (Down fast), R13144 (Up fast), R15145 (Down slow) and R15146 (Up slow). Down plays 554 Hz on the left for 200 ms, leaves a 40 ms gap, then plays 370 Hz on the right for 240 ms. Up exchanges the speakers. Both notes use a short ramp and a quiet second harmonic. The peak sample is 2,861 out of 32,768 (about −21 dBFS). Each fresh arrival retains its direction, including opposing trains entering together. The flash replay, USB recordings, initial area snapshots, reconnect baselines, approaches, service lookups and rotating cards are silent. The updated live USB bridge can send arrival directions as an optional checksummed line immediately after an H1 frame. Older bridges still supply display frames.
+The horn follows real entries in R13143 (Down fast), R13144 (Up fast), R15145 (Down slow) and R15146 (Up slow). Down plays 554 Hz on the left for 650 ms, leaves a 140 ms gap, then plays 370 Hz on the right for 800 ms. Up exchanges the speakers. Both notes use a short ramp and a quiet second harmonic. The peak sample is 2,861 out of 32,768 (about −21 dBFS). Each fresh arrival retains its direction, including opposing trains entering together. The flash replay, USB recordings, initial area snapshots, reconnect baselines, approaches, service lookups and rotating cards are silent. The updated live USB bridge can send arrival directions as an optional checksummed line immediately after an H1 frame. Older bridges still supply display frames.
 
 ### Electrical references for the 10.1-inch V1.2
 

@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
         if (i && right > 0 && down[2*i-1] <= 0) ++lowCrossings;
         peak = std::max({peak, std::abs(left), std::abs(right)});
     }
-    if (peak < 2500 || peak > 3200 || highCrossings != 111 || lowCrossings != 89) return 1;
+    if (peak < 2500 || peak > 3200 || highCrossings != 361 || lowCrossings != 296) return 1;
     std::fprintf(stderr, "Down and Up stereo slots verified, peak %d/32768\n", peak);
     if (argc == 2) {
         const auto &pcm = std::string_view(argv[1]) == "up" ? up : down;

@@ -32,10 +32,16 @@ void playback(void *) {
     for (;;) {
         xQueueReceive(entries, &entry, portMAX_DELAY);
         if (xTaskGetTickCount() - entry.tick > pdMS_TO_TICKS(3500)) continue;
+        if (i2s_channel_enable(tx) != ESP_OK) {
+            ESP_LOGW("horn", "Speaker clock unavailable");
+            continue;
+        }
         gpio_set_level(mute, 0);
         const bool ok = play(entry.direction);
         gpio_set_level(mute, 1);
-        if (!ok) ESP_LOGW("horn", "I2S output interrupted");
+        i2s_channel_disable(tx);
+        if (ok) ESP_LOGI("horn", "%s station entry played", entry.direction == hemel::Direction::Down ? "Down" : "Up");
+        else ESP_LOGW("horn", "I2S output interrupted");
     }
 }
 }
@@ -56,7 +62,7 @@ void horn_init() {
     fmt.gpio_cfg.dout = GPIO_NUM_23;
     fmt.gpio_cfg.din = I2S_GPIO_UNUSED;
     if (i2s_new_channel(&chan, &tx, nullptr) == ESP_OK &&
-        i2s_channel_init_std_mode(tx, &fmt) == ESP_OK && i2s_channel_enable(tx) == ESP_OK) {
+        i2s_channel_init_std_mode(tx, &fmt) == ESP_OK) {
         entries = xQueueCreate(8, sizeof(Entry));
         if (entries && xTaskCreate(playback, "horn", 4096, nullptr, 4, nullptr) == pdPASS) return;
     }

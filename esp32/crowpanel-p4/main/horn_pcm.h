@@ -5,7 +5,10 @@
 #include <cstdint>
 
 namespace horn {
-constexpr unsigned rate = 16000, highFrames = 3200, gap = 640, lowFrames = 3840;
+constexpr unsigned rate = 16000;
+constexpr unsigned highFrames = rate * 650 / 1000;
+constexpr unsigned gap = rate * 140 / 1000;
+constexpr unsigned lowFrames = rate * 800 / 1000;
 // The quiet tail drains more than the four 128-frame DMA buffers before mute.
 constexpr unsigned frames = highFrames + gap + lowFrames + 1024;
 inline void render(hemel::Direction direction, unsigned start, unsigned count, int16_t *stereo) {

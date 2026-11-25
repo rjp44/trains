@@ -2,6 +2,9 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_rom_crc.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <ctime>
 #include <cstdlib>
 
@@ -17,6 +20,16 @@ const JSMallocFunctions mem = {
     [](void *, void *p, size_t size) { return heap_caps_realloc(p, size, caps); },
     [](const void *p) -> size_t { return p ? heap_caps_get_allocated_size(const_cast<void *>(p)) : 0; },
 };
+// A long timetable can keep the interpreter busy for seconds on the P4.
+int yieldInterpreter(JSRuntime *, void *opaque) {
+    auto &next = *static_cast<int64_t *>(opaque);
+    const auto now = esp_timer_get_time();
+    if (now >= next) {
+        vTaskDelay(1);
+        next = esp_timer_get_time() + 50000;
+    }
+    return 0;
+}
 JSValue crc(JSContext *ctx, JSValueConst, int argc, JSValueConst *args) {
     size_t len;
     const char *s = argc ? JS_ToCStringLen(ctx, &len, args[0]) : nullptr;
@@ -55,6 +68,7 @@ bool FeedVM::init() {
     tzset();
     rt = JS_NewRuntime2(&mem, nullptr);
     if (!rt) return false;
+    JS_SetInterruptHandler(rt, yieldInterpreter, &nextYield);
     JS_SetMemoryLimit(rt, 12 * 1024 * 1024);
     JS_SetMaxStackSize(rt, 80 * 1024);
     ctx = JS_NewContext(rt);

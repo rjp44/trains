@@ -29,6 +29,7 @@ struct Socket {
     esp_websocket_client_handle_t client = nullptr;
 
     void close() {
+        failed = true;
         if (client) {
             esp_websocket_client_stop(client);
             esp_websocket_client_destroy(client);
@@ -42,7 +43,12 @@ struct Socket {
     }
     void post(bool opened, std::string *body = nullptr) {
         SocketEvent event{opened, body};
-        if (!xQueueSend(events, &event, 0)) { delete body; failed = true; }
+        // Let TCP absorb a short burst while the feed task parses a timetable.
+        if (!xQueueSend(events, &event, pdMS_TO_TICKS(1000))) {
+            delete body;
+            ESP_LOGW("feed", "Relay receive queue full");
+            failed = true;
+        }
     }
 };
 void wsEvent(void *arg, esp_event_base_t, int32_t id, void *payload) {
@@ -50,6 +56,7 @@ void wsEvent(void *arg, esp_event_base_t, int32_t id, void *payload) {
     if (s.failed) return;
     if (id == WEBSOCKET_EVENT_CONNECTED) { s.post(true); return; }
     if (id == WEBSOCKET_EVENT_ERROR || id == WEBSOCKET_EVENT_DISCONNECTED || id == WEBSOCKET_EVENT_CLOSED) {
+        ESP_LOGW("feed", "Relay transport ended (event %ld)", long(id));
         s.failed = true;
         return;
     }
@@ -58,13 +65,21 @@ void wsEvent(void *arg, esp_event_base_t, int32_t id, void *payload) {
     if (e.op_code >= 8) return;
     if (e.payload_offset == 0) {
         if (e.op_code == 1 && !s.collecting) { s.collecting = true; s.partial.clear(); }
-        else if (e.op_code != 0 || !s.collecting) { s.failed = true; return; }
+        else if (e.op_code != 0 || !s.collecting) {
+            ESP_LOGW("feed", "Unexpected relay frame (opcode %d)", int(e.op_code));
+            s.failed = true;
+            return;
+        }
         s.frameStart = s.partial.size();
     }
     if (!s.collecting || e.payload_offset < 0 || e.data_len < 0 || e.payload_len < 0 ||
         size_t(e.payload_offset) != s.partial.size() - s.frameStart ||
         size_t(e.payload_len) > maxBody - s.frameStart ||
-        size_t(e.data_len) + size_t(e.payload_offset) > size_t(e.payload_len)) { s.failed = true; return; }
+        size_t(e.data_len) + size_t(e.payload_offset) > size_t(e.payload_len)) {
+        ESP_LOGW("feed", "Invalid relay frame (length %d, offset %d)", e.payload_len, e.payload_offset);
+        s.failed = true;
+        return;
+    }
     if (e.data_len) s.partial.append(e.data_ptr, e.data_len);
     if (e.fin && e.payload_offset + e.data_len == e.payload_len) {
         s.collecting = false;
@@ -122,6 +137,8 @@ void fetchTask(void *) {
 void run(FeedVM &vm, Socket &s, unsigned session) {
     int current = 0;
     uint32_t drawn = 0, link = wifi_link_state();
+    std::string previousStatus;
+    uint32_t lastReport = 0;
     while (vm.ok) {
         const uint32_t state = wifi_link_state();
         if (state != link) {
@@ -163,6 +180,15 @@ void run(FeedVM &vm, Socket &s, unsigned session) {
             bool full = wifi_needs_snapshot();
             lvgl_port_unlock();
             const auto packet = vm.call("packet", nullptr, full);
+            const auto status = vm.call("status");
+            if (status != previousStatus) {
+                ESP_LOGI("feed", "Panel feed %s", status.c_str());
+                previousStatus = status;
+            }
+            if (!packet.empty() && now - lastReport >= 30000) {
+                lastReport = now;
+                ESP_LOGI("feed", "Live card check: %s [%s]", status.c_str(), vm.call("cardHeads").c_str());
+            }
             if (!packet.empty()) {
                 lvgl_port_lock(0);
                 if (full || !wifi_needs_snapshot()) wifi_packet(packet.data(), packet.size(), esp_timer_get_time()/1000);
@@ -187,7 +213,7 @@ void feedTask(void *) {
     ESP_LOGI("feed", "Waiting for network UTC");
     while (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(15000)) != ESP_OK) vTaskDelay(pdMS_TO_TICKS(1000));
     Socket s;
-    s.events = xQueueCreate(8, sizeof(SocketEvent));
+    s.events = xQueueCreate(32, sizeof(SocketEvent));
     fetches = xQueueCreate(1, sizeof(Lookup *));
     results = xQueueCreate(1, sizeof(Lookup *));
     if (s.events && fetches && results && xTaskCreate(fetchTask, "rail-https", 8192, nullptr, 3, nullptr) == pdPASS) {

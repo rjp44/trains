@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include "quickjs.h"
 
@@ -10,6 +11,7 @@ public:
     int tick();
     std::string call(const char *method, const std::string *text = nullptr, bool flag = false);
 private:
+    int64_t nextYield = 0;
     JSRuntime *rt = nullptr;
     JSContext *ctx = nullptr;
     JSValue api = JS_UNDEFINED;
