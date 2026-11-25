@@ -28,7 +28,8 @@ bool setBrightness(unsigned value) {
     if (value == 100) {
         if (ledc_stop(speed, channel, 1) != ESP_OK)
             return false;
-    } else if (ledc_set_duty_and_update(speed, channel, 1024 * value / 100, 0) != ESP_OK)
+    } else if (ledc_set_duty(speed, channel, 1024 * value / 100) != ESP_OK ||
+               ledc_update_duty(speed, channel) != ESP_OK)
         return false;
     light = value;
     return true;
@@ -58,6 +59,9 @@ bool savePreferences() {
               nvs_set_u8(n, "horn_volume", volume()) == ESP_OK &&
               nvs_set_u8(n, "backlight", light) == ESP_OK && nvs_commit(n) == ESP_OK;
     nvs_close(n);
+    if (ok)
+        ESP_LOGI("settings", "Saved horn mode %u, volume %u%%, backlight %u%%", unsigned(sound()), volume(),
+                 brightness());
     return ok;
 }
 void startBacklight() {
@@ -82,5 +86,7 @@ void startBacklight() {
         gpio_set_direction(GPIO_NUM_31, GPIO_MODE_OUTPUT);
         light = 100;
     }
+    ESP_LOGI("settings", "Applied horn mode %u, volume %u%%, backlight %u%%", unsigned(sound()), volume(),
+             brightness());
 }
 } // namespace panel

@@ -1,5 +1,6 @@
 #include "wifi.h"
 #include "esp_event.h"
+#include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
 #include "esp_timer.h"
@@ -39,6 +40,7 @@ WifiStatus status;
 void (*startFeed)();
 
 void message(const char *s, bool busy = false) {
+    ESP_LOGI("panel_wifi", "%s", s);
     std::lock_guard guard(lock);
     status.message = s;
     status.busy = busy;
@@ -74,13 +76,15 @@ bool associatedWith(const Credentials &c) {
            strncmp(reinterpret_cast<const char *>(ap.ssid), reinterpret_cast<const char *>(c.ssid),
                    sizeof(c.ssid)) == 0;
 }
-bool connect(const Credentials &c) {
+bool configure(const Credentials &c) {
     wifi_config_t cfg{};
     memcpy(cfg.sta.ssid, c.ssid, sizeof(c.ssid));
     memcpy(cfg.sta.password, c.pass, sizeof(c.pass));
     cfg.sta.threshold.authmode = c.pass[0] ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
-    cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-    return esp_wifi_set_config(WIFI_IF_STA, &cfg) == ESP_OK && esp_wifi_connect() == ESP_OK;
+    return esp_wifi_set_config(WIFI_IF_STA, &cfg) == ESP_OK;
+}
+bool connect(const Credentials &c) {
+    return configure(c) && esp_wifi_connect() == ESP_OK;
 }
 void disconnect() {
     xEventGroupClearBits(events, gotIP | lostIP);
@@ -116,27 +120,32 @@ void scan() {
     }
     std::lock_guard guard(lock);
     status.networks = std::move(list);
+    ESP_LOGI("panel_wifi", "Scan found %u network names", unsigned(status.networks.size()));
     status.message = status.networks.empty() ? "No networks found." : "Choose a network.";
     status.busy = false;
     ++status.revision;
 }
 void worker(void *) {
+    auto saved = savedNetwork();
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     if (esp_netif_init() != ESP_OK || esp_event_loop_create_default() != ESP_OK ||
         !esp_netif_create_default_wifi_sta() ||
         esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, event, nullptr) != ESP_OK ||
         esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, event, nullptr) != ESP_OK ||
         esp_wifi_init(&init) != ESP_OK || esp_wifi_set_storage(WIFI_STORAGE_RAM) != ESP_OK ||
-        esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK || esp_wifi_start() != ESP_OK) {
+        esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK ||
+        (saved.ssid[0] && !configure(saved)) || esp_wifi_start() != ESP_OK) {
         unavailable = true;
         message("Wi-Fi hardware unavailable.");
         vTaskDelete(nullptr);
         return;
     }
-    auto saved = savedNetwork();
-    bool started = false, attempting = false, trial = false;
+    // ESP-Hosted automatically connects on STA_START. Give that attempt time
+    // to acquire a DHCP lease before the worker retries the saved profile.
+    bool started = false, attempting = saved.ssid[0] != 0, trial = false;
     Credentials candidate{};
-    int64_t retry = 0, deadline = 0;
+    constexpr int64_t joinTimeout = 60000;
+    int64_t retry = 0, deadline = esp_timer_get_time() / 1000 + joinTimeout;
     message(saved.ssid[0] ? "Connecting to saved network..." : "Choose a Wi-Fi network.");
     for (;;) {
         const int64_t now = esp_timer_get_time() / 1000;
@@ -145,6 +154,7 @@ void worker(void *) {
             if (trial && !associatedWith(candidate))
                 continue;
             attempting = false;
+            ESP_LOGI("panel_wifi", "Station obtained an IP address");
             if (trial && store(candidate)) {
                 saved = candidate;
                 message("Connected. Network saved.");
@@ -193,13 +203,13 @@ void worker(void *) {
                 disconnect();
                 candidate = cmd.credentials;
                 trial = attempting = true;
-                deadline = now + 24000;
+                deadline = now + joinTimeout;
                 if (!connect(candidate))
                     deadline = now;
             }
         } else if (!(linkState.load() & 1) && !attempting && saved.ssid[0] && now >= retry) {
             attempting = connect(saved);
-            deadline = now + 24000;
+            deadline = now + joinTimeout;
             retry = now + 4000;
         }
     }
