@@ -4,3 +4,7 @@
 /qemu/sdkconfig.old
 /qemu/managed_components/
 /node_modules/
+/crowpanel-p4/build/
+/crowpanel-p4/sdkconfig
+/crowpanel-p4/sdkconfig.old
+/crowpanel-p4/managed_components/

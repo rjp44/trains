@@ -2,6 +2,8 @@
 
 The native renderer runs the 15-mile Hemel diagram, the Apsley–Berkhamsted close-up and the Watford Junction view. A laptop bridge supplies live trains, signal indications, Abbey station reports and Hemel cards. The three bundled recordings exercise the same display offline. The emulator boots into the 15-mile recording and switches to the bridge when it receives a valid snapshot.
 
+For the physical board, see the [CrowPanel hardware profile and first-boot procedure](crowpanel-p4/README.md).
+
 ## Run the laptop simulator
 
 From the repository root, with Node.js 22.4+, CMake 3.24+, Ninja, a C++17 compiler and the SDL2 development package installed, run the following commands. On a Mac with the Xcode command-line tools, Homebrew provides `cmake`, `ninja` and `sdl2`. The first configure downloads the pinned LVGL 9.3.0 source.
@@ -75,6 +77,4 @@ In a second terminal at the repository root, run `node esp32/bridge.mjs --qemu 8
 
 1. **Standalone connectivity.** The bridge emits an atomic full snapshot on connection and every ten packets, with sequenced deltas or heartbeats in between at 1.5-second intervals. Each packet carries the protocol version, layout fingerprint, latest TD observation time and CRC32. The receiver rejects damaged batches or gaps and waits for the next full snapshot. Next, measure heap with Wi-Fi and TLS active on the chosen board and decide which upstream connections to move onto it.
 2. **Touch navigation.** The current controls support train and signal inspection, themes and three fixed presets. Free drag, pinch zoom and physical touch calibration remain for the next iteration.
-3. **Physical bring-up.** Identify the board revision, SoC, panel resolution, display controller and bus, touch controller, memory and vendor pin map. Replace the QEMU host with that board’s display and input drivers, set orientation and RGB byte order, and release each LVGL stripe when its transfer completes. Replay the same three frames on hardware, then measure refresh time, free heap with Wi-Fi active, and recovery after a disconnect. Optimize dirty-region redraws if the display bus needs it.
-
-The 1024×600 desktop profile and the 800×480 virtual LCD are development targets. Selecting the physical board and its pin configuration can wait until its model is confirmed.
+3. **Physical bring-up.** The CrowPanel V1.2 candidate firmware builds for the 1024×600 MIPI display with GT911 touch and UART input. Confirm the connected board and preserve its factory image before the first write. On hardware, check the three recorded frames, colour order, touch orientation and USB reconnection, then measure refresh time and free heap.
