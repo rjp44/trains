@@ -9,7 +9,9 @@ from datetime import date, timedelta
 from pathlib import Path
 from zipfile import ZipFile
 
-LINES = {'505', '555', '599', '516', '508'}
+LINES = {'505', '508', '516', '555', '599', 'X4', 'X5', 'X6'}
+# The winter feed splits 555 workings at central Kendal (54.33 N). The other X4 is in Lancaster.
+MIN_ENDPOINT_LAT = {'555': 54.32, 'X4': 54.55}
 WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 
@@ -57,7 +59,7 @@ def pair_opposite_stops(groups, stops, official, routes_at):
             stops[ref]['group'] = i
 
 
-def extract(archive, naptan, winter_end):
+def extract(archive, naptan, winter_end, cache):
     def rows(table):
         with archive.open(table + '.txt') as source:
             yield from csv.DictReader(io.TextIOWrapper(source, encoding='utf-8-sig'))
@@ -102,11 +104,54 @@ def extract(archive, naptan, winter_end):
                     r['timepoint'] != '0', r['drop_off_type'] != '1'))
     if set(calls) != set(trips):
         raise ValueError('Missing stop times for selected trip')
+    stop_rows = {r['stop_id']: r for r in rows('stops')}
+    endpoints = defaultdict(set)
+    for key, t in list(trips.items()):
+        line = routes[t['route_id']]
+        if line not in MIN_ENDPOINT_LAT:
+            continue
+        seq = sorted(calls[key])
+        ends = [seq[0][1], seq[-1][1]]
+        if any(float(stop_rows[ref]['stop_lat']) < MIN_ENDPOINT_LAT[line] for ref in ends):
+            del trips[key], calls[key]
+        else:
+            endpoints[line].update(ends)
+
+    # Export the actual road traces of the retained trips, including shorter and seasonal variants.
+    shape_lines = defaultdict(set)
+    for t in trips.values():
+        shape_lines[t['shape_id']].add(routes[t['route_id']])
+    points = defaultdict(list)
+    with archive.open('shapes.txt') as raw:
+        reader = csv.reader(io.TextIOWrapper(raw, encoding='utf-8-sig'))
+        header = next(reader)
+        key, seq, lon, lat = [header.index(k) for k in ('shape_id', 'shape_pt_sequence', 'shape_pt_lon', 'shape_pt_lat')]
+        for row in reader:
+            if row[key] in shape_lines:
+                points[row[key]].append((int(row[seq]), round(float(row[lon]), 6), round(float(row[lat]), 6)))
+    shapes = {line: [] for line in sorted(LINES)}
+    for shape_id, lines in shape_lines.items():
+        if len(points[shape_id]) < 2:
+            raise ValueError('Missing road trace ' + shape_id)
+        trace = [(lon, lat) for _, lon, lat in sorted(points[shape_id])]
+        for line in lines:
+            shapes[line].append(trace)
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / 'bus-shapes.json').write_text(json.dumps(shapes, separators=(',', ':')))
+    coverage = {}
+    for line, traces in shapes.items():
+        xs, ys = zip(*(p for trace in traces for p in trace))
+        # Allow about a kilometre for location uncertainty and short diversions.
+        coverage[line] = {'bounds': [round(min(xs)-.016, 5), round(min(ys)-.01, 5),
+                                     round(max(xs)+.016, 5), round(max(ys)+.01, 5)]}
+        if line in endpoints:
+            coverage[line]['endpoints'] = sorted(endpoints[line])
+    (Path(__file__).resolve().parents[1] / 'bus-coverage.json').write_text(json.dumps(coverage, indent=2) + '\n')
     used = {call[1] for trip in calls.values() for call in trip}
     official = {r['ATCOCode']: r for r in csv.DictReader(naptan) if r['ATCOCode'] in used}
     stops, groups = {}, []
     by_name = defaultdict(list)
-    for r in sorted(rows('stops'), key=lambda r: r['stop_id']):
+    for r in sorted(stop_rows.values(), key=lambda r: r['stop_id']):
         ref = r['stop_id']
         if ref not in used:
             continue
@@ -152,9 +197,10 @@ if __name__ == '__main__':
     parser.add_argument('regional_gtfs', type=Path)
     parser.add_argument('naptan_csv', type=Path)
     parser.add_argument('--until', required=True, type=date.fromisoformat, help='Last day of map edition')
+    parser.add_argument('--map-cache', required=True, type=Path, help='Source cache for build-map.py')
     args = parser.parse_args()
     with ZipFile(args.regional_gtfs) as z, args.naptan_csv.open(encoding='utf-8-sig') as n:
-        result = extract(z, n, args.until)
+        result = extract(z, n, args.until, args.map_cache)
     target = Path(__file__).resolve().parents[1] / 'public/data/timetable.json'
     target.write_text(json.dumps(result, separators=(',', ':'), ensure_ascii=False) + '\n')
     print(f"{len(result['trips'])} trips, {len(result['stops'])} stops, {len(result['groups'])} stop groups")

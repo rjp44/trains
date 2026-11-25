@@ -178,7 +178,6 @@ h1 {
   fill-rule: evenodd;
 }
 .place,
-.water-name,
 .station-label {
   font:
     600 12px 'DM Sans',
@@ -193,17 +192,6 @@ h1 {
 .place.major {
   font-size: 16px;
   font-weight: 730;
-}
-.water-name {
-  font:
-    italic 12px Georgia,
-    serif;
-  fill: #336374;
-  stroke: var(--land);
-  stroke-width: 1.6px;
-}
-:root[data-theme='dark'] .water-name {
-  fill: #a8d0d3;
 }
 .station-label {
   font-size: 10px;
@@ -273,7 +261,7 @@ h1 {
 }
 .north {
   position: absolute;
-  top: 58px;
+  bottom: 32px;
   left: 13px;
   display: grid;
   justify-items: center;
@@ -599,8 +587,7 @@ aside {
 .road,
 .lake,
 .place,
-.station-label,
-.water-name {
+.station-label {
   vector-effect: non-scaling-stroke;
 }
 .place-points > * {
@@ -658,7 +645,7 @@ body.map-only {
   right: calc(9px + env(safe-area-inset-right));
 }
 .map-only .north {
-  top: calc(58px + env(safe-area-inset-top));
+  bottom: calc(32px + env(safe-area-inset-bottom));
   left: calc(13px + env(safe-area-inset-left));
 }
 .map-only .map-foot {
@@ -689,10 +676,23 @@ body.map-only {
   .map-tools .icon {
     min-height: 40px;
   }
-  .north {
-    top: 64px;
+}
+
+@media (max-width: 500px) {
+  .map-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
-  .map-only .north {
-    top: calc(64px + env(safe-area-inset-top));
+  #routes {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  #routes .route {
+    min-width: 0;
+    padding-inline: 2px;
+  }
+  .map-tools {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
   }
 }

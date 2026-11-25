@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { busFixes, railFixes, railBearing, visibleFixes, project, order } from './public/model.mjs';
+import { busFixes, railFixes } from './feeds.mjs';
+import { railBearing, visibleFixes, project, order } from './public/model.mjs';
 
 const read = (name) => JSON.parse(readFileSync(new URL('./public/data/' + name, import.meta.url)));
 const now = Date.parse('2026-11-25T12:05:54Z');
@@ -10,7 +11,7 @@ test('bus GPS is geofenced and newer observations win for the same vehicle', () 
   const results = busFixes([
     fix,
     { ...fix, time: '2026-11-25T12:04:38Z' },
-    { ...fix, route: 'X6', id: 'x' },
+    { ...fix, route: '999', id: 'x' },
     { ...fix, lat: '', id: 'y' },
   ]);
   assert.equal(results.length, 1);
@@ -58,9 +59,19 @@ test('recorded winter geography and observations cover every requested service',
   const map = read('map.json'),
     first = read('replay.json').frames[0];
   assert.deepEqual(new Set(visibleFixes(first, first.time).map((v) => v.route)), new Set(order));
-  assert.equal(map.stations.length, 5);
-  assert.ok(map.rail.length > 30);
-  for (const id of order.filter((id) => id !== 'rail')) assert.ok(map.routes[id].length > 10);
+  const { lines } = read('rail.json');
+  assert.equal(lines.rail.stations.length, 5);
+  assert.equal(lines.coast.stations.length, 27);
+  for (const line of Object.values(lines)) {
+    let previous = -1;
+    for (const station of line.stations) {
+      assert.ok(station.vertex > previous, station.name);
+      const [x, y] = line.track[station.vertex];
+      assert.ok(Math.hypot(x - station.point[0], y - station.point[1]) <= 1.06, station.name);
+      previous = station.vertex;
+    }
+  }
+  for (const id of order.filter((id) => !lines[id])) assert.ok(map.routes[id].length > 10);
   for (const v of visibleFixes(first, first.time)) {
     const [x, y] = project(v.point, map.frame);
     assert.ok(x >= 0 && x <= map.frame.width && y >= 0 && y <= map.frame.height);
@@ -71,7 +82,7 @@ test('recorded winter geography and observations cover every requested service',
 });
 
 test('GPS bearings preserve due north and distinguish a missing or invalid heading', () => {
-  const base = { id: '1', route: '555', lon: -2.78, lat: 54.2, time: new Date(now).toISOString() };
+  const base = { id: '1', route: '555', lon: -2.78, lat: 54.34, time: new Date(now).toISOString() };
   for (const [value, want] of [
     ['0', 0],
     ['360', 0],
@@ -98,4 +109,73 @@ test('a train cab follows the local rail segment in either direction, including 
   assert.equal(railBearing({ lastCode: 'A', nextCode: 'B' }, [8, 11], line, stations), 90);
   assert.equal(railBearing({ last: 'Last', next: 'First' }, [8, 11], line, stations), 270);
   assert.equal(railBearing({ last: 'First', next: 'Last' }, [1, 4], line, stations), 180);
+});
+
+test('coastal estimates include skipped stations and junctions and exclude unrelated shared-track and out-of-sector trains', () => {
+  const train = {
+    id: 'through',
+    last: { crs: 'CNF' },
+    next: { crs: 'GOS' },
+    origin: 'Manchester Airport',
+    destination: 'Barrow-In-Furness',
+    lon: -2.81,
+    lat: 54.175,
+  };
+  const fixes = railFixes({
+    generated_at: new Date(now).toISOString(),
+    trains: [
+      train,
+      {
+        ...train,
+        id: 'junction',
+        last: { crs: 'ASK' },
+        next: { name: 'Park South' },
+        origin: 'Corkickle',
+        destination: 'Barrow-In-Furness',
+        lon: -3.20216,
+        lat: 54.18119,
+      },
+      { ...train, id: 'shared', last: { crs: 'LAN' }, next: { crs: 'CNF' } },
+      { ...train, id: 'leeds', last: { crs: 'LAN' }, next: { crs: 'CNF' }, destination: 'Leeds' },
+      { ...train, id: 'north', last: { crs: 'WTH' }, next: { crs: 'PRN' } },
+      { ...train, id: 'cancelled', cancelled: true },
+    ],
+  });
+  assert.deepEqual(
+    fixes.map((v) => [v.id, v.route, v.direction]),
+    [
+      ['rail-through', 'coast', 1],
+      ['rail-junction', 'coast', -1],
+      ['rail-shared', 'coast', 1],
+    ],
+  );
+});
+
+test('555 workings south of Kendal and Lancaster X4 workings stay off the map', () => {
+  const bus = {
+    id: 'at-kendal',
+    route: '555',
+    lon: -2.743,
+    lat: 54.33,
+    time: new Date(now).toISOString(),
+    origin: '090079360111',
+    terminus: '090002372828',
+  };
+  assert.deepEqual(
+    busFixes([
+      bus,
+      { ...bus, id: 'south', terminus: '250020314' },
+      { ...bus, id: 'holme', origin: '090079331275' },
+      { ...bus, id: 'x4', route: 'X4', lon: -2.8, lat: 54.05 },
+    ]).map((v) => v.id),
+    ['bus-at-kendal'],
+  );
+  const data = read('map.json');
+  const latitudes = (id) => data.routes[id].flat().map(([, y]) => data.frame.north - y / data.frame.units);
+  assert.ok(Math.min(...latitudes('555')) > 54.325);
+  for (const id of ['X4', 'X5'])
+    assert.ok(
+      data.routes[id].flat().some(([x]) => x < project([-3.53, 54.64], data.frame)[0]),
+      id,
+    );
 });

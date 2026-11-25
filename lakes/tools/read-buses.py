@@ -3,10 +3,11 @@ import io
 import json
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from zipfile import ZipFile
 
 ns = '{http://www.siri.org.uk/siri}'
-lines = {'505', '555', '599', '516', '508'}
+lines = json.loads((Path(__file__).resolve().parents[1] / 'bus-coverage.json').read_text())
 rows, updated = [], None
 with ZipFile(io.BytesIO(sys.stdin.buffer.read())) as archive:
     if archive.getinfo('siri.xml').file_size > 150_000_000:

@@ -31,8 +31,9 @@ async function get(url) {
   if (!res.ok) throw Error('Unavailable');
   return res.json();
 }
-const [data, schedule] = await Promise.all([
+const [data, { lines: railways }, schedule] = await Promise.all([
   get('/data/map.json'),
+  get('/data/rail.json'),
   get('/data/timetable.json').catch(() => null),
 ]);
 const timetable = schedule && new Timetable(schedule);
@@ -50,15 +51,9 @@ const positions = [
   ['Hawkshead', -3.0, 54.375, -7, -4],
   ['Coniston', -3.074, 54.369, -6, -2],
   ['Bowness', -2.922, 54.365, -7, 5],
-  ['Milnthorpe', -2.774, 54.227, 8, 0],
-  ['Carnforth', -2.769, 54.13, 6, -4],
-  ['Lancaster', -2.804, 54.051, 0, 17, 1],
-];
-const waterNames = [
-  ['Ullswater', -2.9, 54.583, -32],
-  ['Windermere', -2.953, 54.311, -76],
-  ['Coniston Water', -3.093, 54.319, -71],
-  ['Derwentwater', -3.153, 54.568, 0],
+  ['Workington', -3.546, 54.644, 6, -8, 1],
+  ['Cockermouth', -3.366, 54.664, 0, -9],
+  ['Bassenthwaite', -3.2, 54.679, 0, -9],
 ];
 const path = (points) => 'M' + points.map((p) => p.join(',')).join('L');
 const multi = (lines) => lines.map(path).join('');
@@ -109,13 +104,29 @@ const paths = new Map(),
     { class: 'route-lines', fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
     svg,
   );
-for (const key of ['555', '505', '516', '599', '508', 'rail']) {
-  const d = key === 'rail' ? path(data.rail) : multi(data.routes[key]);
+for (const key of order) {
+  const railway = railways[key];
+  const tunnelStart = key === 'coast' ? railway.stations.find((s) => s.code === 'CKL').vertex : null;
+  const d = railway
+    ? path(tunnelStart === null ? railway.track : railway.track.slice(0, tunnelStart + 1))
+    : multi(data.routes[key]);
   const g = shape('g', { 'data-route-line': key }, group);
-  shape('path', { d, stroke: 'var(--halo)', 'stroke-width': key === 'rail' ? 4.2 : 3.8 }, g);
-  shape('path', { d, stroke: routes[key].colour, 'stroke-width': key === 'rail' ? 2.7 : 2.2 }, g);
-  if (key === 'rail')
-    shape('path', { d, stroke: '#fff', 'stroke-width': 1.1, 'stroke-dasharray': '3 4' }, g);
+  shape('path', { d, stroke: 'var(--halo)', 'stroke-width': railway ? 4.2 : 3.8 }, g);
+  shape('path', { d, stroke: routes[key].colour, 'stroke-width': railway ? 2.7 : 2.2 }, g);
+  if (railway) shape('path', { d, stroke: '#fff', 'stroke-width': 1.1, 'stroke-dasharray': '3 4' }, g);
+  if (tunnelStart !== null) {
+    const tunnel = shape(
+      'path',
+      {
+        d: path(railway.track.slice(tunnelStart)),
+        stroke: routes[key].colour,
+        'stroke-width': 2.1,
+        'stroke-dasharray': '2 4',
+      },
+      g,
+    );
+    shape('title', {}, tunnel, 'Bransty Tunnel · rail services suspended in the November 2026 edition');
+  }
   paths.set(key, g);
 }
 // Alternate colours on road links shared by several routes at the overview scale.
@@ -174,7 +185,8 @@ const stops =
 function fillStopPicker() {
   const picker = $('stop-picker');
   picker.length = 1;
-  picker.disabled = !timetable || (selectedRoutes.size === 1 && selectedRoutes.has('rail'));
+  picker.disabled =
+    !timetable || (selectedRoutes.size > 0 && [...selectedRoutes].every((key) => railways[key]));
   if (!timetable) picker.options[0].text = 'Timetable unavailable';
   for (const s of stops.filter((s) => stopVisible(s.id)).sort((a, b) => a.name.localeCompare(b.name)))
     picker.add(new Option(s.name, s.id));
@@ -256,9 +268,9 @@ const townLabels = [];
 let labelBoxes = [];
 const collides = (a, b) =>
   a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
-function place(name, point, dx, dy, major = false, station = false) {
+function place(name, point, dx, dy, major = false, station = false, railRoute = null, minZoom = 1) {
   const [x, y] = point;
-  shape(
+  const dot = shape(
     station ? 'rect' : 'circle',
     station
       ? {
@@ -285,27 +297,36 @@ function place(name, point, dx, dy, major = false, station = false) {
     labels,
     name,
   );
-  townLabels.push({ label, x, y, dx, dy, major });
+  townLabels.push({ label, dot, x, y, dx, dy, major, railRoute, minZoom });
 }
 for (const [name, lon, lat, dx, dy, major] of positions)
   place(name, project([lon, lat], frame), dx, dy, major);
 const stationOffsets = { WDM: [8, -12, 1], SVL: [2, 14], BUD: [6, -2], KEN: [8, 7, 1], OXN: [7, 10] };
-for (const s of data.stations) {
-  const [dx, dy, large] = stationOffsets[s.code];
-  place(s.code === 'OXN' ? 'Oxenholme' : s.name, s.point, dx, dy, large, true);
-}
-for (const [name, lon, lat, angle] of waterNames) {
-  const [x, y] = project([lon, lat], frame);
-  shape(
-    'text',
-    {
-      transform: 'translate(' + x + ' ' + y + ') rotate(' + angle + ')',
-      class: 'water-name',
-      'text-anchor': 'middle',
-    },
-    labels,
-    name,
-  );
+const coastalHubs = new Set(['LAN', 'WTH', 'BIF', 'ULV', 'GOS']);
+const stationNames = {
+  OXN: 'Oxenholme',
+  BIF: 'Barrow-in-Furness',
+  GOS: 'Grange-over-Sands',
+  KBF: 'Kirkby-in-Furness',
+  CAK: 'Cark & Cartmel',
+  RAV: 'Ravenglass',
+};
+for (const [key, line] of Object.entries(railways)) {
+  for (const s of line.stations) {
+    const hub = coastalHubs.has(s.code);
+    const [dx, dy, major] = stationOffsets[s.code] || [5, -5, hub];
+    // Keep interchanges visible on the bus map. Small coastal stations appear on zoom or route selection.
+    place(
+      stationNames[s.code] || s.name,
+      s.point,
+      dx,
+      dy,
+      major,
+      true,
+      hub ? null : key,
+      key === 'coast' && !hub ? 2 : 1,
+    );
+  }
 }
 function theme(dark) {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -329,11 +350,11 @@ $('theme').onclick = () => {
 
 for (const key of order) {
   const r = routes[key];
-  const button = text('button', key === 'rail' ? 'Rail' : key, 'route');
+  const button = text('button', r.chip || key, 'route');
   button.dataset.route = key;
   button.style.setProperty('--accent', r.colour);
   button.setAttribute('aria-pressed', 'false');
-  button.ariaLabel = key === 'rail' ? r.name : 'Bus ' + key + ' · ' + r.name;
+  button.ariaLabel = railways[key] ? r.name + ' · ' + r.via : 'Bus ' + key + ' · ' + r.name;
   button.title = button.ariaLabel;
   button.onclick = () => {
     if (selectedRoutes.has(key)) selectedRoutes.delete(key);
@@ -409,7 +430,16 @@ function viewport() {
   }
   labelBoxes = [];
   const matrixScale = matrix?.a || 1;
-  for (const { label, x, y, dx, dy } of [...townLabels].sort((a, b) => Number(b.major) - Number(a.major))) {
+  for (const { label, dot, x, y, dx, dy, railRoute, minZoom } of [...townLabels].sort(
+    (a, b) => Number(b.major) - Number(a.major),
+  )) {
+    const visible =
+      (!railRoute || routeVisible(railRoute)) && (zoom >= minZoom || selectedRoutes.has(railRoute));
+    dot.style.display = visible ? '' : 'none';
+    if (!visible) {
+      label.style.visibility = 'hidden';
+      continue;
+    }
     const offsets = [
       [dx, dy],
       [-dx, dy],
@@ -432,18 +462,6 @@ function viewport() {
       labelBoxes.push(box);
       break;
     }
-  }
-  // Water names are rotated, so convert their screen rectangles back to the map.
-  for (const label of labels.querySelectorAll('.water-name')) {
-    const b = label.getBoundingClientRect(),
-      matrix = svg.getScreenCTM();
-    if (matrix)
-      labelBoxes.push([
-        (b.left - matrix.e) / matrix.a,
-        (b.top - matrix.f) / matrix.d,
-        b.width / matrix.a,
-        b.height / matrix.d,
-      ]);
   }
   drawStops(1 / matrixScale);
   drawMarkers();
@@ -597,10 +615,10 @@ function detail() {
   if (selectedStop !== null) drawBoard(body, now);
   else {
     body.append(
-      text('span', v.agency + ' · ' + (v.route === 'rail' ? 'Lakes Line' : v.route), 'kicker'),
-      text('strong', v.route === 'rail' ? v.label : 'To ' + (v.destination || 'unknown destination')),
+      text('span', v.agency + ' · ' + (railways[v.route] ? routes[v.route].name : v.route), 'kicker'),
+      text('strong', railways[v.route] ? v.label : 'To ' + (v.destination || 'unknown destination')),
     );
-    if (v.route === 'rail')
+    if (railways[v.route])
       body.append(
         text(
           'div',
@@ -625,10 +643,10 @@ function detail() {
           ageLabel(now - v.time) +
           (v.stale ? ' · stale' : '') +
           ' · ' +
-          (v.route === 'rail' ? 'Railinfo' : 'DfT BODS'),
+          (railways[v.route] ? 'Railinfo' : 'DfT BODS'),
       ),
     );
-    if (v.route !== 'rail') drawJourney(body, v, now);
+    if (!railways[v.route]) drawJourney(body, v, now);
   }
   const list = body.querySelector('.schedule-list');
   if (list) {
@@ -660,15 +678,16 @@ function drawMarkers() {
   const currentFocus = document.activeElement?.dataset?.vehicle;
   markers.replaceChildren();
   const unit = 1 / (svg.getScreenCTM()?.a || 1);
+  const iconUnit = unit * Math.min(2.4, 1 + 0.35 * Math.log2(zoom));
   const occupied = [...labelBoxes];
   for (const vehicle of fixes) {
     const [x, y] = project(vehicle.point, frame);
-    const radius = vehicle.route === 'rail' ? 18 : 16;
-    occupied.push([x - radius * unit, y - radius * unit, 2 * radius * unit, 2 * radius * unit]);
+    const radius = (railways[vehicle.route] ? 18 : 16) * iconUnit;
+    occupied.push([x - radius, y - radius, 2 * radius, 2 * radius]);
   }
   for (const v of fixes) {
     const [x, y] = project(v.point, frame),
-      rail = v.route === 'rail',
+      rail = railways[v.route],
       fill = routes[v.route].colour;
     const g = shape(
       'g',
@@ -683,7 +702,7 @@ function drawMarkers() {
       markers,
     );
     shape('title', {}, g, v.label + ' · ' + v.precision);
-    const w = (rail ? 27 : 26) * unit,
+    const w = (rail ? 35 : 26) * unit,
       h = 13 * unit;
     const candidates = [
       [5, -17],
@@ -699,7 +718,7 @@ function drawMarkers() {
       [21, -3],
       [-48, -3],
     ];
-    const options = candidates.map(([dx, dy]) => [x + dx * unit, y + dy * unit, w, h]);
+    const options = candidates.map(([dx, dy]) => [x + dx * iconUnit, y + dy * iconUnit, w, h]);
     const b = options.find((b) => !occupied.some((r) => collides(b, r)));
     if (b) {
       occupied.push(b);
@@ -734,7 +753,7 @@ function drawMarkers() {
           'font-family': 'ui-monospace, monospace',
         },
         g,
-        rail ? 'Rail' : v.route,
+        routes[v.route].chip || v.route,
       );
       shape(
         'rect',
@@ -748,7 +767,7 @@ function drawMarkers() {
         g,
       );
     }
-    const bearing = rail ? railBearing(v, [x, y], data.rail, data.stations) : v.bearing;
+    const bearing = rail ? railBearing(v, [x, y], rail.track, rail.stations) : v.bearing;
     const known = Number.isFinite(bearing);
     const angle = known ? bearing - 90 : 0;
     const flip = known && bearing > 180 ? -1 : 1;
@@ -759,11 +778,21 @@ function drawMarkers() {
         href: icon,
         color: fill,
         transform:
-          'translate(' + x + ' ' + y + ') scale(' + unit + ') rotate(' + angle + ') scale(1 ' + flip + ')',
+          'translate(' +
+          x +
+          ' ' +
+          y +
+          ') scale(' +
+          iconUnit +
+          ') rotate(' +
+          angle +
+          ') scale(1 ' +
+          flip +
+          ')',
       },
       g,
     );
-    shape('circle', { cx: x, cy: y, r: 17 * unit, fill: 'transparent' }, g);
+    shape('circle', { cx: x, cy: y, r: 17 * iconUnit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
     g.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -783,7 +812,7 @@ function render() {
   detail();
   for (const kind of ['bus', 'rail']) {
     const feed = snapshot?.[kind],
-      relevant = fixes.filter((v) => (v.route === 'rail') === (kind === 'rail'));
+      relevant = fixes.filter((v) => Boolean(railways[v.route]) === (kind === 'rail'));
     const count = relevant.filter((v) => !v.stale).length,
       stale = relevant.length - count;
     let status =
@@ -828,10 +857,7 @@ function render() {
   for (const v of fixes) {
     const b = text(
       'button',
-      (v.route === 'rail' ? 'Rail' : v.route) +
-        ' · ' +
-        (v.destination || v.label) +
-        (v.stale ? ' · stale' : ''),
+      (routes[v.route].chip || v.route) + ' · ' + (v.destination || v.label) + (v.stale ? ' · stale' : ''),
     );
     b.onclick = () => inspect(v.id);
     list.append(b);

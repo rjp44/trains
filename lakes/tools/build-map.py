@@ -9,24 +9,24 @@ import gzip
 import json
 import math
 import sys
-import xml.etree.ElementTree as ET
-from zipfile import ZipFile
 
 import mapbox_vector_tile
 import numpy as np
 from PIL import Image
 from shapely.geometry import LineString, Point, box, shape
-from shapely.ops import transform, unary_union
+from shapely.ops import linemerge, transform, unary_union
 
 OUT = Path(__file__).resolve().parents[1] / 'public/data'
 CACHE = Path(sys.argv[1])
 CACHE.mkdir(parents=True, exist_ok=True)
-WEST, NORTH, UNIT, WIDTH, HEIGHT = -3.34, 54.707, 1030, 480, 748
+WEST, NORTH, UNIT, WIDTH, HEIGHT = -3.69, 54.74, 1030, 635, 770
 # Keep the whole service area in view on phones in either orientation and on widescreen monitors.
 BLEED_X, BLEED_Y = 700, 240
 ASPECT = math.cos(math.radians(54.35))
-LINES = ('505', '508', '516', '555', '599')
-STATIONS = ('WDM', 'SVL', 'BUD', 'KEN', 'OXN')
+RAIL_ROUTES = {
+    'rail': 'WDM SVL BUD KEN OXN'.split(),
+    'coast': 'LAN CNF SVR ARN GOS KBK CAK ULV DLT ROO BIF ASK KBF FOX GNR MLM SIC BOC RAV DRI SSC SEL BYS NRT SBS CKL WTH'.split(),
+}
 
 
 def get(key, url):
@@ -58,22 +58,26 @@ def tiles(bounds, zoom):
 
 
 def route_links():
-    archive = get('stagecoach.zip', 'https://opendata.stagecoachbus.com/stagecoach-sccu-route-schedule-data-transxchange_2_4.zip')
-    paths = {n: set() for n in LINES}
-    with ZipFile(BytesIO(archive)) as source:
-        for name in source.namelist():
-            number = name.rsplit('_', 1)[-1].removesuffix('.xml')
-            if number not in LINES:
-                continue
-            root = ET.fromstring(source.read(name))
-            for link in root.findall('.//{*}RouteLink'):
-                points = [project(float(p.findtext('{*}Longitude')), float(p.findtext('{*}Latitude')))
-                          for p in link.findall('{*}Track/{*}Mapping/{*}Location')]
-                if len(points) < 2:
-                    raise ValueError('Missing road geometry in ' + name)
-                simplified = tuple(tuple(p) for p in coords(LineString(points).simplify(.09)))
-                paths[number].add(min(simplified, simplified[::-1]))
-    return {line: sorted(parts) for line, parts in paths.items()}
+    shapes = json.loads((CACHE / 'bus-shapes.json').read_text())
+    # A road edge has the same owners in either direction. Merge consecutive edges with
+    # the same owners before simplifying, so shared roads get identical dashed overlays.
+    owners = defaultdict(set)
+    for number, traces in shapes.items():
+        for trace in traces:
+            points = [tuple(p) for p in trace]
+            for a, b in zip(points, points[1:]):
+                if a != b:
+                    owners[min((a, b), (b, a))].add(number)
+    runs = defaultdict(list)
+    for (a, b), lines in sorted(owners.items()):
+        runs[tuple(sorted(lines))].append([project(*a), project(*b)])
+    paths = {number: [] for number in shapes}
+    for lines, edges in runs.items():
+        for segment in parts(linemerge(edges)):
+            points = coords(segment.simplify(.09))
+            for line in lines:
+                paths[line].append(points)
+    return paths
 
 
 def vector_tile(tile):
@@ -101,44 +105,67 @@ def parts(geometry):
     return geometry.geoms if hasattr(geometry, 'geoms') else [geometry]
 
 
-def railway(segments, stations):
-    # Join shared tile-edge vertices and trace the branch between station coordinates.
+def rail_graph(segments):
     graph = defaultdict(dict)
     for line in segments:
-        vertices = [(round(x, 2), round(y, 2)) for x, y in line.coords]
+        # Straight tracks can span a station without an OSM vertex at its platforms.
+        vertices = [(round(x, 3), round(y, 3)) for x, y in line.segmentize(.4).coords]
         for a, b in zip(vertices, vertices[1:]):
             if a != b:
                 graph[a][b] = graph[b][a] = math.dist(a, b)
-    # Vector tiles can end a few metres apart at a boundary.
-    ends = [p for p, neighbours in graph.items() if len(neighbours) == 1]
-    for p in ends:
-        for q in graph:
-            dist = math.dist(p, q)
-            if 0 < dist < .19:
-                graph[p][q] = graph[q][p] = dist
-    origin, destination = stations[0]['point'], stations[-1]['point']
-    first = min(graph, key=lambda p: math.dist(p, origin))
+    # Join small gaps between neighbouring vector tiles.
+    cells = defaultdict(list)
+    for x, y in graph:
+        cells[(math.floor(x), math.floor(y))].append((x,y))
+    for p in [p for p, neighbours in graph.items() if len(neighbours) == 1]:
+        u, v = map(math.floor, p)
+        for i in range(u-1,u+2):
+            for j in range(v-1,v+2):
+                for q in cells[i,j]:
+                    distance = math.dist(p, q)
+                    if 0 < distance < .19:
+                        graph[p][q] = graph[q][p] = distance
+    return graph
+
+
+def rail_leg(graph, first, station):
+    destination = station['point']
     queue, distance, previous = [(0, first)], {first: 0}, {}
+    closest, gap = first, math.inf
     while queue:
         cost, point = heappop(queue)
         if cost != distance[point]:
             continue
-        # The rail endpoint on platform 3 is about 105 m from Oxenholme’s station centroid.
-        if math.dist(point, destination) < 1.05:
-            path = [point]
-            while path[-1] != first:
-                path.append(previous[path[-1]])
-            track = LineString(path[::-1])
-            if max(track.distance(Point(s['point'])) for s in stations) > 1.05:
-                raise ValueError('Branch does not pass each station')
-            return coords(track.simplify(.035))
+        separation = math.dist(point, destination)
+        if separation < gap:
+            closest, gap = point, separation
+        if gap <= .25:
+            break
         for neighbour, length in graph[point].items():
             new = cost + length
             if new < distance.get(neighbour, math.inf):
                 distance[neighbour] = new
                 previous[neighbour] = point
                 heappush(queue, (new, neighbour))
-    raise ValueError('No connected Windermere branch found')
+    # Station centroids can be up to 110 m from the passenger track, e.g. Oxenholme.
+    if gap > 1.05:
+        raise ValueError(f"No connected track to {station['code']} (gap {gap:.2f} map units)")
+    path = [closest]
+    while path[-1] != first:
+        path.append(previous[path[-1]])
+    return path[::-1]
+
+
+def railway(graph, stations):
+    track = [min(graph, key=lambda p: math.dist(p, stations[0]['point']))]
+    stations[0]['vertex'] = 0
+    for station in stations[1:]:
+        leg = rail_leg(graph, track[-1], station)
+        track.extend(coords(LineString(leg).simplify(.035))[1:])
+        # Use full precision at connections so the next leg can find the graph node.
+        track[-1] = leg[-1]
+        station['vertex'] = len(track)-1
+    return [[round(x,2), round(y,2)] for x,y in track]
 
 
 def relief(bounds):
@@ -169,9 +196,10 @@ def relief(bounds):
 bounds = [WEST-BLEED_X/(UNIT*ASPECT), NORTH-(HEIGHT+BLEED_Y)/UNIT, WEST+(WIDTH+BLEED_X)/(UNIT*ASPECT), NORTH+BLEED_Y/UNIT]
 tile_url = json.loads(get('tile-source.json','https://tiles.openfreemap.org/planet'))['tiles'][0]
 geo = json.loads(get('stations.json', 'https://api.railinfo.uk/stations/geo'))
-station_by_code = {f['properties']['crs']: f for f in geo['features'] if f['properties'].get('crs') in STATIONS}
-stations = [{'code': code, 'name': station_by_code[code]['properties']['name'],
-             'point': list(project(*station_by_code[code]['geometry']['coordinates']))} for code in STATIONS]
+station_by_code = {f['properties']['crs']: f for f in geo['features'] if f['properties'].get('crs')}
+railways = {key: {'stations': [{'code': code, 'name': station_by_code[code]['properties']['name'],
+                               'point': list(project(*station_by_code[code]['geometry']['coordinates']))}
+                              for code in codes]} for key, codes in RAIL_ROUTES.items()}
 water, roads, rail = [], [], []
 with ThreadPoolExecutor(max_workers=4) as pool:
     for tile, layers in pool.map(vector_tile, tiles(bounds, 10)):
@@ -180,7 +208,7 @@ with ThreadPoolExecutor(max_workers=4) as pool:
         if 'transportation' in layers:
             roads.extend(geom for props, geom in features(tile, layers['transportation'])
                          if props['class'] in ('motorway','trunk','primary','secondary') and geom.geom_type.endswith('LineString'))
-    for tile, layers in pool.map(vector_tile, tiles([-2.93,54.29,-2.70,54.395], 12)):
+    for tile, layers in pool.map(vector_tile, tiles([-3.635,54.022,-2.69,54.573], 12)):
         if 'transportation' in layers:
             for props, geom in features(tile, layers['transportation']):
                 if props['class']=='rail':
@@ -188,13 +216,23 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 clip = box(-BLEED_X, -BLEED_Y, WIDTH+BLEED_X, HEIGHT+BLEED_Y)
 lakes = unary_union(water).intersection(clip).simplify(.12)
 road = unary_union(roads).intersection(clip).simplify(.22)
+# The winter vector tiles omit Bransty Tunnel during its engineering closure.
+# Use its surveyed OSM centreline to show the physical railway through to Whitehaven.
+tunnel = json.loads(get('bransty-way.json', 'https://api.openstreetmap.org/api/0.6/way/5940205/full.json'))['elements']
+nodes = {e['id']: project(e['lon'], e['lat']) for e in tunnel if e['type'] == 'node'}
+way = next(e for e in tunnel if e['type'] == 'way' and e['id'] == 5940205)
+rail.append(LineString([nodes[n] for n in way['nodes']]))
+graph = rail_graph(rail)
+for line in railways.values():
+    line['track'] = railway(graph, line['stations'])
 map_data = {
     'frame': {'width':WIDTH, 'height':HEIGHT, 'west':WEST, 'north':NORTH, 'units':UNIT, 'aspect':ASPECT, 'bleedX':BLEED_X, 'bleedY':BLEED_Y},
-    'routes': route_links(), 'stations': stations, 'rail': railway(rail, stations),
+    'routes': route_links(),
     'lakes': [[coords(p.exterior)] + [coords(r) for r in p.interiors] for p in parts(lakes) if p.geom_type=='Polygon' and p.area>.7],
     'roads': [coords(p) for p in parts(road) if p.geom_type=='LineString' and p.length>1],
 }
 OUT.mkdir(parents=True, exist_ok=True)
+(OUT/'rail.json').write_text(json.dumps({'frame': map_data['frame'], 'lines': railways}, separators=(',', ':'))+'\n')
 (OUT/'map.json').write_text(json.dumps(map_data, separators=(',', ':'))+'\n')
 relief(bounds)
-print('Route links', {r: len(v) for r,v in map_data['routes'].items()}, 'rail vertices', len(map_data['rail']))
+print('Route links', {r: len(v) for r,v in map_data['routes'].items()}, 'rail vertices', {key: len(line['track']) for key,line in railways.items()})

@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Lake District buses and trains",
   "short_name": "Lakes Transit",
-  "description": "Live Lake District buses, Lakes Line trains and scheduled bus departures.",
+  "description": "Live Lake District buses, Lakes Line and coastal trains and scheduled bus departures.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
