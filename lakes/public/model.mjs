@@ -54,6 +54,7 @@ export function busFixes(rows) {
       continue;
     const id = 'bus-' + row.id;
     if (fixes.has(id) && fixes.get(id).time >= time) continue;
+    const bearing = row.bearing == null || String(row.bearing).trim() === '' ? NaN : Number(row.bearing);
     fixes.set(id, {
       id,
       route,
@@ -61,6 +62,11 @@ export function busFixes(rows) {
       time,
       label: 'Vehicle ' + row.id,
       destination: row.destination || '',
+      bearing: Number.isFinite(bearing) && bearing >= 0 && bearing <= 360 ? bearing % 360 : null,
+      origin: row.origin,
+      terminus: row.terminus,
+      departure: row.departure,
+      serviceDate: row.serviceDate,
       agency: 'Stagecoach',
       precision: 'Vehicle GPS',
     });

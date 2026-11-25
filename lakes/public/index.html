@@ -29,7 +29,57 @@
           id="map"
           viewBox="0 0 480 748"
           aria-label="Geographic map of Stagecoach bus routes and the Lakes Line"
-        ></svg>
+        >
+          <defs>
+            <g id="bus-side">
+              <path
+                d="M-12 4V-5q0-2 2-2H6q3 0 4 3l2 6v2q0 1-2 1h-20q-2 0-2-1Z"
+                fill="currentColor"
+                stroke="white"
+                stroke-width="1.3"
+              />
+              <path
+                d="M-10-5h3v3h-3zm4 0h3v3h-3zm4 0h3v3h-3zm4 0h3v3H2zm4 0q2 0 3 3H6zM-10 0h3v2h-3zm4 0h3v2h-3zm4 0h3v2h-3zm4 0h2v4H2zm4-1h3l1 3H6z"
+                fill="#def1ee"
+              />
+              <path d="M10 3h2" stroke="#ffe19a" stroke-width="1.7" />
+              <g fill="#182d33" stroke="white" stroke-width=".8">
+                <circle cx="-7" cy="5" r="2.2" />
+                <circle cx="7" cy="5" r="2.2" />
+              </g>
+              <path
+                d="m14-3 4 3-4 3"
+                fill="none"
+                stroke="white"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="m14-3 4 3-4 3"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </g>
+            <g id="bus-front">
+              <rect
+                x="-6"
+                y="-8"
+                width="12"
+                height="16"
+                rx="3"
+                fill="currentColor"
+                stroke="white"
+                stroke-width="1.3"
+              />
+              <path d="M-4-6h8v3h-8zm0 5h8v4h-8z" fill="#def1ee" />
+              <path d="M-4 5h2m4 0h2" stroke="#ffe19a" stroke-width="1.6" />
+            </g>
+          </defs>
+        </svg>
         <div class="map-tools">
           <button class="icon" id="plus" title="Zoom in" aria-label="Zoom in">+</button
           ><button class="icon" id="minus" title="Zoom out" aria-label="Zoom out">−</button
@@ -47,13 +97,17 @@
               <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md"
                 >Mapzen and sources</a
               >
-              · Routes © <a href="https://www.stagecoachbus.com/open-data">Stagecoach</a>
+              · Routes © <a href="https://www.stagecoachbus.com/open-data">Stagecoach</a> <br />Timetables
+              via DfT BODS · Stops from NaPTAN ·
+              <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+                >Open Government Licence</a
+              >
             </div>
           </details>
         </div>
-        <div id="vehicle" hidden role="region" aria-label="Vehicle details">
-          <button id="close" class="close" aria-label="Close vehicle details">×</button>
-          <div id="vehicle-info"></div>
+        <div id="vehicle" hidden role="region" aria-label="Map details">
+          <button id="close" class="close" aria-label="Close details">×</button>
+          <div id="vehicle-info" tabindex="0"></div>
         </div>
       </section>
       <aside>
@@ -62,6 +116,12 @@
           <button id="show-all" hidden>Show all</button>
         </div>
         <div id="routes" aria-label="Focus on a route"></div>
+        <div class="stop-finder">
+          <label for="stop-picker">Bus stops</label>
+          <select id="stop-picker">
+            <option value="">Find a stop…</option>
+          </select>
+        </div>
         <section class="reports">
           <h2>Running information</h2>
           <div><span>Bus GPS</span><b id="bus-status">Connecting…</b></div>

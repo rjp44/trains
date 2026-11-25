@@ -69,3 +69,18 @@ test('recorded winter geography and observations cover every requested service',
   for (const link of map.routes['508'])
     for (const [, y] of link) assert.ok(y < (map.frame.north - 54.51) * map.frame.units);
 });
+
+test('GPS bearings preserve due north and distinguish a missing or invalid heading', () => {
+  const base = { id: '1', route: '555', lon: -2.78, lat: 54.2, time: new Date(now).toISOString() };
+  for (const [value, want] of [
+    ['0', 0],
+    ['360', 0],
+    ['256', 256],
+    [null, null],
+    ['', null],
+    ['-1', null],
+    [361, null],
+  ]) {
+    assert.equal(busFixes([{ ...base, bearing: value }])[0].bearing, want);
+  }
+});

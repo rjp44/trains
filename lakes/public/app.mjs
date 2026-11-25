@@ -1,4 +1,5 @@
 import { routes, order, project, visibleFixes, ageLabel, londonTime, freshMs } from './model.mjs';
+import { Timetable, hhmm, stopTitle, serviceSeconds } from './timetable.mjs';
 
 const $ = (id) => document.getElementById(id);
 const svg = $('map'),
@@ -21,8 +22,12 @@ async function get(url) {
   if (!res.ok) throw Error('Unavailable');
   return res.json();
 }
-const data = await get('/data/map.json'),
-  { frame } = data;
+const [data, schedule] = await Promise.all([
+  get('/data/map.json'),
+  get('/data/timetable.json').catch(() => null),
+]);
+const timetable = schedule && new Timetable(schedule);
+const { frame } = data;
 const [W, H] = [frame.width, frame.height];
 const positions = [
   ['Penrith', -2.757, 54.663, 0, -9, 1],
@@ -52,7 +57,8 @@ let zoom = 1,
   cx = W / 2,
   cy = H / 2,
   focus = null,
-  selection = null;
+  selection = null,
+  selectedStop = null;
 let mode = 'live',
   snapshot = null,
   replay = null,
@@ -84,7 +90,11 @@ shape(
 );
 shape('path', { d: multi(data.roads), class: 'road', 'stroke-width': 0.65 }, svg);
 const paths = new Map(),
-  group = shape('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+  group = shape(
+    'g',
+    { class: 'route-lines', fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+    svg,
+  );
 for (const key of ['555', '505', '516', '599', '508', 'rail']) {
   const d = key === 'rail' ? path(data.rail) : multi(data.routes[key]);
   const g = shape('g', {}, group);
@@ -108,7 +118,11 @@ for (const [route, links] of Object.entries(data.routes)) {
     linkSet.set(d, ids);
   }
 }
-const shared = shape('g', { 'pointer-events': 'none', fill: 'none', 'stroke-width': 2.5 }, svg);
+const shared = shape(
+  'g',
+  { class: 'route-lines', 'pointer-events': 'none', fill: 'none', 'stroke-width': 2.5 },
+  svg,
+);
 const common = new Map();
 for (const [d, ids] of linkSet) {
   if (ids.length < 2) continue;
@@ -130,9 +144,97 @@ for (const [key, d] of common) {
     ),
   );
 }
-const places = shape('g', {}, svg),
+const places = shape('g', { 'pointer-events': 'none' }, svg),
+  stopsLayer = shape('g', { 'aria-label': 'Bus stops' }, svg),
   markers = shape('g', { 'aria-label': 'Vehicles' }, svg);
-const dots = shape('g', {}, places),
+const stops =
+  timetable?.groups
+    .map((g, id) => {
+      const points = g.refs.map((ref) => project(timetable.stops[ref].point, frame));
+      const point = [0, 1].map((axis) => points.reduce((sum, p) => sum + p[axis], 0) / points.length);
+      return { id, name: stopTitle(g), point, weight: timetable.boards[id].length };
+    })
+    .sort((a, b) => b.weight - a.weight) || [];
+
+function fillStopPicker() {
+  const picker = $('stop-picker');
+  picker.length = 1;
+  picker.disabled = !timetable || focus === 'rail';
+  if (!timetable) picker.options[0].text = 'Timetable unavailable';
+  for (const s of stops
+    .filter((s) => !focus || timetable.routesAt[s.id].has(focus))
+    .sort((a, b) => a.name.localeCompare(b.name)))
+    picker.add(new Option(s.name, s.id));
+}
+function openStop(id, centre) {
+  selection = null;
+  selectedStop = id;
+  if (mode === 'replay') runReplay(false);
+  $('stop-picker').value = String(id);
+  if (centre) {
+    [cx, cy] = stops.find((s) => s.id === id).point;
+    zoom = Math.max(zoom, 6);
+    cy += (H * 0.19) / zoom;
+  }
+  viewport();
+  detail();
+  $('vehicle-info').focus({ preventScroll: true });
+}
+$('stop-picker').onchange = (e) => {
+  if (e.target.value !== '') openStop(Number(e.target.value), true);
+  else $('close').click();
+};
+fillStopPicker();
+
+function drawStops(unit) {
+  const active = document.activeElement?.dataset?.stop;
+  stopsLayer.replaceChildren();
+  const visible = [];
+  const ordered =
+    selectedStop === null
+      ? stops
+      : [stops.find((s) => s.id === selectedStop), ...stops.filter((s) => s.id !== selectedStop)];
+  for (const s of ordered) {
+    if (focus && !timetable.routesAt[s.id].has(focus)) continue;
+    const [x, y] = s.point;
+    if (Math.abs(cx - x) > W / (2 * zoom) + 5 * unit || Math.abs(cy - y) > H / (2 * zoom) + 5 * unit)
+      continue;
+    if (visible.some(([px, py]) => Math.hypot(px - x, py - y) < 22 * unit)) continue;
+    visible.push(s.point);
+    const g = shape(
+      'g',
+      {
+        role: 'button',
+        tabindex: 0,
+        'data-stop': s.id,
+        'aria-label': 'Departures from ' + s.name,
+        transform: 'translate(' + x + ' ' + y + ') scale(' + unit + ')',
+      },
+      stopsLayer,
+    );
+    shape('title', {}, g, s.name + ' · Scheduled departures');
+    shape('circle', { r: 12, fill: 'transparent' }, g);
+    shape(
+      'circle',
+      {
+        r: selectedStop === s.id ? 5 : 3.4,
+        fill: 'var(--card)',
+        stroke: selectedStop === s.id ? '#ce731d' : 'var(--town)',
+        'stroke-width': 1.45,
+      },
+      g,
+    );
+    g.onclick = () => openStop(s.id, false);
+    g.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openStop(s.id, false);
+      }
+    };
+    if (active === String(s.id)) g.focus({ preventScroll: true });
+  }
+}
+const dots = shape('g', { class: 'place-points' }, places),
   labels = shape('g', {}, places);
 const townLabels = [];
 let labelBoxes = [];
@@ -226,6 +328,8 @@ for (const key of order) {
 function selectRoute(key) {
   focus = key;
   selection = null;
+  selectedStop = null;
+  fillStopPicker();
   shared.style.display = key ? 'none' : '';
   for (const b of $('routes').children) b.setAttribute('aria-pressed', String(b.dataset.route === key));
   $('show-all').hidden = !key;
@@ -252,18 +356,20 @@ function viewport() {
   cx = Math.min(W - w / 2, Math.max(w / 2, cx));
   cy = Math.min(H - h / 2, Math.max(h / 2, cy));
   svg.setAttribute('viewBox', [cx - w / 2, cy - h / 2, w, h].join(' '));
-  $('plus').disabled = zoom >= 5;
+  $('plus').disabled = zoom >= 24;
   $('minus').disabled = zoom <= 1;
   const matrix = svg.getScreenCTM();
+  const labelScale = zoom / Math.min(1.35, Math.sqrt(zoom));
+  dots.style.setProperty('--point-scale', 1 / labelScale);
   if (matrix) {
-    const km = zoom >= 3 ? 2 : 5;
+    const km = zoom >= 12 ? 0.5 : zoom >= 6 ? 1 : zoom >= 3 ? 2 : 5;
     $('scale').style.width = ((km * frame.units) / 111.2) * matrix.a + 'px';
     $('scale').textContent = km + ' km';
   }
   for (const e of labels.children) {
     const cls = e.getAttribute('class');
     const base = cls.includes('major') ? 16 : cls.includes('station-label') ? 10 : 12;
-    e.style.fontSize = base / Math.sqrt(zoom) + 'px';
+    e.style.fontSize = base / labelScale + 'px';
   }
   labelBoxes = [];
   const matrixScale = matrix?.a || 1;
@@ -279,8 +385,8 @@ function viewport() {
     ];
     label.style.visibility = 'hidden';
     for (const [ox, oy] of offsets) {
-      label.setAttribute('x', x + ox / Math.sqrt(zoom));
-      label.setAttribute('y', y + oy / Math.sqrt(zoom));
+      label.setAttribute('x', x + ox / labelScale);
+      label.setAttribute('y', y + oy / labelScale);
       label.setAttribute('text-anchor', ox < 0 ? 'end' : ox > 0 ? 'start' : 'middle');
       const b = label.getBBox(),
         pad = 1.5 / matrixScale,
@@ -303,10 +409,11 @@ function viewport() {
         b.height / matrix.d,
       ]);
   }
+  drawStops(1 / matrixScale);
   drawMarkers();
 }
 function changeZoom(factor, anchor = [cx, cy]) {
-  const next = Math.max(1, Math.min(5, zoom * factor)),
+  const next = Math.max(1, Math.min(24, zoom * factor)),
     ratio = zoom / next;
   cx = anchor[0] + (cx - anchor[0]) * ratio;
   cy = anchor[1] + (cy - anchor[1]) * ratio;
@@ -330,7 +437,7 @@ svg.addEventListener(
 );
 let drag;
 svg.onpointerdown = (e) => {
-  if (e.target.closest('[data-vehicle]') || zoom === 1) return;
+  if (e.target.closest('[data-vehicle], [data-stop]') || zoom === 1) return;
   drag = { x: e.clientX, y: e.clientY, cx, cy };
   svg.setPointerCapture(e.pointerId);
 };
@@ -347,50 +454,164 @@ svg.onpointerup = svg.onpointercancel = () => {
 
 function inspect(id) {
   selection = id;
-  drawMarkers();
+  selectedStop = null;
+  $('stop-picker').value = '';
+  if (mode === 'replay') runReplay(false);
+  viewport();
   detail();
+  $('vehicle-info').focus({ preventScroll: true });
+}
+function drawBoard(body, now) {
+  const group = timetable.groups[selectedStop];
+  body.append(text('span', 'Bus stop · ' + group.town, 'kicker'), text('strong', group.name));
+  const board = timetable.departures(selectedStop, now, focus);
+  if (!board.covered) {
+    body.append(text('p', 'No timetable published here for this date.'));
+    return;
+  }
+  body.append(
+    text(
+      'small',
+      'Scheduled departures · ' +
+        (mode === 'replay' ? 'Replay ' : '') +
+        londonTime(now).slice(0, 5) +
+        ' London · ≈ approximate',
+    ),
+  );
+  const list = text('div', '', 'schedule-list');
+  body.append(list);
+  const sections = [...board.sections].sort(
+    (a, b) => (a[1][0]?.at ?? Infinity) - (b[1][0]?.at ?? Infinity),
+  );
+  if (!sections.length) list.append(text('p', 'No boarding departures at this stop.'));
+  for (const [via, calls] of sections) {
+    list.append(text('h3', 'Towards ' + timetable.groups[via].name));
+    if (!calls.length)
+      list.append(text('small', 'No departures in the next seven days of the published timetable.'));
+    for (const call of calls) {
+      const row = text('div', '', 'departure-row');
+      const badge = text('b', call.trip.route, 'line-number');
+      badge.style.backgroundColor = routes[call.trip.route].colour;
+      const dest = text('span', call.trip.destination);
+      const pole = timetable.stops[call.ref];
+      const boarding = [pole.name === group.name ? '' : pole.name, pole.side].filter(Boolean).join(' · ');
+      if (boarding) dest.append(text('small', boarding));
+      row.append(text('time', (call.exact ? '' : '≈') + call.time), badge, dest);
+      list.append(row);
+    }
+  }
+}
+function drawJourney(body, v, now) {
+  const trip = timetable?.match(v);
+  if (!trip) {
+    body.append(text('p', 'No matching published timetable for this journey.'));
+    return;
+  }
+  const calls = timetable.patterns[trip.pattern];
+  const seconds = serviceSeconds(now, v.serviceDate);
+  const list = text('div', '', 'schedule-list');
+  const first = timetable.stops[calls[0][0]];
+  body.append(
+    text('h3', 'Scheduled stops · from ' + timetable.groups[first.group].town),
+    text('small', 'London time · ≈ approximate'),
+    list,
+  );
+  let marked = false;
+  for (const [ref, arrival, departure, pickup, exact, dropoff] of calls) {
+    if (!pickup && !dropoff) continue;
+    const pole = timetable.stops[ref],
+      group = timetable.groups[pole.group];
+    const time = trip.start + (pickup ? departure : arrival);
+    const row = text('div', '', 'call-row');
+    const location = text('span', pole.name);
+    location.append(text('small', group.town + (pole.side ? ' · ' + pole.side : '')));
+    if (!marked && time >= seconds) {
+      marked = true;
+      row.classList.add('next-call');
+      location.append(text('small', 'Next by timetable', 'next-note'));
+    }
+    row.append(text('time', (exact ? '' : '≈') + hhmm(time)), location);
+    list.append(row);
+  }
 }
 function detail() {
   const v = fixes.find((v) => v.id === selection),
-    box = $('vehicle');
-  box.hidden = !v;
-  if (!v) return;
-  box.style.setProperty('--accent', routes[v.route].colour);
-  const body = $('vehicle-info'),
-    now = mode === 'replay' ? snapshot.time : Date.now();
-  body.replaceChildren(
-    text('span', v.route === 'rail' ? v.agency + ' · Lakes Line' : v.agency + ' · ' + v.route),
-    text('strong', v.route === 'rail' ? v.label : 'To ' + (v.destination || 'unknown destination')),
-  );
-  if (v.route === 'rail')
+    box = $('vehicle'),
+    body = $('vehicle-info');
+  box.hidden = !v && selectedStop === null;
+  const key = v ? [v.id, v.route, v.departure].join('/') : 'stop/' + selectedStop;
+  const previousList = body.querySelector('.schedule-list');
+  const restoreFocus = previousList && previousList === document.activeElement;
+  const previous = body.dataset.key === key ? previousList?.scrollTop : null;
+  if (box.hidden) {
+    delete body.dataset.key;
+    return;
+  }
+  body.dataset.key = key;
+  const now = mode === 'replay' ? snapshot?.time : Date.now();
+  if (!Number.isFinite(now)) {
+    box.hidden = true;
+    return;
+  }
+  body.replaceChildren();
+  box.style.setProperty('--accent', v ? routes[v.route].colour : 'var(--active)');
+  if (selectedStop !== null) drawBoard(body, now);
+  else {
+    body.append(
+      text('span', v.agency + ' · ' + (v.route === 'rail' ? 'Lakes Line' : v.route), 'kicker'),
+      text('strong', v.route === 'rail' ? v.label : 'To ' + (v.destination || 'unknown destination')),
+    );
+    if (v.route === 'rail')
+      body.append(
+        text(
+          'div',
+          'Last reported ' + v.last + ' ' + v.lastTime + ' · Next ' + v.next + ' ' + (v.nextTime || ''),
+        ),
+      );
+    else
+      body.append(
+        text(
+          'div',
+          v.label +
+            ' · ' +
+            (Number.isFinite(v.bearing) ? 'Heading ' + v.bearing + '°' : 'Heading unavailable'),
+        ),
+      );
     body.append(
       text(
-        'div',
-        'Last reported ' + v.last + ' ' + v.lastTime + ' · Next ' + v.next + ' ' + (v.nextTime || ''),
+        'small',
+        (mode === 'replay' ? 'Recorded · ' : '') +
+          v.precision +
+          ' · ' +
+          ageLabel(now - v.time) +
+          (v.stale ? ' · stale' : '') +
+          ' · ' +
+          (v.route === 'rail' ? 'Railinfo' : 'DfT BODS'),
       ),
     );
-  else body.append(text('div', v.label));
-  body.append(
-    text(
-      'small',
-      (mode === 'replay' ? 'Recorded · ' : '') +
-        v.precision +
-        ' · ' +
-        ageLabel(now - v.time) +
-        (v.stale ? ' · stale' : ''),
-    ),
-  );
-  body.append(
-    text(
-      'small',
-      v.route === 'rail' ? 'Source: Railinfo running feed' : 'Source: DfT Bus Open Data Service',
-    ),
-  );
+    if (v.route !== 'rail') drawJourney(body, v, now);
+  }
+  const list = body.querySelector('.schedule-list');
+  if (list) {
+    list.tabIndex = 0;
+    list.setAttribute('aria-label', selectedStop !== null ? 'Scheduled departures' : 'Scheduled stops');
+    const next = list.querySelector('.next-call');
+    list.scrollTop = previous ?? (next ? next.offsetTop - list.offsetTop : 0);
+    if (restoreFocus) list.focus({ preventScroll: true });
+  }
 }
 $('close').onclick = () => {
+  if ($('vehicle').hidden) return;
+  const selector =
+    selectedStop !== null
+      ? '[data-stop="' + selectedStop + '"]'
+      : '[data-vehicle="' + CSS.escape(selection) + '"]';
   selection = null;
+  selectedStop = null;
+  $('stop-picker').value = '';
   detail();
-  drawMarkers();
+  viewport();
+  svg.querySelector(selector)?.focus({ preventScroll: true });
 };
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') $('close').click();
@@ -403,7 +624,8 @@ function drawMarkers() {
   const occupied = [...labelBoxes];
   for (const vehicle of fixes) {
     const [x, y] = project(vehicle.point, frame);
-    occupied.push([x - 4 * unit, y - 4 * unit, 8 * unit, 8 * unit]);
+    const radius = vehicle.route === 'rail' ? 4 : 13;
+    occupied.push([x - radius * unit, y - radius * unit, 2 * radius * unit, 2 * radius * unit]);
   }
   for (const v of fixes) {
     const [x, y] = project(v.point, frame),
@@ -440,8 +662,6 @@ function drawMarkers() {
     ];
     const options = candidates.map(([dx, dy]) => [x + dx * unit, y + dy * unit, w, h]);
     const b = options.find((b) => !occupied.some((r) => collides(b, r)));
-    shape('circle', { cx: x, cy: y, r: 3.6 * unit, fill, stroke: '#fff', 'stroke-width': 1.1 * unit }, g);
-    shape('circle', { cx: x, cy: y, r: 7 * unit, fill: 'transparent' }, g);
     if (b) {
       occupied.push(b);
       shape(
@@ -489,6 +709,34 @@ function drawMarkers() {
         g,
       );
     }
+    if (rail) {
+      shape('circle', { cx: x, cy: y, r: 3.6 * unit, fill, stroke: '#fff', 'stroke-width': 1.1 * unit }, g);
+    } else {
+      const known = Number.isFinite(v.bearing);
+      const angle = known ? v.bearing - 90 : 0;
+      const flip = known && v.bearing > 180 ? -1 : 1;
+      shape(
+        'use',
+        {
+          href: known ? '#bus-side' : '#bus-front',
+          color: fill,
+          transform:
+            'translate(' +
+            x +
+            ' ' +
+            y +
+            ') scale(' +
+            unit +
+            ') rotate(' +
+            angle +
+            ') scale(1 ' +
+            flip +
+            ')',
+        },
+        g,
+      );
+    }
+    shape('circle', { cx: x, cy: y, r: (rail ? 9 : 14) * unit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
     g.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -591,6 +839,9 @@ async function setMode(next) {
   runReplay(false);
   const token = ++generation;
   mode = next;
+  selectedStop = null;
+  $('stop-picker').value = '';
+  viewport();
   snapshot = null;
   selection = null;
   fetchFailed = false;
@@ -628,7 +879,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 setInterval(() => {
-  if (!document.hidden && mode === 'live' && snapshot) render();
+  if (!document.hidden && mode === 'live' && (snapshot || selectedStop !== null)) render();
 }, 10_000);
 new ResizeObserver(viewport).observe(svg);
 viewport();

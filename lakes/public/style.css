@@ -519,3 +519,112 @@ aside {
     margin-right: 8px;
   }
 }
+
+.stop-finder {
+  margin-top: 14px;
+}
+.stop-finder label {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+.stop-finder select {
+  width: 100%;
+  min-height: 34px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 12px;
+}
+[data-stop] {
+  cursor: pointer;
+}
+#vehicle {
+  max-width: 380px;
+  max-height: calc(100% - 84px);
+  padding: 10px 11px;
+  overflow: hidden;
+}
+#vehicle-info {
+  max-height: inherit;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+#vehicle-info > :is(strong, .kicker) {
+  padding-right: 25px;
+}
+#vehicle-info .kicker {
+  color: var(--muted);
+  font: 600 10px var(--mono);
+}
+#vehicle-info h3 {
+  font-size: 12px;
+  margin: 9px 0 4px;
+}
+#vehicle-info p {
+  margin: 8px 0;
+}
+.schedule-list {
+  max-height: min(30dvh, 235px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.schedule-list h3 {
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 3px 0;
+}
+.departure-row,
+.call-row {
+  display: grid;
+  align-items: baseline;
+  column-gap: 7px;
+  padding: 4px 1px;
+  border-bottom: 1px solid var(--rule);
+}
+.departure-row {
+  grid-template-columns: auto auto 1fr;
+}
+.call-row {
+  grid-template-columns: 45px 1fr;
+}
+.schedule-list time,
+.line-number {
+  font: 600 11px var(--mono);
+}
+.line-number {
+  padding: 2px 4px;
+  color: white;
+  border-radius: 3px;
+}
+#vehicle .schedule-list small {
+  margin: 1px 0 0;
+  font-size: 10px;
+}
+.next-call {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+}
+#vehicle .next-note {
+  color: var(--ink);
+  font-weight: 650;
+}
+.route-lines path,
+.road,
+.lake,
+.place,
+.station-label,
+.water-name {
+  vector-effect: non-scaling-stroke;
+}
+.place-points > * {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(var(--point-scale, 1));
+}

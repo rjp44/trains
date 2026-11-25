@@ -26,7 +26,12 @@ with ZipFile(io.BytesIO(sys.stdin.buffer.read())) as archive:
                     if loc is not None and vehicle:
                         rows.append({'id': vehicle, 'route': line, 'lon': loc.findtext(ns+'Longitude'),
                                      'lat': loc.findtext(ns+'Latitude'), 'time': el.findtext(ns+'RecordedAtTime'),
-                                     'destination': journey.findtext(ns+'DestinationName')})
+                                     'destination': journey.findtext(ns+'DestinationName'),
+                                     'bearing': journey.findtext(ns+'Bearing'),
+                                     'origin': journey.findtext(ns+'OriginRef'),
+                                     'terminus': journey.findtext(ns+'DestinationRef'),
+                                     'departure': journey.findtext(ns+'OriginAimedDepartureTime'),
+                                     'serviceDate': journey.findtext(f'{ns}FramedVehicleJourneyRef/{ns}DataFrameRef')})
             el.clear()
 if updated is None:
     raise ValueError('Missing SIRI delivery timestamp')

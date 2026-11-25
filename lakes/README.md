@@ -6,6 +6,16 @@ The map opens live. Select a route to fit it to the panel, or select it again to
 
 Choose **Replay** for snapshots captured on 25 November 2026. The snapshots advance every five seconds and show the original London time. Pause or use the slider to inspect a frame. Positions jump only when there is another observation. The first frame contains all five bus routes and a Lakes Line train approaching Oxenholme from Kendal.
 
+## Bus timetables
+
+The double-decker and its front chevron point along the last reported GPS bearing. A front-on bus indicates an unavailable bearing. Tap a bus to open its scheduled stops. The list opens at the next call by timetable and scrolls back to the origin. Times use the London clock and ≈ marks an approximate scheduled time. A live bus needs a unique matching stop pattern for its route, service day, booked departure time and origin and destination stop codes.
+
+Tap a white stop circle for the next three scheduled boarding departures in each onward direction. Each row gives the service number, destination and boarding side or stand where available. Zoom for more circles or use **Find a stop**. Selecting a route filters the stop boards. Selecting a bus or stop pauses replay and uses the recorded time. For an example serving both sides of a road, select **Hayes Garden Centre, Ambleside** in the first replay frame.
+
+The bundled winter extract covers 24 November 2026 through 21 March 2027. It includes Stagecoach's five routes, daily service calendars and date exceptions from BODS, plus NaPTAN stop names and roadside information. Its 369 boarding and alighting points appear in 221 map locations. Stops with matching names and localities are grouped within 220 m. Differently named poles can share a board when they serve a common route on the same street, face opposing directions and are mutually nearest within 120 m. Their individual boarding names appear beside departures. [DfT regional GTFS download](https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/north_west/) · [DfT NaPTAN stop extract](https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv&atcoAreaCodes=090,250)
+
+To refresh the timetable, download both extracts above as `north_west.zip` and `naptan.csv`. Run `python3 lakes/tools/build-timetable.py north_west.zip naptan.csv --until 2027-03-21` with Python 3.11 or newer. Set the end date to the last day covered by the route map edition. When moving to a new edition, keep a timetable covering the replay's service dates or refresh the replay with observations from the new edition.
+
 ## Coverage
 
 The map includes the road geometry of the published winter route variants. Each fix is plotted at its reported coordinates. The branch includes Oxenholme Lake District, Kendal, Burneside, Staveley and Windermere.
