@@ -38,6 +38,7 @@ const feed = createLiveFeed(layout, {
 const files = {
   '/': ['index.html', 'text/html'],
   '/app.js': ['app.js', 'text/javascript'],
+  '/hemel.mjs': ['hemel.mjs', 'text/javascript'],
   '/style.css': ['style.css', 'text/css'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
   '/icons/rail-192.png': ['icons/rail-192.png', 'image/png'],
@@ -53,7 +54,8 @@ const files = {
 };
 const server = http.createServer(async (req, res) => {
   const path = req.url.split('?')[0];
-  if (req.method !== 'GET' || (path !== '/api/live' && path !== '/api/abbey-lookup' && !Object.hasOwn(files, path))) {
+  const schedule = /^\/api\/hemel-schedule\/([A-Z0-9]\d{5}\/\d{2}\/\d{2}\/\d{2})$/.exec(path);
+  if (req.method !== 'GET' || (path !== '/api/live' && path !== '/api/abbey-lookup' && !schedule && !Object.hasOwn(files, path))) {
     res.writeHead(404).end();
     return;
   }
@@ -63,6 +65,12 @@ const server = http.createServer(async (req, res) => {
       res
         .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
         .end(JSON.stringify(feed.snapshot()));
+    } else if (schedule) {
+      const response = await fetch('https://openrail.railcam.uk/rail/livetrain/' + schedule[1], {
+        signal: AbortSignal.timeout(8000),
+      });
+      res.writeHead(response.status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+        .end(await response.text());
     } else if (path === '/api/abbey-lookup') {
       // Local equivalent of the fixed-destination Netlify rewrite.
       const url = new URL(serviceLookup);

@@ -8,6 +8,7 @@ import {
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
+import { isTrainCode, hemelBerths, hemelTrains, cardRotation, schedulePath, readHemelSchedule, callText } from '/hemel.mjs';
 
 const $ = (id) => document.getElementById(id);
 const panel = document.querySelector('.panel');
@@ -114,7 +115,7 @@ const markers = corridorTracks(layout).flatMap((track) =>
 );
 const byBit = new Map(markers.filter((m) => m.bit).map((m) => [m.bit, m]));
 const byBerth = new Map(markers.map((m) => [m.id, m]));
-const isTrainCode = (head) => /^(?:[0-9][A-Z][0-9]{2}|[A-Z][0-9]{3})$/.test(head);
+const hemel = hemelBerths(layout);
 const state = () => withStationReports(mode === 'live' ? live : replayBoard);
 const showBranches = () =>
   !(centre === home && zoom >= 1) && centre - plotHalfWidth / (slotWidth * zoom) <= diagram.abbeyEnd + 0.5;
@@ -553,6 +554,8 @@ function drawMap(values) {
   }
   verticalScale = height / naturalHeight;
   svg.setAttribute('viewBox', '0 0 ' + mapWidth + ' ' + height);
+  const hemelX = position(home);
+  panel.style.setProperty('--hemel-column', (inView(hemelX) ? 100 * hemelX / mapWidth : 50) + 'cqw');
   svg.replaceChildren();
   const defs = shape(svg, 'defs', {});
   shape(shape(defs, 'clipPath', { id: 'plot' }), 'rect', { x: 103, y: 0, width: mapWidth - 104, height });
@@ -689,6 +692,11 @@ function drawMap(values) {
           : 'Hemel sector · WCML';
 }
 
+function stationName(s) {
+  return s?.toLowerCase()
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    .replace(/\bDc\b/g, 'DC') || 'Unknown';
+}
 function trainDetails(board) {
   const t = trainSelection;
   const { marker: m, current, service, ambiguous } = locateTrain(t, markers, board);
@@ -698,16 +706,11 @@ function trainDetails(board) {
   box.replaceChildren();
   const title = node('div', undefined, 'servicehead');
   title.append(node('b', t.head, 'traincode'));
-  const name = (s) =>
-    s
-      ?.toLowerCase()
-      .replace(/\b[a-z]/g, (c) => c.toUpperCase())
-      .replace(/\bDc\b/g, 'DC') || 'Unknown';
   title.append(
     node(
       'strong',
       service
-        ? name(service.origin) + ' → ' + name(service.destination)
+        ? stationName(service.origin) + ' → ' + stationName(service.destination)
         : identified
           ? 'Train service'
           : 'Signalling description',
@@ -770,7 +773,67 @@ const operators = {
   DB: 'DB Cargo UK',
   GB: 'GB Railfreight',
   FL: 'Freightliner',
+  SN: 'Southern',
+  ZZ: 'Operator unavailable',
 };
+const activeSchedules = new Map();
+const rotateCard = { fast: cardRotation(), slow: cardRotation() };
+
+function scheduleFor(service, activeKeys) {
+  if (!service) return null;
+  const archived = mode === 'replay' && recording.hemelCalls?.[service.id];
+  if (archived && archived.uid === service.uid) return archived;
+  const path = schedulePath(service, mode === 'replay' ? cursor : undefined);
+  if (!path) return null;
+  const key = mode + '/' + service.id + path;
+  activeKeys.add(key);
+  let entry = activeSchedules.get(key);
+  if (!entry) {
+    entry = { call: null, retryAt: 0 };
+    activeSchedules.set(key, entry);
+  }
+  if (!document.hidden && Date.now() >= entry.retryAt) {
+    entry.retryAt = Infinity;
+    const replay = mode === 'replay';
+    fetch(path, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+      .then(async (response) => response.ok ? readHemelSchedule(await response.text(), service, path) : null)
+      .then((call) => {
+        if (call) entry.call = replay && call.booked ? { booked: call.booked } : call;
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!entry.call || (!replay && entry.call.booked && !Number.isFinite(entry.call.delay))) {
+          entry.retryAt = Date.now() + 45000;
+        }
+        if (activeSchedules.get(key) === entry && !document.hidden) updateHemelCards(state());
+      });
+  }
+  return entry.call ?? (entry.retryAt === Infinity ? { pending: true } : null);
+}
+
+function updateHemelCards(board) {
+  const groups = fresh('R1') ? hemelTrains(hemel, board) : { fast: [], slow: [] };
+  const activeKeys = new Set();
+  for (const [line, trains] of Object.entries(groups)) {
+    for (const train of trains) train.call = scheduleFor(train.service, activeKeys);
+    const card = $('hemel-' + line);
+    const train = rotateCard[line](trains, performance.now());
+    card.hidden = !train;
+    if (!train) continue;
+    const { service, stage, track, head, call } = train;
+    const route = service ? stationName(service.origin) + ' → ' + stationName(service.destination) : 'Service details unavailable';
+    const company = service && (operators[service.operator] || service.operator || 'Operator unknown');
+    const context = track + ' · ' + (stage === 'station' ? 'At Hemel' : 'Approaching Hemel');
+    const timing = callText(call, service?.delay);
+    const signature = JSON.stringify([head, route, company, context, timing]);
+    if (card.dataset.signature === signature) continue;
+    card.dataset.signature = signature;
+    card.replaceChildren(node('b', head, 'headcode'), node('strong', route));
+    if (company) card.append(node('span', company));
+    card.append(node('span', context, 'context'), node('b', timing));
+  }
+  for (const key of activeSchedules.keys()) if (!activeKeys.has(key)) activeSchedules.delete(key);
+}
 let markerPressed = false;
 document.addEventListener(
   'pointerdown',
@@ -791,6 +854,7 @@ function render(force = false) {
   if (markerPressed && !force) return;
   const board = state(),
     stale = mode === 'live' && !['Live', 'Partial'].includes(board.status);
+  updateHemelCards(board);
   const label = mode === 'replay' ? 'Recorded replay' : board.status;
   $('status').textContent = label;
   $('indicator').className = mode === 'replay' ? 'replay' : label === 'Live' ? 'live' : '';
@@ -1073,5 +1137,5 @@ setInterval(() => {
   if (mode === 'live' && !document.hidden) {
     live = feed.snapshot();
     render();
-  }
+  } else if (mode === 'replay' && !playing && !document.hidden) updateHemelCards(replayBoard);
 }, 1000);

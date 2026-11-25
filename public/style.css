@@ -289,6 +289,44 @@ h1 {
   background-size: 14px 14px;
   overflow: hidden;
 }
+.hemel-card:not([hidden]) {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex: none;
+  gap: 2px 9px;
+  width: fit-content;
+  max-width: calc(100% - 16px);
+  align-self: flex-start;
+  margin: 4px 0;
+  transform: translateX(clamp(var(--card-inset, 8px), calc(var(--hemel-column, 50cqw) - 50%), calc(100cqw - 100% - 8px)));
+  padding: 4px 9px;
+  border: 1px solid var(--control-edge);
+  border-radius: 5px;
+  color: var(--board-text);
+  background: var(--station-band);
+  font-size: clamp(12px, 1.1vw, 15px);
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.hemel-card .headcode {
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--train-text);
+  background: var(--train-fill);
+  font: 700 0.95em var(--mono);
+}
+.hemel-card .context {
+  color: var(--board-muted);
+}
+@container diagram (min-width: 950px) {
+  #hemel-fast {
+    --card-inset: 94px;
+    max-width: calc(100% - 102px);
+  }
+}
 #map {
   width: 100%;
   height: auto;

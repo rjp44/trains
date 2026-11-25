@@ -67,6 +67,7 @@ export class Corridor {
         delay: s.cd,
         operator: s.tc,
         uid: s.sk?.slice(0, 6),
+        startTime: s.st,
         updated: s.lu,
       };
     }
