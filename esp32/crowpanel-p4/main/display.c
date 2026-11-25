@@ -84,12 +84,11 @@ lv_display_t *crowpanel_display_init(void)
 
     const esp_lcd_dpi_panel_config_t dpi = {
         .dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT, .dpi_clock_freq_mhz = 51,
-        .pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565, .num_fbs = 1,
+        .pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565, .num_fbs = 2,
         .video_timing = {
             .h_size = WIDTH, .v_size = HEIGHT, .hsync_back_porch = 160, .hsync_pulse_width = 70,
             .hsync_front_porch = 160, .vsync_back_porch = 23, .vsync_pulse_width = 10, .vsync_front_porch = 12,
         },
-        .flags.use_dma2d = true,
     };
     const ek79007_vendor_config_t controller = {.mipi_config = {.dsi_bus = bus, .dpi_config = &dpi}};
     const esp_lcd_panel_dev_config_t panel_cfg = {
@@ -105,12 +104,13 @@ lv_display_t *crowpanel_display_init(void)
     gui.task_stack = 16384;
     gui.task_max_sleep_ms = 20;
     ESP_ERROR_CHECK(lvgl_port_init(&gui));
+    // LVGL draws native RGB565 straight into the inactive DSI framebuffer.
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io, .panel_handle = panel, .control_handle = panel,
-        .buffer_size = WIDTH * 24, .hres = WIDTH, .vres = HEIGHT,
-        .color_format = LV_COLOR_FORMAT_RGB565, .flags = {.buff_dma = true, .swap_bytes = true},
+        .buffer_size = WIDTH * HEIGHT, .double_buffer = true, .hres = WIDTH, .vres = HEIGHT,
+        .color_format = LV_COLOR_FORMAT_RGB565, .flags.direct_mode = true,
     };
-    const lvgl_port_display_dsi_cfg_t dsi_port = {0};
+    const lvgl_port_display_dsi_cfg_t dsi_port = {.flags.avoid_tearing = true};
     lv_display_t *display = lvgl_port_add_disp_dsi(&disp_cfg, &dsi_port);
     ESP_ERROR_CHECK(display ? ESP_OK : ESP_ERR_NO_MEM);
     if (touch) {

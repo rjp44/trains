@@ -40,6 +40,18 @@ With the matching ESP-IDF 5.5.3 environment and Node.js 22.4+ on PATH, run `idf.
 
 Once the board identity, recovery image and first write are confirmed, flash the board-specific build using `idf.py -C esp32/crowpanel-p4 -p "$PORT" flash monitor` on a host with serial access. A native esptool can also use the board build's `flash_args` file from its build directory. The UART should print `Sector +5s drawn at 1024x600`. Verify that the LCD shows the four WCML lines, the DC and Abbey branches, and the 2N71 Hemel card. Tap a station label, a train badge, a signal and the theme button to check touch orientation across the panel.
 
+### App-only update on the tested V1.2 board
+
+The tested board reported ESP32-P4 revision 1.3, 16 MB of flash, 32 MB of PSRAM, an EK79007 LCD and GT911 touch. Its factory partition table placed a 15 MiB application at `0x10000`. After verifying the factory backup and that layout, use the following command from the repository root to update just the application. The USB link on the test Mac was most reliable at 115200 baud.
+
+```sh
+APP=esp32/crowpanel-p4/build/hemel_crowpanel_p4.bin
+"$PY" -m esptool --chip esp32p4 --port "$PORT" --baud 115200 write-flash 0x10000 "$APP"
+"$PY" -m esptool --chip esp32p4 --port "$PORT" --baud 115200 verify-flash 0x10000 "$APP"
+```
+
+The display uses native RGB565 and two full-screen DSI buffers in 200 MHz PSRAM. LVGL draws into the inactive buffer and presents it at the refresh boundary. In the default theme, the background is dark teal and train badges are amber. In the light theme, the background is off-white.
+
 ## Feed the panel over USB
 
 Close the serial monitor and install the Node dependencies with `npm ci --prefix esp32 --ignore-scripts`. These commands start the bridge separately, first with a recording and then with the public live feed. Stop each session with Ctrl+C.
