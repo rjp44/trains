@@ -205,7 +205,8 @@ h1 {
   --route-abbey: #c9b7e8;
   --route-bay: #9cb8ad;
   --station-band: #223b3b;
-  --hemel-band: #29473f;
+  --hemel-band: #2c424c;
+  --hemel-edge: #77939f;
   --junction-band: #294a44;
   --station-guide: #54716a;
   --junction-guide: #89b2a3;
@@ -240,7 +241,8 @@ h1 {
   --route-abbey: #6c4289;
   --route-bay: #415e52;
   --station-band: #e8ede5;
-  --hemel-band: #dae9d9;
+  --hemel-band: #dce8ed;
+  --hemel-edge: #7e98a3;
   --junction-band: #d4e6d9;
   --station-guide: #9aaea0;
   --junction-guide: #739a84;
@@ -290,26 +292,24 @@ h1 {
   overflow: hidden;
 }
 .hemel-card:not([hidden]) {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  flex-wrap: wrap;
-  flex: none;
-  gap: 2px 9px;
-  width: fit-content;
-  max-width: calc(100% - 16px);
-  align-self: flex-start;
-  margin: 4px 0;
-  transform: translateX(clamp(var(--card-inset, 8px), calc(var(--hemel-column, 50cqw) - 50%), calc(100cqw - 100% - 8px)));
-  padding: 4px 9px;
-  border: 1px solid var(--control-edge);
+  position: absolute;
+  pointer-events: none;
+  transform-origin: top left;
+  width: max-content;
+  max-width: min(330px, 100%);
+  padding: 4px 8px;
+  border: 1px solid var(--hemel-edge);
   border-radius: 5px;
   color: var(--board-text);
-  background: var(--station-band);
-  font-size: clamp(12px, 1.1vw, 15px);
-  line-height: 1.35;
-  text-align: center;
+  background: var(--hemel-band);
+  font-size: clamp(12px, 1.1vw, 14px);
+  line-height: 1.2;
   overflow-wrap: anywhere;
+}
+.hemel-card .card-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 .hemel-card .headcode {
   padding: 1px 4px;
@@ -320,12 +320,37 @@ h1 {
 }
 .hemel-card .context {
   color: var(--board-muted);
+  font-size: 0.9em;
 }
-@container diagram (min-width: 950px) {
-  #hemel-fast {
-    --card-inset: 94px;
-    max-width: calc(100% - 102px);
-  }
+.hemel-card .card-route {
+  display: block;
+  margin: 2px 0 1px;
+}
+.hemel-card .card-running {
+  font-size: 0.92em;
+}
+.hemel-card.compact:not([hidden]) {
+  display: grid;
+  align-items: baseline;
+  gap: 1px 6px;
+  padding: 2px 6px;
+}
+.hemel-card.compact .card-heading {
+  display: contents;
+}
+.hemel-card.compact .headcode {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+.hemel-card.compact .card-route {
+  grid-area: 1 / 2 / 2 / 4;
+  margin: 0;
+}
+.hemel-card.compact .context {
+  grid-area: 2 / 1 / 3 / 3;
+}
+.hemel-card.compact .card-running {
+  grid-area: 2 / 3;
 }
 #map {
   width: 100%;
@@ -536,6 +561,10 @@ button:disabled {
   fill: var(--board);
   stroke: var(--control-edge);
   stroke-width: 1;
+}
+.station-target[data-station='HML'] rect {
+  fill: var(--hemel-band);
+  stroke: var(--hemel-edge);
 }
 .station-target:hover rect,
 .station-target:focus-visible rect {

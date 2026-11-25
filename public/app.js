@@ -80,6 +80,7 @@ const plotHalfWidth = 504;
 const baseWidth = 1140;
 let mapWidth = baseWidth,
   verticalScale = 1;
+let cardSpace, cardFrame;
 const slotPitch = () => (slotWidth * zoom * (mapWidth - 132)) / (2 * plotHalfWidth);
 let inspectedSignal = false;
 let trainSelection = null;
@@ -398,9 +399,14 @@ function stationLabels(plot, stations, y, rowOffset) {
       return { station, column, x: position(column) };
     })
     .filter((s) => inView(s.x));
+  const bounds = { top: Infinity, bottom: 0 };
   for (const item of fitStationNames(items, 105, mapWidth - 4, measureLabel)) {
-    stationLabel(plot, item, y + item.row * rowOffset);
+    const baseline = y + item.row * rowOffset;
+    stationLabel(plot, item, baseline);
+    bounds.top = Math.min(bounds.top, baseline - item.size);
+    bounds.bottom = Math.max(bounds.bottom, baseline + 5);
   }
+  return bounds;
 }
 function stationLabel(plot, { station, column, labelX, width, size, label }, y) {
   const name = station.name;
@@ -554,8 +560,6 @@ function drawMap(values) {
   }
   verticalScale = height / naturalHeight;
   svg.setAttribute('viewBox', '0 0 ' + mapWidth + ' ' + height);
-  const hemelX = position(home);
-  panel.style.setProperty('--hemel-column', (inView(hemelX) ? 100 * hemelX / mapWidth : 50) + 'cqw');
   svg.replaceChildren();
   const defs = shape(svg, 'defs', {});
   shape(shape(defs, 'clipPath', { id: 'plot' }), 'rect', { x: 103, y: 0, width: mapWidth - 104, height });
@@ -597,11 +601,29 @@ function drawMap(values) {
       'pointer-events': 'none',
     });
   }
-  stationLabels(plot, upperLabels, 20 * verticalScale, Math.max(22, 21 * verticalScale));
+  const upperNames = stationLabels(plot, upperLabels, 20 * verticalScale, Math.max(22, 21 * verticalScale));
   // Keep both label rows above the Down Fast signal hit targets. A crowded
   // second row grows away from the track, even on a short display.
   const signalHitTop = mainY(0) - (zoom < 0.6 ? 22 : 30);
-  stationLabels(plot, wcmlLabels, signalHitTop - 9, -22);
+  const wcmlNames = stationLabels(plot, wcmlLabels, signalHitTop - 9, -22);
+  // These are empty regions in the existing track geometry, in SVG units.
+  // Cards use the right of the junction fan whenever that part of the map is visible.
+  const fanEnd = position(junction + 1);
+  const besideFan = merged && fanEnd < mapWidth - 160;
+  cardSpace = {
+    centre: inView(position(home)) ? position(home) : mapWidth / 2,
+    left: besideFan ? Math.max(8, fanEnd + 10) : 8,
+    fast: {
+      top: upperNames.bottom + 4,
+      bottom: Math.min(wcmlNames.top, signalHitTop) - 5,
+      aboveNames: merged ? null : upperNames.top,
+    },
+    slow: {
+      top: mainY(3) + (zoom >= 3 || inspectedSignal ? 26 : 15),
+      bottom: merged ? laneY(10) - 13 : height - 5,
+    },
+  };
+  queueCardPosition();
   for (const [i, t] of layout.tracks.entries()) {
     const y = mainY(i);
     textAt(svg, 17, y - 1, t.name, { 'text-anchor': 'start' });
@@ -779,6 +801,43 @@ const operators = {
 const activeSchedules = new Map();
 const rotateCard = { fast: cardRotation(), slow: cardRotation() };
 
+function queueCardPosition() {
+  if (cardFrame) return;
+  cardFrame = requestAnimationFrame(() => {
+    cardFrame = null;
+    if (!cardSpace) return;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+    const unit = matrix.a;
+    const bounds = drawing.getBoundingClientRect();
+    const offsetX = matrix.e - bounds.left, offsetY = matrix.f - bounds.top;
+    const left = offsetX + cardSpace.left * unit;
+    const available = drawing.clientWidth - left - 4;
+    if (available <= 0 || !unit) return;
+    for (const line of ['fast', 'slow']) {
+      const card = $('hemel-' + line);
+      if (card.hidden) continue;
+      const slot = cardSpace[line];
+      let top = offsetY + slot.top * unit, bottom = offsetY + slot.bottom * unit;
+      // A narrow dashboard can have spare space above the close-up's station names.
+      if (Number.isFinite(slot.aboveNames) && offsetY + slot.aboveNames * unit - 8 > bottom - top) {
+        top = 4;
+        bottom = offsetY + slot.aboveNames * unit - 4;
+      }
+      const compact = bottom - top < 56;
+      card.classList.toggle('compact', compact);
+      card.style.maxWidth = (compact ? Math.max(370, Math.min(455, available)) : Math.max(275, Math.min(330, available))) + 'px';
+      const w = card.offsetWidth, h = card.offsetHeight;
+      const scale = Math.min(1, available / w, (bottom - top) / h);
+      const centre = offsetX + cardSpace.centre * unit;
+      const x = Math.max(left, Math.min(drawing.clientWidth - w * scale - 4, centre - w * scale / 2));
+      card.style.left = x + 'px';
+      card.style.top = (line === 'fast' ? bottom - h * scale : top) + 'px';
+      card.style.transform = 'scale(' + scale + ')';
+    }
+  });
+}
+
 function scheduleFor(service, activeKeys) {
   if (!service) return null;
   const archived = mode === 'replay' && recording.hemelCalls?.[service.id];
@@ -828,9 +887,13 @@ function updateHemelCards(board) {
     const signature = JSON.stringify([head, route, company, context, timing]);
     if (card.dataset.signature === signature) continue;
     card.dataset.signature = signature;
-    card.replaceChildren(node('b', head, 'headcode'), node('strong', route));
-    if (company) card.append(node('span', company));
-    card.append(node('span', context, 'context'), node('b', timing));
+    const heading = node('div', undefined, 'card-heading');
+    heading.append(node('b', head, 'headcode'), node('span', context, 'context'));
+    const running = node('div', undefined, 'card-running');
+    if (company) running.append(company + ' · ');
+    running.append(node('b', timing));
+    card.replaceChildren(heading, node('strong', route, 'card-route'), running);
+    queueCardPosition();
   }
   for (const key of activeSchedules.keys()) if (!activeKeys.has(key)) activeSchedules.delete(key);
 }
@@ -1114,7 +1177,10 @@ viewLink.addEventListener('click', (event) => {
 window.addEventListener('popstate', updateDisplay);
 new ResizeObserver(() => {
   if (diagramOnly) render(true);
-  else positionPopout();
+  else {
+    positionPopout();
+    queueCardPosition();
+  }
 }).observe(drawing);
 new ResizeObserver(positionPopout).observe(popout);
 const initialView = new URLSearchParams(location.search).get('view') ?? 'sector';
