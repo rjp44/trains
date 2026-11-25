@@ -2,7 +2,7 @@
 // Pinout and timing source: vendor IDF Lesson09, linked in esp32/README.md.
 #include "display.h"
 #include "driver/i2c_master.h"
-#include "driver/ledc.h"
+#include "driver/gpio.h"
 #include "esp_lcd_ek79007.h"
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_lcd_panel_ops.h"
@@ -21,22 +21,14 @@ static void panel_power(void)
     ESP_ERROR_CHECK(esp_ldo_acquire_channel(&io, &io_supply));
     ESP_ERROR_CHECK(esp_ldo_acquire_channel(&lcd, &panel_supply));
 
-    const ledc_timer_config_t timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE, .timer_num = LEDC_TIMER_0,
-        .duty_resolution = LEDC_TIMER_11_BIT, .freq_hz = 30000, .clk_cfg = LEDC_USE_PLL_DIV_CLK,
-    };
-    const ledc_channel_config_t backlight = {
-        .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_0,
-        .timer_sel = LEDC_TIMER_0, .gpio_num = GPIO_NUM_31, .duty = 0,
-    };
-    ESP_ERROR_CHECK(ledc_timer_config(&timer));
-    ESP_ERROR_CHECK(ledc_channel_config(&backlight));
+    // This panel has a fixed brightness. Keep the backlight enable steady during scanout.
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_31, 0));
+    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_31, GPIO_MODE_OUTPUT));
 }
 
 void crowpanel_backlight_on(void)
 {
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 2000));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_31, 1));
 }
 
 static esp_lcd_touch_handle_t touch_init(void)
@@ -74,7 +66,7 @@ lv_display_t *crowpanel_display_init(void)
     panel_power();
     esp_lcd_touch_handle_t touch = touch_init();
     const esp_lcd_dsi_bus_config_t dsi = {
-        .bus_id = 0, .num_data_lanes = 2, .phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT, .lane_bit_rate_mbps = 900,
+        .bus_id = 0, .num_data_lanes = 2, .phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT, .lane_bit_rate_mbps = 1000,
     };
     const esp_lcd_dbi_io_config_t dbi = {.virtual_channel = 0, .lcd_cmd_bits = 8, .lcd_param_bits = 8};
     esp_lcd_dsi_bus_handle_t bus;

@@ -1,6 +1,6 @@
 # Physical Hemel panel
 
-This build targets the **Elecrow CrowPanel Advanced 10.1-inch ESP32-P4, PCB V1.2, 1024×600**. The image has been cross-compiled with ESP-IDF 5.5.3 for P4 silicon revisions 1.0–1.99. Match the PCB marking, chip revision and panel before programming. The vendor's V1.2 display example supplies the 900 Mbit/s two-lane DSI timings, EK79007 initialization, backlight on GPIO31 and GT911 touch wiring. The shared Hemel component supplies the diagram, touch actions, replay and stream decoder. [Elecrow V1.2 display example](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/tree/1408f16feabf76ae6172a0a8d59e014441cfa13b/example/V1.2/idf-code/Lesson09-LVGL_Lighting_Control)
+This build targets the **Elecrow CrowPanel Advanced 10.1-inch ESP32-P4, PCB V1.2, 1024×600**. The image has been cross-compiled with ESP-IDF 5.5.3 for P4 silicon revisions 1.0–1.99. Match the PCB marking, chip revision and panel before programming. The vendor's V1.2 display example supplies the LCD porch and sync timings, EK79007 initialization, backlight on GPIO31 and GT911 touch wiring. The shared Hemel component supplies the diagram, touch actions, replay and stream decoder. [Elecrow V1.2 display example](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/tree/1408f16feabf76ae6172a0a8d59e014441cfa13b/example/V1.2/idf-code/Lesson09-LVGL_Lighting_Control)
 
 ## Identify the board and preserve its factory image
 
@@ -50,7 +50,7 @@ APP=esp32/crowpanel-p4/build/hemel_crowpanel_p4.bin
 "$PY" -m esptool --chip esp32p4 --port "$PORT" --baud 115200 verify-flash 0x10000 "$APP"
 ```
 
-The display uses native RGB565 and two full-screen DSI buffers in 200 MHz PSRAM. LVGL draws into the inactive buffer and presents it at the refresh boundary. In the default theme, the background is dark teal and train badges are amber. In the light theme, the background is off-white.
+The factory firmware uses two 1 Gbit/s DSI lanes and a 51 MHz pixel clock. GPIO31 holds the backlight enabled while the diagram is visible. The display uses native RGB565 and two full-screen DSI buffers in 200 MHz PSRAM. LVGL draws into the inactive buffer and presents it at the refresh boundary. In the default theme, the background is dark teal and train badges are amber. In the light theme, the background is off-white.
 
 ## Feed the panel over USB
 
