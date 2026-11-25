@@ -52,9 +52,7 @@ input:focus-visible {
 .mast-meta,
 .source-status,
 .zoom,
-.legend,
 .sectionhead,
-.panelhead,
 .hero,
 .modes,
 .modebox {
@@ -84,9 +82,7 @@ input:focus-visible {
 .mast-meta,
 .kicker,
 .mini,
-.panel-sub,
 .source-status,
-.legend small,
 .crs,
 footer {
   font-family: var(--mono);
@@ -97,8 +93,7 @@ footer {
   gap: 12px;
   color: var(--muted);
 }
-.mast-meta b,
-.panel-sub b {
+.mast-meta b {
   color: #96a7a2;
 }
 .hero {
@@ -193,12 +188,13 @@ h1 {
   background: #bd8527;
 }
 .panel {
+  position: relative;
+  container: diagram / inline-size;
   --board: #132a2c;
   --board-heading: #f3f9f4;
   --board-text: #dce8e3;
   --board-muted: #b0c5c1;
   --board-edge: #243d3e;
-  --board-rule: #395151;
   --control-edge: #586f6c;
   --control-hover: #314748;
   --grid-dot: #36504f;
@@ -234,7 +230,6 @@ h1 {
   --board-text: #203d35;
   --board-muted: #496158;
   --board-edge: #a7b9ad;
-  --board-rule: #c4d1c7;
   --control-edge: #99b0a3;
   --control-hover: #e0ebe1;
   --grid-dot: #d2ddd2;
@@ -259,42 +254,29 @@ h1 {
   --selection: #675019;
   --marker-focus: #122f32;
 }
-.panelhead,
-.legend {
-  padding: 13px 20px;
-  justify-content: space-between;
-}
-.panelhead {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  border-bottom: 1px solid var(--board-rule);
-}
-.panelhead h2,
 .sectionhead h2 {
   font-size: 19px;
   font-weight: 620;
   letter-spacing: -0.55px;
 }
-.panel-sub {
-  font-size: 10px;
-  color: var(--board-muted);
-}
 .zoom {
-  border: 1px solid var(--control-edge);
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  border: 1px solid var(--edge);
   border-radius: 5px;
 }
 .zoom button {
   padding: 6px 11px;
-  color: var(--board-text);
   font-size: 13px;
 }
 .zoom button + button {
-  border-left: 1px solid var(--control-edge);
+  border-left: 1px solid var(--edge);
 }
 .zoom button:hover,
 .zoom button:focus-visible {
-  background: var(--control-hover);
+  background: #e0e8e1;
 }
 .zoom button:disabled {
   opacity: 0.4;
@@ -326,44 +308,6 @@ svg text {
 .marker:hover .ring {
   stroke: var(--marker-focus);
   stroke-width: 1.5;
-}
-.legend {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 8px 21px;
-  border-top: 1px solid var(--board-rule);
-  color: var(--board-text);
-  font-size: 12px;
-}
-.legend span {
-  display: inline-flex;
-  gap: 7px;
-  align-items: center;
-}
-.key {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.key.on {
-  background: var(--signal-on);
-}
-.key.off {
-  border: 2px solid var(--signal-off);
-}
-.key.unknown {
-  border: 1px dashed var(--signal-unknown);
-}
-.key.train {
-  border-radius: 2px;
-  background: var(--train-fill);
-  width: 14px;
-}
-.legend small {
-  margin-left: auto;
-  color: var(--board-muted);
-  font-size: 10px;
 }
 #notice {
   margin: 11px 0;
@@ -504,19 +448,6 @@ button:disabled {
     grid-template-columns: 1fr;
     gap: 18px;
   }
-  .legend {
-    padding: 10px 12px;
-    gap: 8px 12px;
-  }
-  .legend small {
-    display: none;
-  }
-  .panelhead {
-    padding: 10px;
-  }
-  .panelhead h2 {
-    font-size: 16px;
-  }
   #map {
     width: 100%;
     min-height: 220px;
@@ -525,9 +456,6 @@ button:disabled {
     padding: 6px;
   }
   .mast-meta {
-    font-size: 9px;
-  }
-  .panel-sub {
     font-size: 9px;
   }
   footer {
@@ -579,10 +507,31 @@ button:disabled {
   outline: 2px solid var(--selection);
 }
 
-.branch-note {
-  padding: 7px 20px 10px;
-  font: 11px var(--mono);
-  color: var(--board-muted);
+#branch-status {
+  margin-top: 10px;
+}
+#signal-readout:not([hidden]) {
+  position: absolute;
+  right: 8px;
+  bottom: 2rem;
+  max-width: calc(100% - 16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--control-edge);
+  border-radius: 5px;
+  background: var(--board);
+  color: var(--board-text);
+  font: 12px var(--mono);
+}
+#close-signal {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
 }
 #train-popout h2 {
   margin: 0;
@@ -649,6 +598,19 @@ button:disabled {
 .diagram-tools {
   display: flex;
   gap: 4px;
+  width: fit-content;
+  margin: 6px;
+}
+/* Use the space left of the station labels when both icons fit in it. */
+@media (min-height: 400px) {
+  @container diagram (min-width: 950px) {
+    .diagram-tools {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+    }
+  }
 }
 .icon-control {
   box-sizing: border-box;
@@ -660,7 +622,7 @@ button:disabled {
   border: 1px solid var(--control-edge);
   border-radius: 5px;
   color: var(--board-text);
-  background: transparent;
+  background: var(--board);
   touch-action: manipulation;
 }
 .icon-control:hover,
@@ -702,11 +664,6 @@ button:disabled {
   border: 0;
   border-radius: 0;
 }
-.diagram-only .panelhead,
-.diagram-only .branch-note,
-.diagram-only .legend {
-  flex: none;
-}
 .diagram-only #drawing {
   flex: 1 1 0;
   min-height: 0;
@@ -715,32 +672,4 @@ button:disabled {
   width: 100%;
   height: 100%;
   min-height: 0;
-}
-.diagram-only #signal-readout:not([hidden]) {
-  display: block;
-}
-@media (max-width: 720px) {
-  .panelhead {
-    grid-template-columns: 1fr auto;
-    gap: 7px;
-  }
-  .diagram-tools {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .panelhead .zoom {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    flex-wrap: wrap;
-    justify-self: start;
-  }
-}
-@media (max-height: 500px) {
-  .diagram-only .panelhead,
-  .diagram-only .legend {
-    padding: 4px 12px;
-  }
-  .diagram-only .branch-note {
-    padding: 3px 12px;
-  }
 }

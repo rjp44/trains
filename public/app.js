@@ -171,7 +171,7 @@ function closeTrain(restoreFocus = false) {
   if (popout.open) popout.close();
   render(true);
   if (restoreFocus)
-    (document.querySelector('.marker[data-key="' + CSS.escape(key ?? '') + '"]') ?? $('sector')).focus({
+    (document.querySelector('.marker[data-key="' + CSS.escape(key ?? '') + '"]') ?? viewLink).focus({
       preventScroll: true,
     });
 }
@@ -188,21 +188,31 @@ function select(key, trigger, shownHead) {
     return;
   }
   if (!byBit.has(key)) return;
+  inspectedSignal = diagramOnly && !(inspectedSignal && selection === key);
   selection = key;
-  inspectedSignal = true;
   closeTrain();
   render(true);
 }
 $('close-train').onclick = () => closeTrain(true);
+function closeSignal(restoreFocus = false) {
+  inspectedSignal = false;
+  $('signal-readout').hidden = true;
+  if (restoreFocus)
+    (drawing.querySelector('.marker[data-key="' + CSS.escape(selection) + '"]') ?? viewLink).focus({
+      preventScroll: true,
+    });
+}
+$('close-signal').onclick = () => closeSignal(true);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && popout.open) {
+  if (e.key === 'Escape' && (popout.open || inspectedSignal)) {
     e.preventDefault();
-    closeTrain(true);
+    if (popout.open) closeTrain(true);
+    else closeSignal(true);
   }
 });
 document.addEventListener('click', (e) => {
   if (
-    popout.open &&
+    (popout.open || inspectedSignal) &&
     !popout.contains(e.target) &&
     !e
       .composedPath()
@@ -211,11 +221,14 @@ document.addEventListener('click', (e) => {
           n.classList?.contains('marker') ||
           n.classList?.contains('trainrow') ||
           n.classList?.contains('diagram-tools') ||
+          n.id === 'signal-readout' ||
           n.id === 'replaybar' ||
           n.classList?.contains('zoom'),
       )
-  )
+  ) {
     closeTrain();
+    if (inspectedSignal) closeSignal();
+  }
 });
 function fresh(area) {
   if (area === 'AB') {
@@ -825,10 +838,9 @@ function render(force = false) {
         : status === 'on'
           ? 'on (most restrictive)'
           : 'indication unknown';
-    const showReadout = diagramOnly && inspectedSignal;
-    $('signal-readout').hidden = !showReadout;
-    $('diagram-hint').hidden = showReadout;
-    if (showReadout) $('signal-readout').textContent = m.signal + ' · ' + m.track.name + ' · ' + indication;
+    $('signal-readout').hidden = !inspectedSignal;
+    if (inspectedSignal)
+      $('signal-indication').textContent = m.signal + ' · ' + m.track.name + ' · ' + indication;
     $('inspection').replaceChildren(
       node('strong', m.signal + ' · ' + m.track.name),
       ' — ',
@@ -1012,6 +1024,7 @@ svg.addEventListener('pointercancel', () => {
 });
 function updateDisplay() {
   diagramOnly = readDisplayMode();
+  closeSignal();
   render(true);
 }
 viewLink.addEventListener('click', (event) => {
