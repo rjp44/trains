@@ -1,5 +1,7 @@
 # Hemel Hempstead rail monitor
 
+This branch also contains the [Lake District bus and rail map](lakes/README.md). Start it with `node lakes/server.mjs` and open [the local map on port 8186](http://127.0.0.1:8186/).
+
 Run `node server.mjs` in this directory with Node.js 22.4 or later. Open [the local display](http://127.0.0.1:8174/). The server serves files on the laptop’s loopback interface and forwards Abbey station reports and dated Hemel timetable lookups. Each visible live display opens a WebSocket to Signal Maps. There are no packages to install or credentials to configure.
 
 ## Netlify preview
