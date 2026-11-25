@@ -21,6 +21,10 @@ target_compile_features(hemel-sim PRIVATE cxx_std_17)
 include(CTest)
 if(BUILD_TESTING AND PANEL_WIDTH EQUAL 1024 AND PANEL_HEIGHT EQUAL 600)
     find_program(PANEL_NODE node REQUIRED)
+    add_executable(hemel-horn-test standalone/horn-test.cpp)
+    target_include_directories(hemel-horn-test PRIVATE component crowpanel-p4/main)
+    target_compile_features(hemel-horn-test PRIVATE cxx_std_17)
+    add_test(NAME directional_stereo_pcm COMMAND hemel-horn-test)
     add_test(NAME recorded_panels
         COMMAND "${PANEL_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/smoke.mjs" $<TARGET_FILE:hemel-sim>)
     add_test(NAME live_input_and_touch

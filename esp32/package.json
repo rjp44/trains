@@ -2,5 +2,10 @@
   "name": "hemel-panel-bridge",
   "private": true,
   "type": "module",
-  "dependencies": { "linkedom": "0.18.12" }
+  "dependencies": {
+    "linkedom": "0.18.12"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
 }

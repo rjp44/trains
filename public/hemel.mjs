@@ -9,6 +9,7 @@ export function hemelBerths(layout) {
       id: berth.id,
       line: track.id.endsWith('F') ? 'fast' : 'slow',
       track: track.name,
+      direction: track.direction,
       stage: berth.mile === mile ? 'station' : 'approach',
       distance: Math.abs(berth.mile - mile),
       immediate: index === 1,
@@ -59,18 +60,22 @@ export function cardRotation() {
   };
 }
 
-const londonDay = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: '2-digit',
-});
-export function schedulePath(service, replayTime) {
+let dayFormatter;
+function londonDay(time) {
+  dayFormatter ??= new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: '2-digit',
+  });
+  return dayFormatter.format(time);
+}
+export function schedulePath(service, replayTime, formatDay = londonDay) {
   if (!/^[A-Z0-9]\d{5}$/.test(service?.uid)) return null;
   const prefix = '/api/hemel-schedule/' + service.uid + '/';
-  if (Number.isFinite(service.startTime)) return prefix + londonDay.format(service.startTime);
+  if (Number.isFinite(service.startTime)) return prefix + formatDay(service.startTime);
   // Older recordings only have the origin day-of-month in the TRUST train ID.
   if (!Number.isFinite(replayTime) || !/^[A-Z0-9]{8}\d{2}$/.test(service.id)) return null;
-  const today = londonDay.format(replayTime);
+  const today = formatDay(replayTime);
   const [day, month, year] = today.split('/').map(Number);
-  const yesterday = londonDay.format(Date.UTC(2000 + year, month - 1, day - 1, 12));
+  const yesterday = formatDay(Date.UTC(2000 + year, month - 1, day - 1, 12));
   const date = [today, yesterday].find((date) => date.startsWith(service.id.slice(-2) + '/'));
   return date ? prefix + date : null;
 }

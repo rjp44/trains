@@ -1,6 +1,8 @@
 #pragma once
 #include "lvgl.h"
+#include "direction.h"
 #include <cstdint>
+#include <string_view>
 #include <cstddef>
 
 // Call on the LVGL thread. The attached display must match the generated profile.
@@ -21,8 +23,10 @@ bool dismiss();
 void toggleLight();
 void beginLive();
 bool isLive();
-void feedInput(const char *bytes, size_t length, uint32_t wall_ms);
+using LocalCommand = void (*)(std::string_view);
+void feedInput(const char *bytes, size_t length, uint32_t wall_ms, LocalCommand provision = nullptr);
 void updateLive(uint32_t wall_ms);
 void linkEnded();
+void setArrivalHandler(void (*handler)(Direction));
 void refreshCards(uint32_t wall_ms);
 } // namespace hemel

@@ -1,6 +1,6 @@
 // Compare bridged recordings with flash replay and exercise the actual LVGL pointer path.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -76,6 +76,21 @@ try {
     assert.equal(pixel(stale, 560, 274), 0xb0bcb3 & 0xf8fcf8);
     assert.deepEqual(render(initial + broken + resync), render(resync));
   }
+  // The optional arrival trailer is usable once, after its own continuous live
+  // batch. Repeating a full+delta pair or replaying a recording must stay quiet.
+  const liveEncoder = encoder(fingerprint);
+  const seed = liveEncoder(ninety, 2), entries = liveEncoder(later, 2, false, 'DU');
+  const event = entries.slice(entries.indexOf('A1\t'));
+  const invalid = entries.replace(/(A1[^\n]*\t)\d+\n$/, '$10\n');
+  function heard(bytes) {
+    const result = spawnSync(process.argv[2], ['--live', '--output', join(tmp, 'events.bmp')], { input: bytes });
+    assert.equal(result.status, 0);
+    return [...result.stderr.toString().matchAll(/Station entry (Up|Down)/g)].map((m) => m[1]);
+  }
+  assert.deepEqual(heard(seed + entries + event + seed + entries), ['Down', 'Up']);
+  assert.deepEqual(heard(seed + invalid + event), []);
+  assert.deepEqual(heard(entries), []);
+  assert.deepEqual(heard(initial + delta + event), []);
   // Live per-area expiry removes a Hemel card and keeps the last train in stale colours.
   const raw = { ...board, areaStatus: { R1: 'Stale', WJ: 'Live', WS: 'Live' } };
   const stale = project(raw, () => null, true);

@@ -1,4 +1,7 @@
 #include "display.h"
+#include "horn.h"
+#include "source.h"
+#include "wifi.h"
 #include "panel.h"
 #include "driver/uart.h"
 #include "esp_log.h"
@@ -22,13 +25,16 @@ extern "C" void app_main()
     crowpanel_backlight_on();
     ESP_LOGI("hemel", "Sector +5s drawn at %dx%d; listening on UART0 at 115200", hemel::width(), hemel::height());
 
+    horn_init();
+    hemel::setArrivalHandler(horn_play);
+    wifi_start();
     for (;;) {
         char bytes[1024];
         const int n = uart_read_bytes(UART_NUM_0, bytes, sizeof(bytes), pdMS_TO_TICKS(20));
         lvgl_port_lock(0);
         const uint32_t now = esp_timer_get_time() / 1000;
         const bool was_live = hemel::isLive();
-        if (n > 0) hemel::feedInput(bytes, n, now);
+        if (n > 0) usb_input(bytes, n, now);
         if (!was_live && hemel::isLive()) ESP_LOGI("hemel", "Bridge snapshot accepted");
         if (hemel::isLive()) hemel::updateLive(now);
         else hemel::seek((offset + now - start) % (hemel::duration() + 1), now);

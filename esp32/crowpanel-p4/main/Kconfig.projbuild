@@ -1,0 +1,11 @@
+# IDF 5.5.3's component manager evaluates optional USB manifests from newer
+# ESP-Hosted releases even when the vendor SDIO host version is pinned.
+config ESP_HOSTED_HOST_USB_CDC_ACM_MANIFEST
+    int
+    default 0
+config ESP_HOSTED_HOST_USB_CHERRYUSB_MANIFEST
+    int
+    default 0
+config ESP_HOSTED_HOST_USB_RNDIS_MANIFEST
+    int
+    default 0

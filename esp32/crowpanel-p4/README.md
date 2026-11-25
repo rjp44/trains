@@ -36,7 +36,7 @@ If you later need to restore this same unencrypted board, check the saved image 
 
 ## Build and check the first boot
 
-With the matching ESP-IDF 5.5.3 environment and Node.js 22.4+ on PATH, run `idf.py -C esp32/crowpanel-p4 build` from the repository root. The component manager resolves the locked LCD, touch and LVGL versions. A Docker build can generate the header on the host with `node esp32/pack.mjs 1024 600 panel_assets.h` and pass the **container-visible** absolute header path as `-DPANEL_PREPACKED=...`. The C3 emulator uses its own bootloader and display driver.
+With the matching ESP-IDF 5.5.3 environment and Node.js 22.4+ on PATH, run `npm ci --prefix esp32` and then `idf.py -C esp32/crowpanel-p4 build` from the repository root. The component manager resolves the locked LCD, touch and LVGL versions. The standalone build instructions below include both host-generated assets for Docker. The C3 emulator uses its own bootloader and display driver.
 
 Once the board identity, recovery image and first write are confirmed, flash the board-specific build using `idf.py -C esp32/crowpanel-p4 -p "$PORT" flash monitor` on a host with serial access. A native esptool can also use the board build's `flash_args` file from its build directory. The UART should print `Sector +5s drawn at 1024x600`. Verify that the LCD shows the four WCML lines, the DC and Abbey branches, and the 2N71 Hemel card. Tap a station label, a train badge, a signal and the theme button to check touch orientation across the panel.
 
@@ -63,3 +63,33 @@ Close the serial monitor and install the Node dependencies with `npm ci --prefix
 ```
 
 The bridge forwards unchanged protocol bytes at 115200 baud, displays board diagnostics, and starts a new full snapshot when the same device path reconnects. Select the **Hemel** view for 1A80 and 2K65, then **Watford** for the Abbey shuttle at Garston. To check loss and recovery without cutting board power, stop the bridge for seven seconds, look for **Link lost**, and restart it. A physical cable removal can also power-cycle a USB-powered panel.
+
+## Standalone Wi-Fi and stereo arrivals
+
+The P4 opens a certificate-verified WebSocket to Signal Maps for R1, WJ and WS. It reads dated running schedules from Open Rail and Abbey calling points from Railinfo over HTTPS. The firmware runs the same relay reducer, service matching, card selection and projection as the USB bridge in a bounded QuickJS runtime in PSRAM. The network needs DHCP, DNS, internet access and a working time source for SNTP. A full USB snapshot takes control while the bridge is connected. After 6.5 seconds of UART silence, a full Wi-Fi frame can take over. A board without saved network settings boots into the bundled replay and accepts USB as before.
+
+From the repository root, run `npm ci --prefix esp32` before `idf.py -C esp32/crowpanel-p4 build`. For a Docker toolchain without Node, pre-generate **both** flash assets on the host and pass their container paths to IDF.
+
+```sh
+mkdir -p esp32/build
+node esp32/pack.mjs 1024 600 esp32/build/p4_assets.h
+node esp32/standalone/bundle.mjs esp32/build/board_feed.js
+# With the checkout mounted at /work in the IDF container:
+idf.py -C /work/esp32/crowpanel-p4 -DPANEL_PREPACKED=/work/esp32/build/p4_assets.h \
+  -DFEED_PREPACKED=/work/esp32/build/board_feed.js build
+```
+
+After loading the feature application on the P4, provision it once from a private local terminal while the USB bridge and monitor are closed. Both prompts suppress echo. The tool waits for the panel to acknowledge a single NVS write in its `hemel` namespace. Restart the panel after the acknowledgement. The same command replaces the saved network. The build and firmware binary contain no Wi-Fi credentials.
+
+```sh
+esp32/build/board-tools/bin/python esp32/crowpanel-p4/provision.py /dev/cu.wchusbserial10
+```
+
+The horn follows real entries in R13143 (Down fast), R13144 (Up fast), R15145 (Down slow) and R15146 (Up slow). Down plays 554 Hz on the left for 200 ms, leaves a 40 ms gap, then plays 370 Hz on the right for 240 ms. Up exchanges the speakers. Both notes use a short ramp and a quiet second harmonic. The peak sample is 2,861 out of 32,768 (about −21 dBFS). Each fresh arrival retains its direction, including opposing trains entering together. The flash replay, USB recordings, initial area snapshots, reconnect baselines, approaches, service lookups and rotating cards are silent. The updated live USB bridge can send arrival directions as an optional checksummed line immediately after an H1 frame. Older bridges still supply display frames.
+
+### Electrical references for the 10.1-inch V1.2
+
+- The V1.2 drawing identifies IC1 as ESP32-C6-MINI-1-N4. Elecrow's station example and saved IDF configuration select ESP-Hosted four-bit SDIO, slot 1, 40 MHz, CLK 18, CMD 19, D0–D3 17/16/15/14 and C6 EN/reset 32. The descriptive comment above the example mentions 54, but its V1.2 macro, the saved IDF config and the schematic net all specify 32. The P4 build pins the host and remote Wi-Fi versions used by the vendor AI example. [V1.2 station pin definitions](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/blob/1408f16feabf76ae6172a0a8d59e014441cfa13b/example/V1.2/Arduino_Code/Lesson15-WiFi_function/ESP32_P4-station/board_config.h) · [Vendor IDF settings](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/blob/1408f16feabf76ae6172a0a8d59e014441cfa13b/example/V1.2/AI_Conversation/7inch_9inch_10inch_P4_HMI_AI/sdkconfig)
+- Elecrow's V1.2 playback example drives I²S1 in Philips stereo mode at 16 kHz, 16 bits, with LRCLK 21, BCLK 22, DOUT 23, no MCLK and active-low amp enable on 30. Its product revision notes identify the early audio stage as NS4168. The published 10.1-inch V1.2 schematic marks both NS4168 positions NC and also shows an ES8311/NS4263B path. The firmware follows the revision-specific playback example. The fitted parts, audible level and physical left/right slot assignment need verification on the actual panel. [Playback driver and header](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/tree/1408f16feabf76ae6172a0a8d59e014441cfa13b/example/V1.2/idf-code/Lesson12-Playing_Loca_Music_from_SD_Card/peripheral/bsp_audio) · [Product revision notes](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/blob/1408f16feabf76ae6172a0a8d59e014441cfa13b/readme.md) · [V1.2 board schematic](https://github.com/Elecrow-RD/CrowPanel-Advanced-10.1inch-ESP32-P4-HMI-AI-Display-1024x600-IPS-Touch-Screen/tree/1408f16feabf76ae6172a0a8d59e014441cfa13b/Eagle_SCH%26PCB/1.2)
+
+Run `node esp32/standalone/test.mjs` after installing the Node dependencies. It exercises the bundled on-device feed, including direction, all four berths, stale data, sequence gaps and reconnects. The desktop CTest suite also measures both PCM channels and runs the card and touch regressions. On the board, check C6 association and recovery, verify the LCD and touch under TLS load, and listen for the two speaker directions during confirmed station entries.

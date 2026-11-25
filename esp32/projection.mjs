@@ -83,7 +83,7 @@ export function createProjection(layout) {
 export function encoder(fingerprint) {
   let sequence = 0,
     previous;
-  return ({ rows, cards, observed }, status, forceFull = false) => {
+  return ({ rows, cards, observed }, status, forceFull = false, arrivals = '') => {
     const full = forceFull || !previous || sequence % 10 === 0;
     sequence = sequence === 0xffffffff ? 1 : sequence + 1;
     const lines = [];
@@ -98,6 +98,13 @@ export function encoder(fingerprint) {
     const body =
       [`@H1\t${fingerprint}\t${sequence}\t${full ? 'F' : 'D'}\t${status}\t${observed}`, ...lines].join('\n') +
       '\n';
-    return body + '!' + crc32(body) + '\n';
+    const sum = crc32(body);
+    let packet = body + '!' + sum + '\n';
+    // Legacy H1 readers ignore this optional line outside the committed packet.
+    if (arrivals && (status === 1 || status === 2)) {
+      const event = ['A1', sequence, sum, arrivals].join('\t');
+      packet += event + '\t' + crc32(event) + '\n';
+    }
+    return packet;
   };
 }

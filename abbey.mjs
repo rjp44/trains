@@ -1,11 +1,15 @@
 // Railinfo's per-service calling points carry explicit arrived/departed states.
 // Match the timetable at both ends before attaching a report to a relay train ID.
-const day = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/London',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+let day;
+function londonDay(time) {
+  day ??= new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return day.format(time);
+}
 const crs = new Map([
   ['WATFORD JUNCTION', 'WFJ'],
   ['ST ALBANS ABBEY', 'SAA'],
@@ -24,9 +28,12 @@ export function abbeyCandidates(catalogue, now) {
   );
 }
 export const serviceLookup = 'https://api.railinfo.uk/services/lookup';
+export function lookupParameters(s, formatDay = londonDay) {
+  return { crs: crs.get(s.ol), dep: s.od, date: formatDay(s.st) };
+}
 export function lookupURL(s, endpoint = serviceLookup) {
   const url = new URL(endpoint);
-  url.search = new URLSearchParams({ crs: crs.get(s.ol), dep: s.od, date: day.format(s.st) });
+  url.search = new URLSearchParams(lookupParameters(s));
   return url;
 }
 export function stationReport([id, s], journey, stations) {

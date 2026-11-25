@@ -1,6 +1,7 @@
 #include "panel.h"
 #include "input.h"
 #include <array>
+#include <algorithm>
 #include <charconv>
 #include <string>
 
@@ -9,7 +10,11 @@ namespace {
 using input::Field;
 std::string line, packet;
 bool dropping = false, synced = false;
-uint32_t lastSeq = 0, received = 0;
+std::array<uint32_t, 16> recentArrivals{};
+unsigned nextArrival = 0;
+uint32_t lastSeq = 0, received = 0, frameCrc = 0;
+bool acceptArrival = false;
+void (*arrivalHandler)(Direction) = nullptr;
 
 bool number(Field field, uint32_t &value) {
     auto end = field.data() + field.size();
@@ -83,20 +88,40 @@ bool commit(Field trailer, uint32_t now) {
     bytes.remove_prefix(end + 1);
     if (!rows(bytes, false))
         return false;
+    const bool continuous = synced && now - received < 6500 && sequence == lastSeq + 1;
     input::startFrame(full);
     rows(bytes, true);
     input::finishFrame(status, observed, now);
+    acceptArrival = continuous && (status == 1 || status == 2);
+    frameCrc = expected;
     synced = true;
     lastSeq = sequence;
     received = now;
     return true;
 }
 void lost() {
+    acceptArrival = false;
     synced = false;
     if (isLive())
         input::stale();
 }
 void readLine(Field s, uint32_t now) {
+    if (acceptArrival) {
+        acceptArrival = false;
+        if (s.substr(0, 3) == "A1\t" && now - received < 1500) {
+            std::array<Field, 8> f;
+            uint32_t seq, batch, crc;
+            if (fields(s, f) == 5 && number(f[1], seq) && seq == lastSeq &&
+                number(f[2], batch) && batch == frameCrc && !f[3].empty() && f[3].size() <= 8 &&
+                f[3].find_first_not_of("DU") == Field::npos &&
+                number(f[4], crc) && crc == checksum(s.substr(0, s.rfind('\t'))) && arrivalHandler &&
+                std::find(recentArrivals.begin(), recentArrivals.end(), crc) == recentArrivals.end()) {
+                recentArrivals[nextArrival++ % recentArrivals.size()] = crc;
+                for (char d : f[3]) arrivalHandler(d == 'D' ? Direction::Down : Direction::Up);
+            }
+            return;
+        }
+    }
     if (s.substr(0, 4) == "@H1\t") {
         if (!packet.empty())
             lost();
@@ -131,12 +156,16 @@ void readLine(Field s, uint32_t now) {
     packet += '\n';
 }
 } // namespace
-void feedInput(const char *data, size_t length, uint32_t now) {
+void feedInput(const char *data, size_t length, uint32_t now, LocalCommand provision) {
     for (size_t i = 0; i < length; ++i) {
         const unsigned char c = data[i];
         if (c == '\n') {
-            if (!dropping)
-                readLine(line, now);
+            if (!dropping) {
+                if (provision && line.compare(0, 3, "W1\t") == 0)
+                    provision(line);
+                else
+                    readLine(line, now);
+            }
             line.clear();
             dropping = false;
         } else if (!dropping) {
@@ -156,7 +185,8 @@ void linkEnded() {
     dropping = false;
     lost();
 }
-void input::forgetSequence() { synced = false; }
+void input::forgetSequence() { synced = acceptArrival = false; }
+void setArrivalHandler(void (*handler)(Direction)) { arrivalHandler = handler; }
 void updateLive(uint32_t now) {
     if (synced && now - received >= 6500)
         lost();

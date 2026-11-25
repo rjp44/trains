@@ -5,7 +5,7 @@ const freshness = 45000;
 const relay = 'wss://ws.signalmaps.co.uk/new';
 
 // The browser and the optional Node recorder use the same area and freshness rules.
-export function createLiveFeed(layout, { abbeyEndpoint, onFrame } = {}) {
+export function createLiveFeed(layout, { abbeyEndpoint, abbeyURL = lookupURL, onFrame, onReset } = {}) {
   const board = new Corridor(layout);
   const stations = new Set(layout.branches.find((b) => b.id === 'abbey').stations.map((s) => s.code));
   let transport = 'Disconnected';
@@ -21,6 +21,7 @@ export function createLiveFeed(layout, { abbeyEndpoint, onFrame } = {}) {
   }
 
   function stop() {
+    onReset?.();
     clearTimeout(retry);
     retry = null;
     cancelSession?.();
@@ -75,7 +76,7 @@ export function createLiveFeed(layout, { abbeyEndpoint, onFrame } = {}) {
       const timeout = setTimeout(() => lookup.abort(), 8000);
       const results = await Promise.allSettled(
         candidates.map(async (entry) => {
-          const response = await fetch(lookupURL(entry[1], abbeyEndpoint), {
+          const response = await fetch(abbeyURL(entry[1], abbeyEndpoint), {
             signal: lookup.signal,
             cache: 'no-store',
           });
@@ -139,6 +140,7 @@ export function createLiveFeed(layout, { abbeyEndpoint, onFrame } = {}) {
         return;
       }
       const lastAreaTime = board.areaTimes[message.area];
+      if (areaData && upstream < lastAreaTime) return;
       if (areaData && message.type.endsWith('_UPDATE') && lastAreaTime && received - lastAreaTime > freshness) {
         reconnect('No fresh sector updates');
         return;
