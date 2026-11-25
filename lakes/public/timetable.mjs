@@ -79,7 +79,8 @@ export class Timetable {
     }
     return matched;
   }
-  departures(group, instant, route) {
+  departures(group, instant, routes) {
+    const selected = typeof routes === 'string' ? new Set([routes]) : routes;
     const clock = localClock(instant),
       today = dayNumber(clock.date);
     const covered = today >= this.firstDay && today <= this.lastDay;
@@ -88,7 +89,7 @@ export class Timetable {
     // Include a previous service day's after-midnight calls, and the next seven days.
     const current = today * 86400 + clock.seconds;
     for (const call of this.boards[group]) {
-      if (route && call.trip.route !== route) continue;
+      if (selected && !selected.has(call.trip.route)) continue;
       if (!sections.has(call.via)) sections.set(call.via, []);
       const list = sections.get(call.via);
       for (let d = today - 1; d <= Math.min(today + 7, this.lastDay); d++) {

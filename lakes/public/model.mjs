@@ -117,12 +117,38 @@ export function railFixes(data) {
       agency: t.operator || 'Rail',
       precision: 'Estimated between stations',
       last: t.last.name,
+      lastCode: t.last.crs,
       lastTime: t.last.time,
       next: t.next.name,
+      nextCode: t.next.crs,
       nextTime: t.next.est,
     });
   }
   return fixes;
+}
+// The branch polyline and station list both run from Windermere to Oxenholme.
+export function railBearing(fix, point, line, stations) {
+  const stationIndex = (code, name) =>
+    stations.findIndex((s) => (code ? s.code === code : s.name === name));
+  const last = stationIndex(fix.lastCode, fix.last),
+    next = stationIndex(fix.nextCode, fix.next);
+  if (last < 0 || next < 0 || last === next) return null;
+  let closest = Infinity,
+    bearing = null;
+  for (let i = 1; i < line.length; i++) {
+    const [x, y] = line[i - 1],
+      dx = line[i][0] - x,
+      dy = line[i][1] - y;
+    const length2 = dx * dx + dy * dy;
+    if (!length2) continue;
+    const t = Math.max(0, Math.min(1, ((point[0] - x) * dx + (point[1] - y) * dy) / length2));
+    const distance = (point[0] - x - t * dx) ** 2 + (point[1] - y - t * dy) ** 2;
+    if (distance < closest) {
+      closest = distance;
+      bearing = ((Math.atan2(dx, -dy) * 180) / Math.PI + (last < next ? 360 : 540)) % 360;
+    }
+  }
+  return bearing;
 }
 export function visibleFixes(snapshot, now) {
   return ['bus', 'rail'].flatMap((type) =>

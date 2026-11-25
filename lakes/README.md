@@ -2,7 +2,7 @@
 
 From the checkout root run `node lakes/server.mjs` and open [the portrait map](http://127.0.0.1:8186/). The prototype needs Node.js 22.4+ and Python 3. The Python standard library reads the DfT archive. All map assets and the recording are included.
 
-The map opens live. Select a route to fit it to the panel, or select it again to return to the overview. Use + and − to zoom, drag to pan and tap a vehicle for its source and timestamp age. The removable detail card stays inside the map. The vehicle list gives a second way to inspect crowded stops. Light and dark themes are saved on the device.
+The map fills the viewport on launch with all six routes visible. Tap a route chip to focus it, then add or remove routes by tapping their chips. **All** restores the overview. The crosshair fits the visible routes. The dashboard button opens the stop finder, Live/Replay switch and other controls. Use + and − to zoom, drag to pan and tap a vehicle for its source and timestamp age. The removable detail card stays inside the map. The vehicle list gives a second way to inspect crowded stops. Light and dark themes are saved on the device.
 
 Choose **Replay** for snapshots captured on 25 November 2026. The snapshots advance every five seconds and show the original London time. Pause or use the slider to inspect a frame. Positions jump only when there is another observation. The first frame contains all five bus routes and a Lakes Line train approaching Oxenholme from Kendal.
 
@@ -10,7 +10,7 @@ Choose **Replay** for snapshots captured on 25 November 2026. The snapshots adva
 
 The 505, 508 and 516 share a green-and-white single-decker icon. The 555 uses a blue-and-green double-decker and the 599 a lime-green open-top double-decker. Each icon and its route-coloured chevron point along the last reported GPS bearing. A front-on bus indicates an unavailable bearing. Tap a bus to open its scheduled stops. The list opens at the next call by timetable and scrolls back to the origin. Times use the London clock and ≈ marks an approximate scheduled time. A live bus needs a unique matching stop pattern for its route, service day, booked departure time and origin and destination stop codes.
 
-Tap a white stop circle for the next three scheduled boarding departures in each onward direction. Each row gives the service number, destination and boarding side or stand where available. Zoom for more circles or use **Find a stop**. Selecting a route filters the stop boards. Selecting a bus or stop pauses replay and uses the recorded time. For an example serving both sides of a road, select **Hayes Garden Centre, Ambleside** in the first replay frame.
+Tap a white stop circle for the next three scheduled boarding departures in each onward direction. Each row gives the service number, destination and boarding side or stand where available. Zoom for more circles or use **Find a stop**. Stop boards include departures for the selected bus routes. Selecting a bus or stop pauses replay and uses the recorded time. For an example serving both sides of a road, select **Hayes Garden Centre, Ambleside** in the first replay frame.
 
 The bundled winter extract covers 24 November 2026 through 21 March 2027. It includes Stagecoach's five routes, daily service calendars and date exceptions from BODS, plus NaPTAN stop names and roadside information. Its 369 boarding and alighting points appear in 221 map locations. Stops with matching names and localities are grouped within 220 m. Differently named poles can share a board when they serve a common route on the same street, face opposing directions and are mutually nearest within 120 m. Their individual boarding names appear beside departures. [DfT regional GTFS download](https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/north_west/) · [DfT NaPTAN stop extract](https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv&atcoAreaCodes=090,250)
 
@@ -18,7 +18,7 @@ To refresh the timetable, download both extracts above as `north_west.zip` and `
 
 ## Coverage
 
-The map includes the road geometry of the published winter route variants. Each fix is plotted at its reported coordinates. The branch includes Oxenholme Lake District, Kendal, Burneside, Staveley and Windermere.
+The map includes the road geometry of the published winter route variants. Each fix is plotted at its reported coordinates. A single-carriage Northern icon shows the estimated train position, with its yellow cab facing the next station along the branch. The branch includes Oxenholme Lake District, Kendal, Burneside, Staveley and Windermere.
 
 | Route | Winter coverage |
 | --- | --- |

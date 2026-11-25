@@ -22,7 +22,8 @@ OUT = Path(__file__).resolve().parents[1] / 'public/data'
 CACHE = Path(sys.argv[1])
 CACHE.mkdir(parents=True, exist_ok=True)
 WEST, NORTH, UNIT, WIDTH, HEIGHT = -3.34, 54.707, 1030, 480, 748
-BLEED = 100
+# Keep the whole service area in view on phones in either orientation and on widescreen monitors.
+BLEED_X, BLEED_Y = 700, 240
 ASPECT = math.cos(math.radians(54.35))
 LINES = ('505', '508', '516', '555', '599')
 STATIONS = ('WDM', 'SVL', 'BUD', 'KEN', 'OXN')
@@ -153,7 +154,7 @@ def relief(bounds):
     with ThreadPoolExecutor(max_workers=4) as pool:
         for x, y, img in pool.map(image_tile, grid):
             mosaic.paste(img, ((x-min_x)*256, (y-min_y)*256))
-    w, h = (WIDTH+2*BLEED)*2, (HEIGHT+2*BLEED)*2
+    w, h = (WIDTH+2*BLEED_X)*2, (HEIGHT+2*BLEED_Y)*2
     tx, ty = xy_tile(bounds[0] + (np.arange(w)+.5)/(2*UNIT*ASPECT), bounds[3] - (np.arange(h)+.5)/(2*UNIT), zoom)
     raster = np.asarray(mosaic)[np.floor((ty-min_y)*256).astype(int)[:,None], np.floor((tx-min_x)*256).astype(int)].astype(float)
     elevation = raster[:,:,0]*256 + raster[:,:,1] + raster[:,:,2]/256 - 32768
@@ -165,7 +166,7 @@ def relief(bounds):
     Image.fromarray(rgb.astype('uint8')).save(OUT/'relief.webp', quality=84)
 
 
-bounds = [WEST-BLEED/(UNIT*ASPECT), NORTH-(HEIGHT+BLEED)/UNIT, WEST+(WIDTH+BLEED)/(UNIT*ASPECT), NORTH+BLEED/UNIT]
+bounds = [WEST-BLEED_X/(UNIT*ASPECT), NORTH-(HEIGHT+BLEED_Y)/UNIT, WEST+(WIDTH+BLEED_X)/(UNIT*ASPECT), NORTH+BLEED_Y/UNIT]
 tile_url = json.loads(get('tile-source.json','https://tiles.openfreemap.org/planet'))['tiles'][0]
 geo = json.loads(get('stations.json', 'https://api.railinfo.uk/stations/geo'))
 station_by_code = {f['properties']['crs']: f for f in geo['features'] if f['properties'].get('crs') in STATIONS}
@@ -184,11 +185,11 @@ with ThreadPoolExecutor(max_workers=4) as pool:
             for props, geom in features(tile, layers['transportation']):
                 if props['class']=='rail':
                     rail.extend(parts(geom))
-clip = box(-BLEED, -BLEED, WIDTH+BLEED, HEIGHT+BLEED)
+clip = box(-BLEED_X, -BLEED_Y, WIDTH+BLEED_X, HEIGHT+BLEED_Y)
 lakes = unary_union(water).intersection(clip).simplify(.12)
 road = unary_union(roads).intersection(clip).simplify(.22)
 map_data = {
-    'frame': {'width':WIDTH, 'height':HEIGHT, 'west':WEST, 'north':NORTH, 'units':UNIT, 'aspect':ASPECT, 'bleed':BLEED},
+    'frame': {'width':WIDTH, 'height':HEIGHT, 'west':WEST, 'north':NORTH, 'units':UNIT, 'aspect':ASPECT, 'bleedX':BLEED_X, 'bleedY':BLEED_Y},
     'routes': route_links(), 'stations': stations, 'rail': railway(rail, stations),
     'lakes': [[coords(p.exterior)] + [coords(r) for r in p.interiors] for p in parts(lakes) if p.geom_type=='Polygon' and p.area>.7],
     'roads': [coords(p) for p in parts(road) if p.geom_type=='LineString' and p.length>1],

@@ -1,4 +1,13 @@
-import { routes, order, project, visibleFixes, ageLabel, londonTime, freshMs } from './model.mjs';
+import {
+  routes,
+  order,
+  project,
+  railBearing,
+  visibleFixes,
+  ageLabel,
+  londonTime,
+  freshMs,
+} from './model.mjs';
 import { Timetable, hhmm, stopTitle, serviceSeconds } from './timetable.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -53,12 +62,16 @@ const waterNames = [
 ];
 const path = (points) => 'M' + points.map((p) => p.join(',')).join('L');
 const multi = (lines) => lines.map(path).join('');
-let zoom = 1,
+let fitOnResize = true,
+  zoom = 1,
   cx = W / 2,
   cy = H / 2,
-  focus = null,
   selection = null,
   selectedStop = null;
+// An empty set represents the All chip. The first route chip starts a custom selection.
+const selectedRoutes = new Set();
+const routeVisible = (id) => !selectedRoutes.size || selectedRoutes.has(id);
+const stopVisible = (id) => [...timetable.routesAt[id]].some(routeVisible);
 let mode = 'live',
   snapshot = null,
   replay = null,
@@ -70,15 +83,16 @@ let mode = 'live',
 let fixes = [],
   fetchFailed = false;
 
-const bleed = frame.bleed;
+const bleedX = frame.bleedX ?? frame.bleed,
+  bleedY = frame.bleedY ?? frame.bleed;
 shape(
   'image',
   {
     href: '/data/relief.webp',
-    x: -bleed,
-    y: -bleed,
-    width: W + 2 * bleed,
-    height: H + 2 * bleed,
+    x: -bleedX,
+    y: -bleedY,
+    width: W + 2 * bleedX,
+    height: H + 2 * bleedY,
     class: 'relief',
   },
   svg,
@@ -97,16 +111,12 @@ const paths = new Map(),
   );
 for (const key of ['555', '505', '516', '599', '508', 'rail']) {
   const d = key === 'rail' ? path(data.rail) : multi(data.routes[key]);
-  const g = shape('g', {}, group);
-  const casing = shape('path', { d, stroke: 'var(--halo)', 'stroke-width': key === 'rail' ? 4.2 : 3.8 }, g);
-  const stroke = shape(
-    'path',
-    { d, stroke: routes[key].colour, 'stroke-width': key === 'rail' ? 2.7 : 2.2 },
-    g,
-  );
+  const g = shape('g', { 'data-route-line': key }, group);
+  shape('path', { d, stroke: 'var(--halo)', 'stroke-width': key === 'rail' ? 4.2 : 3.8 }, g);
+  shape('path', { d, stroke: routes[key].colour, 'stroke-width': key === 'rail' ? 2.7 : 2.2 }, g);
   if (key === 'rail')
     shape('path', { d, stroke: '#fff', 'stroke-width': 1.1, 'stroke-dasharray': '3 4' }, g);
-  paths.set(key, { g, casing, stroke });
+  paths.set(key, g);
 }
 // Alternate colours on road links shared by several routes at the overview scale.
 const linkSet = new Map();
@@ -129,21 +139,26 @@ for (const [d, ids] of linkSet) {
   const key = ids.join(',');
   common.set(key, (common.get(key) || '') + d);
 }
-for (const [key, d] of common) {
-  const ids = key.split(',');
-  ids.forEach((id, i) =>
-    shape(
-      'path',
-      {
-        d,
-        stroke: routes[id].colour,
-        'stroke-dasharray': '4 ' + 4 * (ids.length - 1),
-        'stroke-dashoffset': -4 * i,
-      },
-      shared,
-    ),
-  );
+function drawSharedLinks() {
+  shared.replaceChildren();
+  for (const [key, d] of common) {
+    const ids = key.split(',').filter(routeVisible);
+    if (ids.length < 2) continue;
+    ids.forEach((id, i) =>
+      shape(
+        'path',
+        {
+          d,
+          stroke: routes[id].colour,
+          'stroke-dasharray': '4 ' + 4 * (ids.length - 1),
+          'stroke-dashoffset': -4 * i,
+        },
+        shared,
+      ),
+    );
+  }
 }
+drawSharedLinks();
 const places = shape('g', { 'pointer-events': 'none' }, svg),
   stopsLayer = shape('g', { 'aria-label': 'Bus stops' }, svg),
   markers = shape('g', { 'aria-label': 'Vehicles' }, svg);
@@ -159,12 +174,11 @@ const stops =
 function fillStopPicker() {
   const picker = $('stop-picker');
   picker.length = 1;
-  picker.disabled = !timetable || focus === 'rail';
+  picker.disabled = !timetable || (selectedRoutes.size === 1 && selectedRoutes.has('rail'));
   if (!timetable) picker.options[0].text = 'Timetable unavailable';
-  for (const s of stops
-    .filter((s) => !focus || timetable.routesAt[s.id].has(focus))
-    .sort((a, b) => a.name.localeCompare(b.name)))
+  for (const s of stops.filter((s) => stopVisible(s.id)).sort((a, b) => a.name.localeCompare(b.name)))
     picker.add(new Option(s.name, s.id));
+  if (selectedStop !== null) picker.value = String(selectedStop);
 }
 function openStop(id, centre) {
   selection = null;
@@ -172,6 +186,7 @@ function openStop(id, centre) {
   if (mode === 'replay') runReplay(false);
   $('stop-picker').value = String(id);
   if (centre) {
+    fitOnResize = false;
     [cx, cy] = stops.find((s) => s.id === id).point;
     zoom = Math.max(zoom, 6);
     cy += (H * 0.19) / zoom;
@@ -190,15 +205,16 @@ function drawStops(unit) {
   const active = document.activeElement?.dataset?.stop;
   stopsLayer.replaceChildren();
   const visible = [];
+  const halfWidth = (svg.clientWidth / 2 + 5) * unit,
+    halfHeight = (svg.clientHeight / 2 + 5) * unit;
   const ordered =
     selectedStop === null
       ? stops
       : [stops.find((s) => s.id === selectedStop), ...stops.filter((s) => s.id !== selectedStop)];
   for (const s of ordered) {
-    if (focus && !timetable.routesAt[s.id].has(focus)) continue;
+    if (!stopVisible(s.id)) continue;
     const [x, y] = s.point;
-    if (Math.abs(cx - x) > W / (2 * zoom) + 5 * unit || Math.abs(cy - y) > H / (2 * zoom) + 5 * unit)
-      continue;
+    if (Math.abs(cx - x) > halfWidth || Math.abs(cy - y) > halfHeight) continue;
     if (visible.some(([px, py]) => Math.hypot(px - x, py - y) < 22 * unit)) continue;
     visible.push(s.point);
     const g = shape(
@@ -312,45 +328,64 @@ $('theme').onclick = () => {
 };
 
 for (const key of order) {
-  const r = routes[key],
-    b = text('button', '', 'route');
-  b.dataset.route = key;
-  b.style.setProperty('--accent', r.colour);
-  b.setAttribute('aria-pressed', 'false');
-  b.title = 'Focus on ' + (key === 'rail' ? 'the Lakes Line' : 'route ' + key);
-  b.append(
-    text('span', key === 'rail' ? 'Rail' : key, 'badge'),
-    text('span', r.name, 'route-name'),
-    text('small', r.via),
-  );
-  b.onclick = () => selectRoute(focus === key ? null : key);
-  $('routes').append(b);
+  const r = routes[key];
+  const button = text('button', key === 'rail' ? 'Rail' : key, 'route');
+  button.dataset.route = key;
+  button.style.setProperty('--accent', r.colour);
+  button.setAttribute('aria-pressed', 'false');
+  button.ariaLabel = key === 'rail' ? r.name : 'Bus ' + key + ' · ' + r.name;
+  button.title = button.ariaLabel;
+  button.onclick = () => {
+    if (selectedRoutes.has(key)) selectedRoutes.delete(key);
+    else selectedRoutes.add(key);
+    applyRoutes();
+  };
+  $('routes').append(button);
 }
-function selectRoute(key) {
-  focus = key;
-  selection = null;
-  selectedStop = null;
-  fillStopPicker();
-  shared.style.display = key ? 'none' : '';
-  for (const b of $('routes').children) b.setAttribute('aria-pressed', String(b.dataset.route === key));
-  $('show-all').hidden = !key;
-  for (const [id, { g }] of paths) g.setAttribute('opacity', !key || id === key ? '1' : '.14');
-  if (key) {
-    const { g } = paths.get(key);
-    group.append(g);
-    const b = g.getBBox();
-    zoom = Math.max(1, Math.min(3.8, Math.min(W / (b.width + 74), H / (b.height + 95))));
+function fitRoutes() {
+  fitOnResize = true;
+  zoom = 1;
+  cx = W / 2;
+  cy = H / 2;
+  if (selectedRoutes.size) {
+    const b = group.getBBox();
+    const scale = Math.min(svg.clientWidth / W, svg.clientHeight / H);
+    zoom = Math.max(
+      1,
+      Math.min(
+        24,
+        svg.clientWidth / (scale * (b.width + 70)),
+        svg.clientHeight / (scale * (b.height + 90)),
+      ),
+    );
     cx = b.x + b.width / 2;
     cy = b.y + b.height / 2;
-  } else {
-    zoom = 1;
-    cx = W / 2;
-    cy = H / 2;
   }
   viewport();
+}
+function applyRoutes() {
+  for (const [id, g] of paths) g.style.display = routeVisible(id) ? '' : 'none';
+  $('show-all').setAttribute('aria-pressed', String(selectedRoutes.size === 0));
+  for (const b of $('routes').querySelectorAll('[data-route]')) {
+    b.setAttribute('aria-pressed', String(selectedRoutes.has(b.dataset.route)));
+  }
+  if (selectedStop !== null && !stopVisible(selectedStop)) selectedStop = null;
+  fillStopPicker();
+  drawSharedLinks();
+  fitRoutes();
   render();
 }
-$('show-all').onclick = () => selectRoute(null);
+$('show-all').onclick = () => {
+  selectedRoutes.clear();
+  applyRoutes();
+};
+$('view-toggle').onclick = () => {
+  const fullMap = document.body.classList.toggle('map-only');
+  $('view-toggle').ariaLabel = fullMap ? 'Show dashboard' : 'Expand map';
+  $('view-toggle').title = $('view-toggle').ariaLabel;
+  window.scrollTo(0, 0);
+  viewport();
+};
 function viewport() {
   const w = W / zoom,
     h = H / zoom;
@@ -416,6 +451,8 @@ function viewport() {
 function changeZoom(factor, anchor = [cx, cy]) {
   const next = Math.max(1, Math.min(24, zoom * factor)),
     ratio = zoom / next;
+  if (next === zoom) return;
+  fitOnResize = false;
   cx = anchor[0] + (cx - anchor[0]) * ratio;
   cy = anchor[1] + (cy - anchor[1]) * ratio;
   zoom = next;
@@ -423,7 +460,7 @@ function changeZoom(factor, anchor = [cx, cy]) {
 }
 $('plus').onclick = () => changeZoom(1.5);
 $('minus').onclick = () => changeZoom(1 / 1.5);
-$('reset').onclick = () => selectRoute(null);
+$('reset').onclick = fitRoutes;
 function world(event) {
   const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
   return [p.x, p.y];
@@ -444,6 +481,7 @@ svg.onpointerdown = (e) => {
 };
 svg.onpointermove = (e) => {
   if (!drag) return;
+  fitOnResize = false;
   const unit = svg.getScreenCTM().a;
   cx = drag.cx - (e.clientX - drag.x) / unit;
   cy = drag.cy - (e.clientY - drag.y) / unit;
@@ -465,7 +503,7 @@ function inspect(id) {
 function drawBoard(body, now) {
   const group = timetable.groups[selectedStop];
   body.append(text('span', 'Bus stop · ' + group.town, 'kicker'), text('strong', group.name));
-  const board = timetable.departures(selectedStop, now, focus);
+  const board = timetable.departures(selectedStop, now, selectedRoutes.size ? selectedRoutes : null);
   if (!board.covered) {
     body.append(text('p', 'No timetable published here for this date.'));
     return;
@@ -625,7 +663,7 @@ function drawMarkers() {
   const occupied = [...labelBoxes];
   for (const vehicle of fixes) {
     const [x, y] = project(vehicle.point, frame);
-    const radius = vehicle.route === 'rail' ? 4 : 16;
+    const radius = vehicle.route === 'rail' ? 18 : 16;
     occupied.push([x - radius * unit, y - radius * unit, 2 * radius * unit, 2 * radius * unit]);
   }
   for (const v of fixes) {
@@ -710,34 +748,22 @@ function drawMarkers() {
         g,
       );
     }
-    if (rail) {
-      shape('circle', { cx: x, cy: y, r: 3.6 * unit, fill, stroke: '#fff', 'stroke-width': 1.1 * unit }, g);
-    } else {
-      const known = Number.isFinite(v.bearing);
-      const angle = known ? v.bearing - 90 : 0;
-      const flip = known && v.bearing > 180 ? -1 : 1;
-      shape(
-        'use',
-        {
-          href: '#' + routes[v.route].icon + (known ? '-side' : '-front'),
-          color: fill,
-          transform:
-            'translate(' +
-            x +
-            ' ' +
-            y +
-            ') scale(' +
-            unit +
-            ') rotate(' +
-            angle +
-            ') scale(1 ' +
-            flip +
-            ')',
-        },
-        g,
-      );
-    }
-    shape('circle', { cx: x, cy: y, r: (rail ? 9 : 16) * unit, fill: 'transparent' }, g);
+    const bearing = rail ? railBearing(v, [x, y], data.rail, data.stations) : v.bearing;
+    const known = Number.isFinite(bearing);
+    const angle = known ? bearing - 90 : 0;
+    const flip = known && bearing > 180 ? -1 : 1;
+    const icon = rail ? '#northern-carriage' : '#' + routes[v.route].icon + (known ? '-side' : '-front');
+    shape(
+      'use',
+      {
+        href: icon,
+        color: fill,
+        transform:
+          'translate(' + x + ' ' + y + ') scale(' + unit + ') rotate(' + angle + ') scale(1 ' + flip + ')',
+      },
+      g,
+    );
+    shape('circle', { cx: x, cy: y, r: 17 * unit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
     g.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -751,13 +777,13 @@ function drawMarkers() {
 function render() {
   const now = mode === 'replay' ? snapshot?.time : Date.now();
   const vehicles = visibleFixes(snapshot, now);
-  fixes = vehicles.filter((v) => !focus || v.route === focus);
+  fixes = vehicles.filter((v) => routeVisible(v.route));
   if (!fixes.some((v) => v.id === selection)) selection = null;
   drawMarkers();
   detail();
   for (const kind of ['bus', 'rail']) {
     const feed = snapshot?.[kind],
-      relevant = vehicles.filter((v) => (v.route === 'rail') === (kind === 'rail'));
+      relevant = fixes.filter((v) => (v.route === 'rail') === (kind === 'rail'));
     const count = relevant.filter((v) => !v.stale).length,
       stale = relevant.length - count;
     let status =
@@ -780,9 +806,22 @@ function render() {
       : 'Offline · choose Replay to see recorded journeys.'
     : problems
       ? 'Feed unavailable. Recent retained positions are dimmed.'
-      : focus && !fixes.length
-        ? 'No current ' + (focus === 'rail' ? 'branch estimate.' : 'fix for route ' + focus + '.')
+      : selectedRoutes.size && !fixes.length
+        ? 'No vehicles reported for the selected routes.'
         : '';
+  const mapState =
+    mode === 'replay'
+      ? navigator.onLine
+        ? 'Replay'
+        : 'Offline replay'
+      : !navigator.onLine
+        ? 'Offline'
+        : problems
+          ? 'Feed unavailable'
+          : snapshot
+            ? 'Live'
+            : 'Connecting…';
+  $('map-status').textContent = mapState + (snapshot ? ' · ' + londonTime(snapshot.time).slice(0, 5) : '');
   $('count').textContent = '(' + fixes.length + ')';
   const list = $('vehicles');
   list.replaceChildren();
@@ -886,7 +925,7 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => {
   if (!document.hidden && mode === 'live' && (snapshot || selectedStop !== null)) render();
 }, 10_000);
-new ResizeObserver(viewport).observe(svg);
+new ResizeObserver(() => (fitOnResize ? fitRoutes() : viewport())).observe(svg);
 viewport();
 window.addEventListener('offline', render);
 window.addEventListener('online', () => {

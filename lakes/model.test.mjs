@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { busFixes, railFixes, visibleFixes, project, order } from './public/model.mjs';
+import { busFixes, railFixes, railBearing, visibleFixes, project, order } from './public/model.mjs';
 
 const read = (name) => JSON.parse(readFileSync(new URL('./public/data/' + name, import.meta.url)));
 const now = Date.parse('2026-11-25T12:05:54Z');
@@ -83,4 +83,19 @@ test('GPS bearings preserve due north and distinguish a missing or invalid headi
   ]) {
     assert.equal(busFixes([{ ...base, bearing: value }])[0].bearing, want);
   }
+});
+
+test('a train cab follows the local rail segment in either direction, including older recorded fixes', () => {
+  const stations = [
+    { code: 'A', name: 'First' },
+    { code: 'B', name: 'Last' },
+  ];
+  const line = [
+    [0, 0],
+    [0, 10],
+    [10, 10],
+  ];
+  assert.equal(railBearing({ lastCode: 'A', nextCode: 'B' }, [8, 11], line, stations), 90);
+  assert.equal(railBearing({ last: 'Last', next: 'First' }, [8, 11], line, stations), 270);
+  assert.equal(railBearing({ last: 'First', next: 'Last' }, [1, 4], line, stations), 180);
 });

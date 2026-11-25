@@ -43,6 +43,9 @@ test('the Ambleside board combines opposite poles, shows upcoming buses in both 
       .flat()
       .every((c) => c.trip.route === '505'),
   );
+  const chosen = new Set(['505', '555', 'rail']);
+  const combined = [...schedule.departures(i, frame.time, chosen).sections.values()].flat();
+  assert.deepEqual(new Set(combined.map((c) => c.trip.route)), new Set(['505', '555']));
   const late = schedule.departures(i, Date.parse('2026-12-24T23:58:00Z'));
   assert.ok(
     [...late.sections.values()]
