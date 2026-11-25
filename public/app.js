@@ -35,7 +35,10 @@ window.addEventListener('storage', (e) => {
 });
 const viewLink = $('diagram-view');
 const recordedPreview = document.documentElement.hasAttribute('data-recorded-preview');
-const defaultDisplay = recordedPreview ? 'diagram' : 'dashboard';
+const installed =
+  matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches ||
+  navigator.standalone === true;
+const defaultDisplay = recordedPreview || installed ? 'diagram' : 'dashboard';
 function readDisplayMode() {
   const url = new URL(location.href);
   const only = (url.searchParams.get('display') ?? defaultDisplay) === 'diagram';
@@ -1024,12 +1027,22 @@ svg.addEventListener('pointercancel', () => {
 });
 function updateDisplay() {
   diagramOnly = readDisplayMode();
+  if (!diagramOnly && document.fullscreenElement === document.documentElement)
+    document.exitFullscreen().catch(() => {});
   closeSignal();
   render(true);
 }
 viewLink.addEventListener('click', (event) => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
+  if (
+    !diagramOnly &&
+    document.fullscreenEnabled &&
+    matchMedia('(display-mode: browser) and (pointer: coarse)').matches
+  ) {
+    // Browsers require a user gesture. The diagram view also works if they decline.
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  }
   history.pushState(null, '', viewLink.href);
   updateDisplay();
 });

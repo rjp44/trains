@@ -2,8 +2,13 @@
 <html lang="en-GB">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#f4f3ed" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Traintimes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/rail-192.png" />
     <title>Hemel Hempstead · Traintimes</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
@@ -106,6 +111,12 @@
       </div>
       <p id="notice" role="status"></p>
       <p class="mini" id="branch-status" hidden></p>
+      <details class="mobile-install">
+        <summary>Open fullscreen on a phone</summary>
+        <p><strong>Android Chrome</strong> — Open the ⋮ menu and choose Install. Look under Install and create shortcut or Add to Home screen if needed.</p>
+        <p><strong>iPhone Safari</strong> — Tap Share, then Add to Home Screen. Enable Open as Web App if shown, then tap Add.</p>
+        <p>Launch Traintimes from its Home Screen icon to open the 15-mile diagram without the address bar.</p>
+      </details>
       <div class="lower">
         <section class="side">
           <div class="sectionhead">

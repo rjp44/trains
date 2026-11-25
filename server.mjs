@@ -194,6 +194,9 @@ const files = {
   '/': ['index.html', 'text/html'],
   '/app.js': ['app.js', 'text/javascript'],
   '/style.css': ['style.css', 'text/css'],
+  '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
+  '/icons/rail-192.png': ['icons/rail-192.png', 'image/png'],
+  '/icons/rail-512.png': ['icons/rail-512.png', 'image/png'],
   '/rail.mjs': ['../rail.mjs', 'text/javascript'],
   '/data/corridor.json': ['data/corridor.json', 'application/json'],
   '/data/watford-replay.json': ['data/watford-replay.json', 'application/json'],
@@ -219,8 +222,9 @@ const server = http.createServer(async (req, res) => {
     } else {
       const [name, mime] = files[path];
       const bytes = await readFile(new URL(name, root));
+      const contentType = mime === 'image/png' ? mime : mime + '; charset=utf-8';
       res
-        .writeHead(200, { 'Content-Type': mime + '; charset=utf-8', 'Cache-Control': 'no-cache' })
+        .writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' })
         .end(bytes);
     }
   } catch {

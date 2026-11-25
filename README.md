@@ -6,6 +6,15 @@ Run `node server.mjs` in this directory with Node.js 22.4 or later. Open [the lo
 
 Import this repository into Netlify and select the `main` branch. The included `netlify.toml` runs `node build-preview.mjs` and publishes `dist`. The site root opens the full-window 15-mile sector, playing the full-sector recording. Use the toolbar to return to the dashboard, or bookmark `/?display=dashboard`. Open `/?view=watford` for the Watford recording. Run the Node server locally for the live feed. [Netlify build configuration](https://docs.netlify.com/build/configure-builds/file-based-configuration/)
 
+### Launch fullscreen on a phone
+
+Open the HTTPS preview at its root and install it once. Launch **Traintimes** from the Home Screen to go straight to the 15-mile replay without the browser address bar.
+
+- **Android Chrome** — Open the ⋮ menu and choose **Install**. Depending on the Chrome version, it appears under **Install and create shortcut** or **Add to Home screen**. [Google Chrome instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en)
+- **iPhone Safari** — Tap **Share** (under **More** on some layouts), then **Add to Home Screen**. Enable **Open as Web App** if shown and tap **Add**. iOS can still show its system status bar or Home indicator. [Apple instructions](https://support.apple.com/guide/iphone/iphea86e5236/ios)
+
+For a single session in Android Chrome, the dashboard’s expand icon also requests fullscreen. An ordinary browser link opens with the browser’s own controls.
+
 ## Using the diagram
 
 The map opens at **15-mile view**, showing the WCML, Watford DC and Abbey line. **Centre on Hemel** zooms in to Apsley, Hemel Hempstead and Berkhamsted. Click a station to zoom or drag the diagram to pan. Use **Watford Junction** to zoom straight to all ten passenger platforms. Each station has a shared column across its tracks. The line with the most berth steps sets the minimum space to the next station. Lines with fewer berths spread them across that space. Labels use the full station name where it fits and shorten later words when space is tight. On the Abbey line, each reported station has its own slot. The 15-mile limit still follows rail mileage.
