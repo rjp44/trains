@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#f6f7f1" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lakes Transit" />
+    <link rel="apple-touch-icon" href="/icons/lakes-180.png" />
+    <link rel="icon" type="image/svg+xml" href="/icons/lakes.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Lake District · Transport map</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="map-only">
+    <main class="board">
+      <header class="mast">
+        <div>
+          <h1>Lake District</h1>
+          <p>Buses &amp; trains across the Lakes</p>
+        </div>
+        <div class="mast-tools">
+          <span class="mode-switch" role="group" aria-label="Data mode"
+            ><button id="live" aria-pressed="true">Live</button
+            ><button id="replay" aria-pressed="false">Replay</button></span
+          >
+          <button class="theme icon" id="theme" aria-label="Use dark theme" title="Use dark theme">
+            ☾
+          </button>
+        </div>
+      </header>
+      <section class="map-panel" aria-label="Lake District transport map">
+        <svg
+          id="map"
+          viewBox="0 0 480 748"
+          aria-label="Geographic map of Stagecoach buses, the Lakes Line and the Furness and Cumbrian Coast lines"
+        >
+          <defs>
+            <!-- Side profiles face east. The route colour is reserved for the heading chevron. -->
+            <!-- One Northern carriage, with its leading yellow cab at the right. -->
+            <g id="northern-carriage">
+              <path
+                d="M-17 3v-6q0-2.7 2.5-2.7H10q3 0 4.8 2.6l2.6 4.6-.6 3.2H-16z"
+                fill="#ecf1f4"
+                stroke="#fff"
+                stroke-width="1.4"
+                stroke-linejoin="round"
+              />
+              <path d="M-16.6-3q0-1.9 2-2.1H9.5l2 1.7h-28z" fill="#617181" />
+              <path d="M-16.5-1.8h6l4.5 4.3 16 .4 6.2-.5-.7 2.7H-16z" fill="#213a63" />
+              <path d="M-15.6-.3q4.8-1.3 9.8 3.4l-3.5.2q-3.6-2.7-6.3-2.1z" fill="#787ac6" />
+              <path d="M-12.7-2.9h3v3h-3zm4.4 0h4.5v3h-4.5zm6 0H2v3h-4.3zm5.8 0h3v3h-3z" fill="#253b51" />
+              <path d="M7.6-3.1h2.3v6H7.6z" fill="#4d81af" />
+              <path d="M10.8-5.2q2.4.7 3.6 3L17 1.9l-.6 2.3-4.4.4.6-4.3z" fill="#f4c337" />
+              <path d="m11.9-3.6 1.5.6 2 3-2.4-.3z" fill="#20344e" />
+              <path d="M-14 4.6h26" stroke="#374550" stroke-width="1.4" />
+              <g fill="#1d2934" stroke="#d9e4e5" stroke-width=".7">
+                <rect x="-13" y="4.2" width="6.5" height="2.6" rx="1.3" />
+                <rect x="6.2" y="4.2" width="6.5" height="2.6" rx="1.3" />
+              </g>
+            </g>
+            <g id="bus-wheels" fill="#172a2c" stroke="#f2f5e9" stroke-width=".7">
+              <circle cx="-8.7" cy="5.2" r="2.3" />
+              <circle cx="8.5" cy="5.2" r="2.3" />
+              <path d="M-9.4 5.2H-8m15.8 0h1.4" stroke="#a7b6b2" stroke-width="1.3" />
+            </g>
+            <g id="bus-heading" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16-3 3.5 3-3.5 3" stroke="white" stroke-width="3.2" />
+              <path d="m16-3 3.5 3-3.5 3" stroke="currentColor" stroke-width="1.7" />
+            </g>
+            <g id="single-side">
+              <path
+                d="M-14.7 4.5v-8.8q0-1.7 1.8-1.7h23.7q1.9 0 2.3 2l1.2 6.6v2.2h-28z"
+                fill="#06594b"
+                stroke="#fff"
+                stroke-width="1.4"
+                stroke-linejoin="round"
+              />
+              <path d="M-12.5-5h24l1.5 7.3H-4.7L-12.5 0z" fill="#edf3e9" />
+              <path d="M-13 0h9.3Q-6 3.1 3.8 3.8H-5.5z" fill="#7cc844" />
+              <path d="M-11.7-3.9H8.1v4.4h-19.8zM9-3.9h2.5l1.4 7h-4z" fill="#193b41" />
+              <path d="M-6.4-3.9V.5m6-4.4V.5m5.6-4.4V.5" stroke="#bed6d0" stroke-width=".85" />
+              <path d="M4.5-5.4h7" stroke="#65bd42" stroke-width="1.2" />
+              <path d="M12.5 3.5h1.4" stroke="#ffe9aa" stroke-width="1.25" />
+              <use href="#bus-wheels" />
+              <use href="#bus-heading" />
+            </g>
+            <g id="single-front">
+              <rect
+                x="-7"
+                y="-5.8"
+                width="14"
+                height="12"
+                rx="2"
+                fill="#075c4c"
+                stroke="white"
+                stroke-width="1.3"
+              />
+              <path d="M-6-3.6h12v6H-6z" fill="#18383c" />
+              <path d="M-5.5-4.5h11" stroke="#87d44c" stroke-width="1.3" />
+              <path d="M-6 2.6h12l-1 1.5H-5z" fill="#e7f0e6" />
+              <path d="M-5.5 3.7h1.7m7.6 0h1.7" stroke="#fff2b3" stroke-width="1.1" />
+            </g>
+            <g id="closed-decker-side">
+              <path
+                d="M-14.7 4.8V-6.9q0-2.6 2.6-2.6H7.6q4.9 0 5.8 5.1l1 6.4q.3 3.4-2.5 3.4h-25z"
+                fill="#24afe4"
+                stroke="white"
+                stroke-width="1.4"
+                stroke-linejoin="round"
+              />
+              <path d="M-14-6.8q1 5.2 8.8 5.5L2 3.6l9.5 1.3H-14z" fill="#96d644" />
+              <path d="M-14-.7q5.5 2.6 12 3.8 6.5 1.6 15.3 1.3l-1.5 1.1H-14z" fill="#075c49" />
+              <path
+                d="M-12.6-7.8H7.7q3.2 0 4.1 3.8h-24.4zM-12.3-.9h12.1v3.1h-12.1zM7.8-2.4h4.4l.9 4.8H7.8z"
+                fill="#17353e"
+              />
+              <path d="M-6.8-7.8V-4m7-3.8V-4m6.9-3.8V-4" stroke="#92bcc8" stroke-width=".8" />
+              <path d="M-6.1-1.5q3-3.9 6.4-.7l2.3 2.9-4.1-.8z" fill="#e0e6b4" />
+              <path d="M12.3 3.2h1.3" stroke="#ffea9c" stroke-width="1.2" />
+              <use href="#bus-wheels" />
+              <use href="#bus-heading" />
+            </g>
+            <g id="open-decker-side">
+              <!-- The exposed seats and uninterrupted sky at the rear carry the open-top silhouette. -->
+              <path
+                d="M-14.6 5V-5.8h15l2.2-3.6h6.1q3.1 0 3.9 3.2l1.6 8.2v3.5h-28z"
+                fill="#acd631"
+                stroke="white"
+                stroke-width="1.4"
+                stroke-linejoin="round"
+              />
+              <path d="M-13.7-3.8q4.8 3.7 11.2 2.5l5.6-5.6-3.8 8.5q-5.3 2.3-13 1.1z" fill="#327343" />
+              <path
+                d="m-13-8 .7 2.1h1.8m1.8-2.1.7 2.1h1.8m1.8-2.1.7 2.1h1.8"
+                fill="none"
+                stroke="#425949"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M-14-5.5h14" stroke="#43874c" stroke-width="1" />
+              <path
+                d="M-13.6-1.4h13L-2 1.9h-11.6zM3.4-8h5.8q2.6 0 3.1 3.8H2zM6.4-.7h6.1l.7 3.1H6.4z"
+                fill="#283e39"
+              />
+              <path d="M-8.8-1.4v3.3M8.4-8v3.8" stroke="#adcaab" stroke-width=".8" />
+              <path d="M12 3.7h1.7" stroke="#fff5b5" stroke-width="1.2" />
+              <use href="#bus-wheels" />
+              <use href="#bus-heading" />
+            </g>
+            <!-- Both double-deckers have an enclosed cab when viewed head-on. -->
+            <g id="decker-front-glass" fill="#1c353b">
+              <path d="M-5.6-3.2v-2.6q0-1.6 1.7-1.6h7.8q1.7 0 1.7 1.6v2.6zM-5.8-1.3H5.8v4q-5.8 2-11.6 0z" />
+              <path d="M-5.5 5h2m7 0h2" stroke="#fff0ac" stroke-width="1.3" />
+            </g>
+            <g id="closed-decker-front">
+              <rect
+                x="-7"
+                y="-9"
+                width="14"
+                height="17"
+                rx="3.4"
+                fill="#24afe4"
+                stroke="white"
+                stroke-width="1.3"
+              />
+              <path d="M-6 6q6 1.3 12 0" fill="none" stroke="#07634f" stroke-width="1.8" />
+              <use href="#decker-front-glass" />
+            </g>
+            <g id="open-decker-front">
+              <rect
+                x="-7"
+                y="-9"
+                width="14"
+                height="17"
+                rx="2.5"
+                fill="#acd631"
+                stroke="white"
+                stroke-width="1.3"
+              />
+              <use href="#decker-front-glass" />
+            </g>
+          </defs>
+        </svg>
+        <div class="map-bar">
+          <div id="routes" role="group" aria-label="Routes on the map">
+            <button id="show-all" class="route" aria-pressed="true" title="Show all routes">All</button>
+          </div>
+          <div class="map-tools">
+            <button class="icon" id="plus" title="Zoom in" aria-label="Zoom in">+</button>
+            <button class="icon" id="minus" title="Zoom out" aria-label="Zoom out">−</button>
+            <button class="icon" id="reset" title="Fit visible routes" aria-label="Fit visible routes">
+              ⌖
+            </button>
+            <button class="icon" id="view-toggle" title="Show dashboard" aria-label="Show dashboard">
+              <svg
+                viewBox="0 0 24 24"
+                width="19"
+                height="19"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.65"
+                aria-hidden="true"
+              >
+                <g class="dashboard-glyph">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M14 4v16m3-11h2m-2 4h2" />
+                </g>
+                <path class="expand-glyph" d="M3 9V4h5m8 0h5v5m0 6v5h-5m-8 0H3v-5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="north" aria-label="North up"><i></i>N</div>
+        <div class="map-foot">
+          <span id="scale"></span>
+          <span id="map-status"></span>
+          <details id="credits">
+            <summary>Map notes &amp; credits</summary>
+            <div>
+              Dashed coast section · <a href="https://www.northernrailway.co.uk/engineering/branstytunnel">Bransty Tunnel closure</a> (November 2026).<br />
+              © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> ·
+              <a href="https://openfreemap.org/">OpenFreeMap</a> ·
+              <a href="https://openmaptiles.org/">OpenMapTiles</a><br />Terrain ©
+              <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md"
+                >Mapzen and sources</a
+              >
+              · Routes © <a href="https://www.stagecoachbus.com/open-data">Stagecoach</a> <br />Timetables
+              via DfT BODS · Stops from NaPTAN ·
+              <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+                >Open Government Licence</a
+              >
+            </div>
+          </details>
+        </div>
+        <div id="vehicle" hidden role="region" aria-label="Map details">
+          <button id="close" class="close" aria-label="Close details">×</button>
+          <div id="vehicle-info" tabindex="0"></div>
+        </div>
+      </section>
+      <aside>
+        <div class="stop-finder">
+          <label for="stop-picker">Bus stops</label>
+          <select id="stop-picker">
+            <option value="">Find a stop…</option>
+          </select>
+        </div>
+        <section class="reports">
+          <h2>Running information</h2>
+          <div><span>Bus GPS</span><b id="bus-status">Connecting…</b></div>
+          <div><span>Rail estimates</span><b id="rail-status">Connecting…</b></div>
+          <small id="observed"></small>
+        </section>
+        <div id="playback" hidden>
+          <label for="frame">Recorded fixes</label>
+          <div>
+            <button id="play" aria-label="Pause replay">Pause</button
+            ><input type="range" id="frame" min="0" value="0" aria-label="Recorded snapshot" />
+          </div>
+          <output id="record-time"></output>
+        </div>
+        <details class="list">
+          <summary>Vehicles on map <span id="count"></span></summary>
+          <div id="vehicles"></div>
+        </details>
+        <div id="status" role="status"></div>
+        <details class="list" id="install-help" hidden>
+          <summary>Install Lakes Transit</summary>
+          <button id="install" hidden>Install app</button>
+          <p>
+            <strong>iPhone</strong> · In Safari, tap Share → Add to Home Screen. Enable Open as Web App if
+            shown.
+          </p>
+          <p><strong>Android</strong> · In Chrome, tap the menu → Add to home screen → Install.</p>
+        </details>
+      </aside>
+    </main>
+    <script type="module" src="/install.mjs"></script>
+    <script type="module" src="/app.mjs"></script>
+  </body>
+</html>
