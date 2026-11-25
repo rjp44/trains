@@ -3,7 +3,8 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
-import { busFixes, railFixes } from './public/model.mjs';
+import { createVehicleFeed } from './feeds.mjs';
+import { offlineWorker } from './pwa-worker.mjs';
 
 const port = Number(process.env.PORT || 8186);
 const root = fileURLToPath(new URL('./public/', import.meta.url));
@@ -29,61 +30,17 @@ function readBusArchive(bytes) {
     child.stdin.end(Buffer.from(bytes));
   });
 }
-const sources = {
-  bus: {
-    url: 'https://data.bus-data.dft.gov.uk/avl/download/bulk_archive',
-    interval: 60_000,
-    async decode(res) {
-      const data = await readBusArchive(await res.arrayBuffer());
-      return { generated: Date.parse(data.updated), vehicles: busFixes(data.rows) };
-    },
-  },
-  rail: {
-    url: 'https://api.railinfo.uk/map/trains',
-    interval: 30_000,
-    async decode(res) {
-      const data = await res.json();
-      return { generated: Date.parse(data.generated_at), vehicles: railFixes(data) };
-    },
-  },
-};
-const cache = new Map();
-async function live(type) {
-  const old = cache.get(type);
-  if (old?.pending) return old.pending;
-  if (old && Date.now() - old.value.checked < sources[type].interval) return old.value;
-  const entry = { value: old?.value };
-  const { url, decode } = sources[type];
-  entry.pending = (async () => {
-    try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'LakesTransitMap/0.1 (rjp44/trains)' },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) throw Error('HTTP ' + res.status);
-      entry.value = { ...(await decode(res)), ok: true, checked: Date.now() };
-    } catch (error) {
-      entry.value = {
-        ...entry.value,
-        ok: false,
-        checked: Date.now(),
-        vehicles: entry.value?.vehicles || [],
-      };
-      console.warn(type + ' feed unavailable', error.message);
-    } finally {
-      entry.pending = null;
-    }
-    return entry.value;
-  })();
-  cache.set(type, entry);
-  return entry.pending;
-}
+const snapshot = createVehicleFeed(readBusArchive);
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css',
   '.mjs': 'text/javascript',
   '.json': 'application/json',
   '.webp': 'image/webp',
+  '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.js': 'text/javascript',
 };
 createServer(async (req, res) => {
   try {
@@ -92,11 +49,17 @@ createServer(async (req, res) => {
       return;
     }
     const path = new URL(req.url, 'http://localhost').pathname;
+    if (path === '/sw.js') {
+      res
+        .writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-cache' })
+        .end(await offlineWorker());
+      return;
+    }
     if (path === '/api/vehicles') {
-      const [bus, rail] = await Promise.all([live('bus'), live('rail')]);
+      const data = await snapshot();
       res
         .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
-        .end(JSON.stringify({ time: Date.now(), bus, rail }));
+        .end(JSON.stringify(data));
       return;
     }
     const file = resolve(root, '.' + (path === '/' ? '/index.html' : decodeURIComponent(path)));

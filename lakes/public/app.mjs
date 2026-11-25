@@ -296,6 +296,7 @@ function theme(dark) {
   $('theme').textContent = dark ? '☀' : '☾';
   $('theme').ariaLabel = dark ? 'Use light theme' : 'Use dark theme';
   $('theme').title = $('theme').ariaLabel;
+  document.querySelector('meta[name=theme-color]').content = dark ? '#182822' : '#f6f7f1';
 }
 try {
   theme(localStorage.getItem('lakes.theme') === 'dark');
@@ -773,11 +774,15 @@ function render() {
     ? (mode === 'replay' ? 'Recorded ' : 'Checked ') + londonTime(snapshot.time) + ' London'
     : '';
   const problems = fetchFailed || (snapshot && (!snapshot.bus.ok || !snapshot.rail.ok));
-  $('status').textContent = problems
-    ? 'Feed unavailable. Recent retained positions are dimmed.'
-    : focus && !fixes.length
-      ? 'No current ' + (focus === 'rail' ? 'branch estimate.' : 'fix for route ' + focus + '.')
-      : '';
+  $('status').textContent = !navigator.onLine
+    ? mode === 'replay'
+      ? 'Offline · showing recorded journeys.'
+      : 'Offline · choose Replay to see recorded journeys.'
+    : problems
+      ? 'Feed unavailable. Recent retained positions are dimmed.'
+      : focus && !fixes.length
+        ? 'No current ' + (focus === 'rail' ? 'branch estimate.' : 'fix for route ' + focus + '.')
+        : '';
   $('count').textContent = '(' + fixes.length + ')';
   const list = $('vehicles');
   list.replaceChildren();
@@ -883,4 +888,12 @@ setInterval(() => {
 }, 10_000);
 new ResizeObserver(viewport).observe(svg);
 viewport();
-setMode('live');
+window.addEventListener('offline', render);
+window.addEventListener('online', () => {
+  render();
+  if (mode === 'live') {
+    clearTimeout(polling);
+    poll(++generation);
+  }
+});
+setMode(navigator.onLine ? 'live' : 'replay');

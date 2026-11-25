@@ -50,3 +50,17 @@ The projection is local equirectangular, with longitude scaled at 54.35°N. Rout
 For a map-data refresh, use a Python environment with `mapbox-vector-tile`, `shapely`, `numpy` and `Pillow`. Run `python lakes/tools/build-map.py /tmp/lakes-map-downloads`. The directory caches the source downloads. Use a fresh directory to retrieve a new timetable or tile edition and review the published service period before replacing the winter coverage. Runtime and tests do not need those libraries.
 
 Run `node --test` from the checkout root. A future ESP32 port can consume the same compact local API and generated map coordinates.
+
+## Mobile app and Netlify
+
+Install **Lakes Transit** from the site on the phone. In Android Chrome use **Install app** when offered, or the browser's Add to home screen menu. In iPhone Safari use **Share → Add to Home Screen** and enable **Open as Web App** if offered. Launching from the home screen opens the map in its own window.
+
+After an online visit finishes caching the app, the map, winter timetable and recorded journeys work offline. An offline launch opens Replay. Live positions require a connection. Each build versions the offline files by content so a new edition takes effect after the previous app windows close.
+
+The public site is a direct deploy from this checkout under the Aplisay team. Deploy again from `lakes/` with the authorized Netlify CLI using the commands below. The site ID selects the Lakes project. Its function uses the same feed selection and freshness rules as the laptop server and reads the bus archive in Node. [Open Lakes Transit](https://lakes-transit.netlify.app/)
+
+```sh
+npm ci
+node build-pwa.mjs
+netlify deploy --site 7276cd59-f7ca-4dfc-8c2a-c1d26679e844 --prod --no-build --dir dist --functions functions
+```
