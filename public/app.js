@@ -390,7 +390,7 @@ function measureLabel(label, size) {
   }
   return labelWidths.get(key);
 }
-function stationLabels(plot, stations, y, secondY) {
+function stationLabels(plot, stations, y, rowOffset) {
   const items = stations
     .map((station) => {
       const column = diagram.columns.get(station.code);
@@ -398,7 +398,7 @@ function stationLabels(plot, stations, y, secondY) {
     })
     .filter((s) => inView(s.x));
   for (const item of fitStationNames(items, 105, mapWidth - 4, measureLabel)) {
-    stationLabel(plot, item, item.row ? Math.max(y + 22, secondY) : y);
+    stationLabel(plot, item, y + item.row * rowOffset);
   }
 }
 function stationLabel(plot, { station, column, labelX, width, size, label }, y) {
@@ -488,7 +488,7 @@ function drawJunction(plot, values, occupied) {
     const top = isDC
       ? Math.max(65 * verticalScale, 20 * verticalScale + 44, 41 * verticalScale + 22)
       : Math.max(laneY(10) + 41, 536 * verticalScale);
-    stationLabels(labels, named, top, (isDC ? 89 : 556) * verticalScale);
+    stationLabels(labels, named, top, Math.max(22, (isDC ? 89 : 556) * verticalScale - top));
   }
   for (const [p, lane] of laneByPlatform) {
     const y = laneY(lane),
@@ -564,10 +564,13 @@ function drawMap(values) {
   );
   const occupied = [];
   const mainY = (i) => (merged ? laneY(5 + i) : (97 + i * 66) * verticalScale);
+  const upperLabels = [], wcmlLabels = [];
   for (const s of stations) {
     const column = diagram.columns.get(s.code);
     const atJunction = merged && s.code === watford.code;
     const sharedDC = merged && dc.stations.some((stop) => stop.code === s.code);
+    if (merged && !atJunction && !sharedDC) wcmlLabels.push(s);
+    else upperLabels.push(s);
     const top = atJunction ? 50 * verticalScale : (sharedDC ? laneY(2) : mainY(0)) - 26;
     const bottom = atJunction ? laneY(10) + 24 : mainY(3) + 24;
     const d = 'M' + position(column) + ' ' + top + 'V' + bottom;
@@ -591,7 +594,11 @@ function drawMap(values) {
       'pointer-events': 'none',
     });
   }
-  stationLabels(plot, stations, 20 * verticalScale, 41 * verticalScale);
+  stationLabels(plot, upperLabels, 20 * verticalScale, Math.max(22, 21 * verticalScale));
+  // Keep both label rows above the Down Fast signal hit targets. A crowded
+  // second row grows away from the track, even on a short display.
+  const signalHitTop = mainY(0) - (zoom < 0.6 ? 22 : 30);
+  stationLabels(plot, wcmlLabels, signalHitTop - 9, -22);
   for (const [i, t] of layout.tracks.entries()) {
     const y = mainY(i);
     textAt(svg, 17, y - 1, t.name, { 'text-anchor': 'start' });
