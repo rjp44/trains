@@ -23,8 +23,9 @@ export function abbeyCandidates(catalogue, now) {
       /^\d{4}$/.test(s.od),
   );
 }
-export function lookupURL(s) {
-  const url = new URL('https://api.railinfo.uk/services/lookup');
+export const serviceLookup = 'https://api.railinfo.uk/services/lookup';
+export function lookupURL(s, endpoint = serviceLookup) {
+  const url = new URL(endpoint);
   url.search = new URLSearchParams({ crs: crs.get(s.ol), dep: s.od, date: day.format(s.st) });
   return url;
 }

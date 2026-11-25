@@ -7,6 +7,7 @@ import {
   fitStationNames,
   junctionPathSlots,
 } from '/rail.mjs';
+import { createLiveFeed } from '/live.mjs';
 
 const $ = (id) => document.getElementById(id);
 const panel = document.querySelector('.panel');
@@ -34,11 +35,11 @@ window.addEventListener('storage', (e) => {
   if (e.key === themeKey || e.key === null) setTheme(e.newValue === 'light');
 });
 const viewLink = $('diagram-view');
-const recordedPreview = document.documentElement.hasAttribute('data-recorded-preview');
 const installed =
   matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches ||
   navigator.standalone === true;
-const defaultDisplay = recordedPreview || installed ? 'diagram' : 'dashboard';
+const defaultDisplay =
+  document.documentElement.classList.contains('diagram-only') || installed ? 'diagram' : 'dashboard';
 function readDisplayMode() {
   const url = new URL(location.href);
   const only = (url.searchParams.get('display') ?? defaultDisplay) === 'diagram';
@@ -86,15 +87,15 @@ let zoom = 1,
   selection = 'R103:7',
   dragging = null,
   moved = false;
-let live = { values: {}, events: [], status: 'Connecting' },
-  fetchFault = false,
-  lastDraw = '';
+let lastDraw = '';
 const request = async (path) => {
   const response = await fetch(path, { signal: AbortSignal.timeout(6000) });
   if (!response.ok) throw Error('Unavailable');
   return response.json();
 };
 const layout = await request('/data/corridor.json');
+const feed = createLiveFeed(layout, { abbeyEndpoint: new URL('/api/abbey-lookup', location.origin) });
+let live = feed.snapshot();
 const watford = layout.stations.find((s) => s.code === layout.junction.code);
 const dc = layout.branches.find((b) => b.id === 'dc'),
   abbey = layout.branches.find((b) => b.id === 'abbey');
@@ -236,13 +237,11 @@ document.addEventListener('click', (e) => {
 function fresh(area) {
   if (area === 'AB') {
     const report = (mode === 'replay' ? replayBoard : live).abbey;
-    return Boolean(
-      report?.available && (mode === 'replay' || (!fetchFault && Date.now() - report.checked < 90000)),
-    );
+    return Boolean(report?.available && (mode === 'replay' || Date.now() - report.checked < 90000));
   }
   return mode === 'replay'
     ? Boolean(replayBoard.areaTimes[area])
-    : !fetchFault && live.areaStatus?.[area] === 'Live';
+    : live.areaStatus[area] === 'Live';
 }
 function visible(m) {
   if (m.track?.branch) return showBranches() && inView(position(m.x));
@@ -784,8 +783,8 @@ for (const event of ['pointerup', 'pointercancel'])
 function render(force = false) {
   if (markerPressed && !force) return;
   const board = state(),
-    stale = mode === 'live' && (fetchFault || !['Live', 'Partial'].includes(board.status));
-  const label = mode === 'replay' ? 'Recorded replay' : fetchFault ? 'Local server offline' : board.status;
+    stale = mode === 'live' && !['Live', 'Partial'].includes(board.status);
+  const label = mode === 'replay' ? 'Recorded replay' : board.status;
   $('status').textContent = label;
   $('indicator').className = mode === 'replay' ? 'replay' : label === 'Live' ? 'live' : '';
   const shownTime = mode === 'replay' ? cursor : board.observed;
@@ -801,9 +800,7 @@ function render(force = false) {
           ? board.areaTimes[area]
             ? 'recorded'
             : 'unrecorded'
-          : fetchFault
-            ? 'offline'
-            : (board.areaStatus?.[area] ?? 'connecting')),
+          : board.areaStatus[area]),
     )
     .join(' · ');
   $('notice').textContent =
@@ -897,15 +894,11 @@ function render(force = false) {
     log.append(row);
   }
 }
-async function poll() {
-  try {
-    live = await request('/api/live');
-    fetchFault = false;
-  } catch {
-    fetchFault = true;
-  }
+function syncLiveFeed() {
+  if (mode === 'live' && !document.hidden && navigator.onLine) feed.start();
+  else feed.stop();
+  live = feed.snapshot();
   if (mode === 'live') render();
-  setTimeout(poll, 1000);
 }
 function seek(time) {
   if (!replayBoard || time < cursor) {
@@ -961,6 +954,7 @@ async function switchMode(next, fitRecording = false) {
     $('run').textContent = 'Pause';
     seek(replayStart);
   }
+  syncLiveFeed();
   render(true);
 }
 $('live').onclick = () => switchMode('live');
@@ -1060,14 +1054,17 @@ if (initialView === 'sector') {
   centre = junction;
   zoom = 2;
 }
-if (recordedPreview) {
-  $('live').disabled = true;
-  $('live').title = 'Live feed is available with the local Node server';
-  $('live').setAttribute('aria-pressed', 'false');
-  if (initialView === 'watford') $('sample').value = '/data/watford-replay.json';
-  if (initialView === 'hemel') $('sample').value = '/data/hemel-replay.json';
-  await switchMode('replay');
-} else {
-  render(true);
-  poll();
-}
+if (initialView === 'watford') $('sample').value = '/data/watford-replay.json';
+if (initialView === 'hemel') $('sample').value = '/data/hemel-replay.json';
+document.addEventListener('visibilitychange', syncLiveFeed);
+window.addEventListener('offline', syncLiveFeed);
+window.addEventListener('online', syncLiveFeed);
+window.addEventListener('pagehide', feed.stop);
+window.addEventListener('pageshow', syncLiveFeed);
+syncLiveFeed();
+setInterval(() => {
+  if (mode === 'live' && !document.hidden) {
+    live = feed.snapshot();
+    render();
+  }
+}, 1000);
