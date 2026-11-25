@@ -183,6 +183,7 @@ function compileView(view) {
     );
   }
   names(topStations, 20 * vertical, Math.max(22 * scale, 21 * vertical));
+  const stationLabelBottom = Math.max(0, ...labels.map(([, y, , font]) => y + font / 2 + 3));
   const fastBottom = names(mainStations, mainY(0) - (zoom < 0.6 ? 31 : 39) * scale, -22 * scale);
   for (const [i, t] of layout.tracks.entries()) {
     const y = mainY(i);
@@ -265,6 +266,25 @@ function compileView(view) {
   array('Label', view + 'Labels', labels);
   array('Marker', view + 'Markers', placed);
   const anchor = visible(x(home)) ? x(home) : width / 2;
+  const cardLeft = merged ? Math.max(4, Math.min(x(1) + 8, width - 280 * scale)) : 4;
+  // Beyond St Albans Abbey the lower card can extend past the Abbey track height.
+  // In the Watford close-up the branch continues to the edge, so stay above its badges.
+  const abbeyEnd = x(diagram.columns.get('SAA')) + 32 * scale;
+  const besideAbbey = merged && width - Math.max(cardLeft, abbeyEnd) >= 235 * scale;
+  const fastTop = merged ? 3 : stationLabelBottom + 3;
+  const fastEdge = fastBottom - (merged ? 16 : 10) * scale;
+  // On short pilot screens, use some of the gap above the signal heads to fit three rows.
+  const fast = [anchor, cardLeft, fastTop, merged ? fastEdge :
+    Math.max(fastEdge, Math.min(fastTop + 32, mainY(0) - 24 * scale))];
+  const aboveAbbey = merged && !besideAbbey;
+  const slowBottom = aboveAbbey ? lane(10) - 13 * scale : height - 24 * scale;
+  const slowTop = Math.min(mainY(3) + (aboveAbbey ? 18 : 26) * scale, slowBottom - 32);
+  const slow = [
+    anchor + (besideAbbey ? 112 : 52) * scale,
+    besideAbbey ? Math.max(cardLeft, abbeyEnd) : cardLeft,
+    Math.max(slowTop, mainY(3) + 12 * scale),
+    slowBottom,
+  ];
   out.push(
     'static constexpr Scene ' +
       view +
@@ -275,17 +295,7 @@ function compileView(view) {
       'Labels), list(' +
       view +
       'Markers), ' +
-      [
-        anchor,
-        merged ? Math.max(4, Math.min(x(1) + 8, width - 280)) : 4,
-        fastBottom - 6,
-        mainY(3) + 15 * scale,
-        merged ? lane(10) - 13 * scale : height - 5,
-        50 * scale,
-        21 * scale,
-      ]
-        .map(round)
-        .join(', ') +
+      [c(fast.map(round)), c(slow.map(round)), round(50 * scale), round(21 * scale)].join(', ') +
       '};',
   );
 }

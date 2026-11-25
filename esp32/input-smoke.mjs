@@ -51,6 +51,16 @@ try {
   assert.deepEqual(diagram(train), diagram(render(null, ['567,266'])));
   assert.deepEqual(render(initial, ['567,266', '722,165']), normal); // close button
   assert.deepEqual(render(initial, ['567,266', '20,540']), normal); // tap outside
+  const sector = ['40,17', '40,17'];
+  const sectorFrame = render(initial, sector);
+  // Tap the newly exposed edges of both enlarged cards in the 15-mile view.
+  for (const point of ['735,126', '875,518']) {
+    const taps = [...sector, point];
+    const opened = render(initial, taps);
+    assert.notDeepEqual(diagram(opened), diagram(sectorFrame));
+    assert.deepEqual(diagram(opened), diagram(render(null, taps)));
+  }
+  assert.deepEqual(render(initial, [...sector, '500,476']), sectorFrame); // former slow-card position
   const signal = render(initial, ['567,137']);
   assert.notDeepEqual(diagram(signal), diagram(normal));
   assert.notDeepEqual(diagram(signal), diagram(train));

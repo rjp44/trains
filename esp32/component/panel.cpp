@@ -54,11 +54,15 @@ struct Marker {
     uint16_t id;
     int16_t x, y, signalY, radius;
 };
+struct CardSpace {
+    int centre, left, top, bottom;
+};
 struct Scene {
     List<Segment> lines;
     List<Label> labels;
     List<Marker> markers;
-    int centre, cardLeft, fastBottom, slowTop, slowBottom, badgeWidth, badgeHeight;
+    CardSpace fast, slow;
+    int badgeWidth, badgeHeight;
 };
 struct Change {
     uint16_t id;
@@ -197,33 +201,38 @@ struct Rect {
     int x, y, w, h;
     bool contains(int px, int py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
-Rect cardRect(int line, const Card &c) {
-    const int room = line ? scene->slowBottom - scene->slowTop : scene->fastBottom - 3;
-    const int height = std::min(57, room);
-    if (height < 16)
+struct CardLayout {
+    Rect bounds;
+    int bodySize, headSize, headWidth;
+};
+CardLayout cardLayout(int line, const Card &c) {
+    const auto &space = line ? scene->slow : scene->fast;
+    const int h = std::min(line ? 72 : 66, space.bottom - space.top);
+    if (h < 16)
         return {};
-    int size = height >= 48 ? 12 : height >= 36 ? 10 : 8;
-
-    const int preferred = std::max({textWidth(c.context, font(size)) + 48, textWidth(c.route, font(size)),
-                                    textWidth(c.running, font(size))}) +
-                          16;
-    const int w = std::min(preferred, panelWidth - scene->cardLeft - 3);
-    const int x = std::clamp(scene->centre - w / 2, scene->cardLeft, panelWidth - w - 3);
-    const int y = line ? scene->slowTop : scene->fastBottom - height;
-    return {x, y, w, height};
+    const int body = h >= 70 ? 16 : h >= 51 ? 14 : h >= 41 ? 12 : h >= 34 ? 10 : 8;
+    const int head = h >= 57 ? 16 : body;
+    const int headW = textWidth(c.head, font(head)) + 10;
+    const int preferred = std::max({headW + 20 + textWidth(c.context, font(body)),
+                                    16 + textWidth(c.route, font(body)),
+                                    16 + textWidth(c.running, font(body))});
+    const int w = std::min(preferred, panelWidth - space.left - 4);
+    const int x = std::clamp(space.centre - w / 2, space.left, panelWidth - w - 4);
+    return {{x, line ? space.top : space.bottom - h, w, h}, body, head, headW};
 }
 void card(lv_layer_t *layer, int line, const Card &c) {
-    auto [x, y, w, height] = cardRect(line, c);
-    if (!height)
+    const auto layout = cardLayout(line, c);
+    const auto [x, y, w, h] = layout.bounds;
+    if (!h)
         return;
-    const int size = height >= 48 ? 12 : height >= 36 ? 10 : 8, rowH = height / 3;
-    box(layer, x, y, w, height, HemelBand, HemelEdge, 4);
-    const int headW = textWidth(c.head, font(size)) + 8;
-    box(layer, x + 5, y + 2, headW, rowH - 2, TrainFill, -1, 2);
-    text(layer, x + 5, y + rowH / 2 + 1, headW, c.head, size, TrainText);
-    text(layer, x + headW + 10, y + rowH / 2 + 1, w - headW - 13, c.context, size, Muted, false);
-    text(layer, x + 6, y + rowH + rowH / 2, w - 12, c.route, size, Text, false);
-    text(layer, x + 6, y + 2 * rowH + rowH / 2, w - 12, c.running, size, Text, false);
+    const int rowH = h / 3;
+    box(layer, x, y, w, h, HemelBand, HemelEdge, 4);
+    box(layer, x + 6, y + 2, layout.headWidth, rowH - 2, TrainFill, -1, 2);
+    text(layer, x + 6, y + rowH / 2 + 1, layout.headWidth, c.head, layout.headSize, TrainText);
+    text(layer, x + layout.headWidth + 12, y + rowH / 2 + 1, w - layout.headWidth - 18,
+         c.context, layout.bodySize, Muted, false);
+    text(layer, x + 8, y + rowH + rowH / 2, w - 16, c.route, layout.bodySize, Text, false);
+    text(layer, x + 8, y + 2 * rowH + rowH / 2, w - 16, c.running, layout.bodySize, Text, false);
 }
 template <class Visitor> void visitBadges(Visitor visit) {
     const Marker *prev = nullptr;
@@ -370,7 +379,7 @@ void tap(int x, int y) {
     }
     for (int line = 0; line < 2; ++line) {
         auto *c = rotation[line].shown;
-        if (offline || !c || !cardRect(line, *c).contains(x, y))
+        if (offline || !c || !cardLayout(line, *c).bounds.contains(x, y))
             continue;
         // A headcode may appear in multiple berths. Only open an unambiguous
         // match with the track printed on this card.
