@@ -54,7 +54,7 @@ The projection is local equirectangular, with longitude scaled at 54.35°N. Rout
 
 For a map-data refresh, use a Python environment with `mapbox-vector-tile`, `shapely`, `numpy` and `Pillow`. Run `python lakes/tools/build-map.py /tmp/lakes-map-downloads`. The directory caches the source downloads. Build the timetable into that cache first. Use a fresh directory to retrieve a new tile edition and review the published service period before replacing the winter coverage. Runtime and tests do not need those libraries.
 
-Run `node --test` from the checkout root. A future ESP32 port can consume the same compact local API and generated map coordinates.
+Run `node --test` from the checkout root. The [CrowPanel ESP32-P4 firmware](esp32/README.md) uses the same map, timetable and public live feed.
 
 ## Mobile app and Netlify
 
