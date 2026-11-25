@@ -1,0 +1,6 @@
+{
+  "name": "hemel-panel-bridge",
+  "private": true,
+  "type": "module",
+  "dependencies": { "linkedom": "0.18.12" }
+}

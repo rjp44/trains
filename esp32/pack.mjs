@@ -1,14 +1,7 @@
 // Build-time only. The device consumes const geometry and timestamped marker changes.
 import { readFileSync, writeFileSync } from 'node:fs';
-import {
-  Corridor,
-  berthDiagram,
-  corridorTracks,
-  fitStationNames,
-  junctionPathSlots,
-  withStationReports,
-} from '../rail.mjs';
-import { cardCandidates, describeCard, hemelBerths, hemelTrains, isTrainCode } from '../public/hemel.mjs';
+import { Corridor, berthDiagram, fitStationNames, junctionPathSlots } from '../rail.mjs';
+import { createProjection } from './projection.mjs';
 
 const [width, height] = process.argv.slice(2, 4).map(Number);
 if (![width, height].every(Number.isInteger) || width < 480 || height < 272 || width > 4096 || height > 2160)
@@ -18,8 +11,7 @@ const layout = data('corridor'),
   diagram = berthDiagram(layout);
 const home = diagram.columns.get('HML'),
   round = Math.round;
-const markers = corridorTracks(layout).flatMap((track) => track.berths.map((b) => ({ ...b, track })));
-const stationBerths = hemelBerths(layout);
+const { markers, project, fingerprint } = createProjection(layout);
 const out = ['// Generated from corridor.json, the panel stylesheet and bundled recordings.'];
 const c = (value) => (Array.isArray(value) ? '{' + value.map(c).join(', ') + '}' : JSON.stringify(value));
 function array(type, name, rows) {
@@ -41,6 +33,28 @@ out.push(
     ', markerCount = ' +
     markers.length +
     ';',
+);
+out.push('static constexpr uint32_t layoutFingerprint = ' + fingerprint + 'u;');
+const stationsByCode = new Map(
+  [...layout.stations, ...layout.branches.flatMap((b) => b.stations)].map((s) => [s.code, s.name]),
+);
+array(
+  'MarkerInfo',
+  'markerInfo',
+  markers.map((b) => [
+    b.id,
+    b.signal || '',
+    b.bit || '',
+    [
+      b.track.name,
+      b.platform
+        ? 'P' + b.platform
+        : stationsByCode.get(b.station) ||
+          (b.kind === 'station-report' ? stationsByCode.get(b.id.slice(2)) : ''),
+    ]
+      .filter(Boolean)
+      .join(' | '),
+  ]),
 );
 const colours = [
   'board',
@@ -121,9 +135,9 @@ function compileView(view) {
       Math.max(1, round(weight * scale)),
     ]);
   }
-  function label(cx, cy, text, pixels, boxWidth, fg = 'board-text', bg = null) {
+  function label(cx, cy, text, pixels, boxWidth, fg = 'board-text', bg = null, preset = 0) {
     const font = Math.min(16, Math.max(8, round(pixels / 2) * 2));
-    labels.push([round(cx), round(cy), round(boxWidth), font, colour(fg), bg ? colour(bg) : -1, text]);
+    labels.push([round(cx), round(cy), round(boxWidth), font, colour(fg), bg ? colour(bg) : -1, text, preset]);
   }
   function names(stations, y, rowStep) {
     let top = y;
@@ -134,7 +148,16 @@ function compileView(view) {
     for (const item of fitStationNames(items, 105, mapWidth - 4, measure)) {
       const cy = y + rowStep * item.row - (item.size * scale) / 2;
       const bg = item.station.code === 'HML' ? 'hemel-band' : 'board';
-      label(item.labelX * scale, cy, item.label, item.size * scale, item.width * scale, 'board-text', bg);
+      label(
+        item.labelX * scale,
+        cy,
+        item.label,
+        item.size * scale,
+        item.width * scale,
+        'board-text',
+        bg,
+        { HML: 1, WFJ: 2 }[item.station.code] ?? 0,
+      );
       top = Math.min(top, cy - ((item.size + 4) * scale) / 2);
     }
     return top;
@@ -268,27 +291,17 @@ function compileView(view) {
 for (const view of ['sector', 'hemel', 'watford']) compileView(view);
 
 const cards = [['', '', '', '', 0]],
-  cardIds = new Map(),
-  identities = new Map();
-function cardId(t) {
-  const d = describeCard(t),
-    key = [t.track, t.head, t.service?.id, t.stage].join('/');
-  if (!identities.has(key)) identities.set(key, identities.size + 1);
-  const ascii = (s) => s.replaceAll(' → ', ' to ').replaceAll(' · ', '  |  ').replaceAll('½', '.5');
-  const row = [
-    d.head,
-    ascii(d.context),
-    ascii(d.route),
-    ascii([d.company, d.timing].filter(Boolean).join(' · ')),
-    identities.get(key),
-  ];
-  const signature = c(row);
-  if (!cardIds.has(signature)) {
-    cardIds.set(signature, cards.length);
-    cards.push(row);
+  details = [['', '', '']];
+function intern(table, keyMap, row) {
+  const key = JSON.stringify(row);
+  if (!keyMap.has(key)) {
+    keyMap.set(key, table.length);
+    table.push(row);
   }
-  return cardIds.get(signature);
+  return keyMap.get(key);
 }
+const detailIds = new Map([[JSON.stringify(details[0]), 0]]),
+  cardIds = new Map([[JSON.stringify(cards[0]), 0]]);
 for (const [name, file] of [
   ['sector', 'replay'],
   ['hemel', 'hemel-replay'],
@@ -299,30 +312,21 @@ for (const [name, file] of [
   const start = recording.startTime ?? recording.frames[0].time;
   const changes = [],
     frames = [],
-    previous = markers.map(() => [0, 0, '']);
+    previous = markers.map(() => [0, 0, '', 0]);
   let previousCards = '';
   for (const frame of recording.frames) {
     board.apply(frame);
-    const state = withStationReports(board);
-    const fresh = (a) => (a === 'AB' ? !!state.abbey?.available : !!state.areaTimes[a]);
+    const projected = project(board, (svc) =>
+      svc && recording.hemelCalls?.[svc.id]?.uid === svc.uid ? recording.hemelCalls[svc.id] : null,
+    );
     const oldEnd = changes.length;
-    for (const [i, b] of markers.entries()) {
-      const head = state.values[b.id] || '',
-        current = fresh(b.id.slice(0, 2));
-      const aspect = current ? ({ on: 1, off: 2 }[state.values[b.bit]] ?? 0) : 0;
-      const kind = !head ? 0 : !current ? 3 : isTrainCode(head) ? 1 : 2;
-      const old = previous[i];
-      if (aspect === old[0] && kind === old[1] && head === old[2]) continue;
-      previous[i] = [aspect, kind, head];
-      changes.push([i, aspect, kind, head]);
-    }
-    const groups = fresh('R1') ? hemelTrains(stationBerths, state, fresh) : { fast: [], slow: [] };
-    const ids = Object.values(groups).flatMap((trains) => {
-      const matches = cardCandidates(trains, (svc) =>
-        svc && recording.hemelCalls?.[svc.id]?.uid === svc.uid ? recording.hemelCalls[svc.id] : null,
-      );
-      return [matches[0] ? cardId(matches[0]) : 0, matches[1] ? cardId(matches[1]) : 0];
+    projected.rows.forEach(([aspect, kind, head, ...info], i) => {
+      const row = [aspect, kind, head, intern(details, detailIds, info)];
+      if (row.every((value, j) => previous[i][j] === value)) return;
+      previous[i] = row;
+      changes.push([i, ...row]);
     });
+    const ids = projected.cards.map((row) => intern(cards, cardIds, row));
     if (!frames.length || changes.length !== oldEnd || ids.join() !== previousCards)
       frames.push([Math.max(0, frame.time - start), changes.length, ids]);
     previousCards = ids.join();
@@ -342,4 +346,5 @@ for (const [name, file] of [
   );
 }
 array('Card', 'cards', cards);
+array('Detail', 'details', details);
 writeFileSync(process.argv[4], out.join('\n') + '\n');

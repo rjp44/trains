@@ -13,7 +13,7 @@ FetchContent_Declare(lvgl
 FetchContent_MakeAvailable(lvgl)
 find_package(SDL2 CONFIG REQUIRED)
 include(component/assets.cmake)
-add_executable(hemel-sim simulator.cpp component/panel.cpp "${PANEL_ASSETS}")
+add_executable(hemel-sim simulator.cpp component/panel.cpp component/wire.cpp "${PANEL_ASSETS}")
 target_include_directories(hemel-sim PRIVATE component "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(hemel-sim PRIVATE lvgl::lvgl SDL2::SDL2)
 target_compile_features(hemel-sim PRIVATE cxx_std_17)
@@ -23,4 +23,6 @@ if(BUILD_TESTING AND PANEL_WIDTH EQUAL 1024 AND PANEL_HEIGHT EQUAL 600)
     find_program(PANEL_NODE node REQUIRED)
     add_test(NAME recorded_panels
         COMMAND "${PANEL_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/smoke.mjs" $<TARGET_FILE:hemel-sim>)
+    add_test(NAME live_input_and_touch
+        COMMAND "${PANEL_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/input-smoke.mjs" $<TARGET_FILE:hemel-sim>)
 endif()

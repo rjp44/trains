@@ -2,7 +2,7 @@
 
 Run `node server.mjs` in this directory with Node.js 22.4 or later. Open [the local display](http://127.0.0.1:8174/). The server serves files on the laptop’s loopback interface and forwards Abbey station reports and dated Hemel timetable lookups. Each visible live display opens a WebSocket to Signal Maps. There are no packages to install or credentials to configure.
 
-The [ESP32 port](esp32/README.md) runs the Hemel diagram and its recordings on the laptop and on an emulated ESP32-C3.
+The [ESP32 port](esp32/README.md) runs the Hemel diagram with live bridge input, touch controls and offline recordings on the laptop and an emulated ESP32-C3.
 
 ## Netlify preview
 

@@ -3,3 +3,4 @@
 /qemu/sdkconfig
 /qemu/sdkconfig.old
 /qemu/managed_components/
+/node_modules/

@@ -1,4 +1,5 @@
 #include "panel.h"
+#include "driver/uart.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_qemu_rgb.h"
 #include "esp_log.h"
@@ -35,6 +36,8 @@ extern "C" void app_main() {
     lv_display_set_flush_cb(display, flush);
     ESP_ERROR_CHECK(hemel::attach(display) ? ESP_OK : ESP_ERR_INVALID_SIZE);
     hemel::replay(hemel::Sample::Sector);
+    // UART0 carries host snapshots and simulated touch on a board-independent link.
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, 16384, 0, 0, nullptr, 0));
     const uint32_t start = ticks();
     // Begin with the same occupied replay frame as the desktop smoke check.
     constexpr uint32_t offset = 5000;
@@ -44,7 +47,20 @@ extern "C" void app_main() {
              unsigned(bytes));
     for (;;) {
         const uint32_t now = ticks();
-        hemel::seek((offset + now - start) % (hemel::duration() + 1), now);
+        char bytes[512];
+        const bool wasLive = hemel::isLive();
+        for (int i = 0; i < 16; i++) {
+            int n = uart_read_bytes(UART_NUM_0, bytes, sizeof(bytes), 0);
+            if (n <= 0)
+                break;
+            hemel::feedInput(bytes, n, now);
+        }
+        if (!wasLive && hemel::isLive())
+            ESP_LOGI("hemel", "Bridge snapshot accepted");
+        if (hemel::isLive())
+            hemel::updateLive(now);
+        else
+            hemel::seek((offset + now - start) % (hemel::duration() + 1), now);
         lv_timer_handler();
         vTaskDelay(pdMS_TO_TICKS(20));
     }

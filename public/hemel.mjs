@@ -83,22 +83,25 @@ export function readHemelSchedule(html, service, path) {
   // A template keeps upstream scripts and subresources inert. Only plain text leaves this parser.
   const template = document.createElement('template');
   template.innerHTML = html;
-  const root = template.content;
+  return readHemelScheduleRoot(template.content, service, path);
+}
+
+export function readHemelScheduleRoot(root, service, path) {
   if (!root.querySelector('h2')?.textContent.includes('(' + service.uid + ')')) return null;
   const activations = [...root.textContent.matchAll(/Train ID = "([A-Z0-9]+)"/g)];
   if (!activations.length || activations.some((entry) => entry[1] !== service.id)) return null;
   const heading = [...root.querySelectorAll('tr')].find((row) =>
-    [...row.cells].map((c) => c.textContent.trim()).join('|') ===
+    [...row.children].map((c) => c.textContent.trim()).join('|') ===
     'Location|P|WTT|Public|Actual|WTT|Actual|WTT|Public|Actual|Path-Line|Allowances|Activities|P|Notes');
   if (!heading) return null;
   const rows = [];
   const date = path.split('/').slice(-3).join('/');
   for (let row = heading.nextElementSibling; row; row = row.nextElementSibling) {
-    if (!row.cells?.length || row.cells[0].tagName !== 'TD') continue;
-    const href = row.cells[0].querySelector('a')?.getAttribute('href');
+    if (!row.children?.length || row.children[0].tagName !== 'TD') continue;
+    const href = row.children[0].querySelector('a')?.getAttribute('href');
     const match = /^\/rail\/liverail\/sum\/([A-Z0-9]+)\/(\d{2}\/\d{2}\/\d{2})$/.exec(href ?? '');
-    if (!match || match[2] !== date || row.cells.length !== heading.cells.length) return null;
-    const cells = [...row.cells].map((c) => c.textContent.trim());
+    if (!match || match[2] !== date || row.children.length !== heading.children.length) return null;
+    const cells = [...row.children].map((c) => c.textContent.trim());
     rows.push({
       location: match[1], activity: cells[12], pass: cells[5],
       arrival: { working: cells[2], public: cells[3], actual: cells[4] },

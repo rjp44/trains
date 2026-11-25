@@ -9,7 +9,7 @@ endif()
 find_program(PANEL_NODE node REQUIRED)
 add_custom_command(OUTPUT "${PANEL_ASSETS}"
     COMMAND "${PANEL_NODE}" "${PANEL_DIR}/pack.mjs" "${PANEL_WIDTH}" "${PANEL_HEIGHT}" "${PANEL_ASSETS}"
-    DEPENDS "${PANEL_DIR}/pack.mjs" "${PANEL_DIR}/../rail.mjs" "${PANEL_DIR}/../public/hemel.mjs"
+    DEPENDS "${PANEL_DIR}/pack.mjs" "${PANEL_DIR}/projection.mjs" "${PANEL_DIR}/../rail.mjs" "${PANEL_DIR}/../public/hemel.mjs"
             "${PANEL_DIR}/../public/style.css" "${PANEL_DIR}/../public/data/corridor.json"
             "${PANEL_DIR}/../public/data/replay.json" "${PANEL_DIR}/../public/data/hemel-replay.json"
             "${PANEL_DIR}/../public/data/watford-replay.json"

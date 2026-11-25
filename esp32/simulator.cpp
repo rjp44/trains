@@ -8,6 +8,9 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace {
 using hemel::Sample;
@@ -17,7 +20,8 @@ struct Options {
     View view = View::Sector;
     uint32_t at = 0;
     std::string output;
-    bool light = false;
+    bool light = false, live = false;
+    std::vector<SDL_Point> taps;
 };
 int preset(const std::string &name) {
     if (name == "sector")
@@ -36,10 +40,15 @@ Options parse(int argc, char **argv) {
             o.light = true;
             continue;
         }
+        if (key == "--live") {
+            o.live = true;
+            continue;
+        }
         if (key == "--help") {
             std::puts("hemel-sim [--sample sector|hemel|watford] [--view sector|hemel|watford] [--at "
-                      "seconds] [--light] [--output file.bmp]\n"
-                      "Space pauses. Left/right seek 10 seconds. 1/2/3 select a view. Tab changes recording. "
+                      "seconds] [--light] [--live] [--tap x,y] [--output file.bmp]\n"
+                      "Space pauses. Left/right seek 10 seconds. With --live, read bridge frames on stdin. "
+                      "1/2/3 select a view. Tab changes recording. "
                       "T changes theme. F changes speed.");
             std::exit(0);
         }
@@ -52,7 +61,14 @@ Options parse(int argc, char **argv) {
             o.sample = static_cast<Sample>(preset(arg));
         else if (key == "--output")
             o.output = arg;
-        else if (key == "--at") {
+        else if (key == "--tap") {
+            SDL_Point p;
+            char extra;
+            if (std::sscanf(arg.c_str(), "%d,%d%c", &p.x, &p.y, &extra) != 2 || p.x < 0 ||
+                p.x >= hemel::width() || p.y < 0 || p.y >= hemel::height())
+                throw std::runtime_error("Invalid tap coordinates");
+            o.taps.push_back(p);
+        } else if (key == "--at") {
             size_t used;
             double seconds = std::stod(arg, &used);
             if (!std::isfinite(seconds) || seconds < 0 || seconds > 4294967 || used != arg.size())
@@ -85,6 +101,24 @@ void flush(lv_display_t *display, const lv_area_t *area, uint8_t *bytes) {
         SDL_RenderPresent(out->renderer);
     }
     lv_display_flush_ready(display);
+}
+bool readBridge(uint32_t now, bool blocking) {
+    char bytes[2048];
+    // Limit work per animation frame when a producer has queued many updates.
+    for (int chunk = 0; blocking || chunk < 8; ++chunk) {
+        auto n = read(STDIN_FILENO, bytes, sizeof(bytes));
+        if (n > 0)
+            hemel::feedInput(bytes, size_t(n), now);
+        else if (n == 0)
+            return false;
+        else if (errno == EINTR)
+            continue;
+        else if (errno == EAGAIN || errno == EWOULDBLOCK)
+            break;
+        else
+            throw std::runtime_error(std::strerror(errno));
+    }
+    return true;
 }
 int run(Options o) {
     const bool headless = !o.output.empty();
@@ -119,7 +153,23 @@ int run(Options o) {
     hemel::replay(o.sample);
     uint32_t at = std::min(o.at, hemel::duration());
     uint32_t last = SDL_GetTicks();
-    hemel::seek(at, last);
+    bool reading = o.live;
+    if (o.live) {
+        hemel::beginLive();
+        if (headless)
+            readBridge(last, true);
+        else {
+            const int flags = fcntl(STDIN_FILENO, F_GETFL);
+            if (flags < 0 || fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK) < 0)
+                throw std::runtime_error("Cannot read bridge pipe");
+        }
+    } else
+        hemel::seek(at, last);
+    lv_refr_now(display);
+    for (auto p : o.taps) {
+        hemel::pointer(p.x, p.y, true);
+        hemel::pointer(p.x, p.y, false);
+    }
     lv_refr_now(display);
     if (headless) {
         check(SDL_SaveBMP(out.pixels, o.output.c_str()) == 0);
@@ -130,18 +180,30 @@ int run(Options o) {
         int speed = 1;
         while (running) {
             const uint32_t now = SDL_GetTicks();
-            if (!paused)
+            if (reading && !readBridge(now, false)) {
+                reading = false;
+                hemel::linkEnded();
+            }
+            if (!paused && !o.live)
                 at = std::min(hemel::duration(), at + (now - last) * speed);
             last = now;
             SDL_Event e;
             while (SDL_PollEvent(&e)) {
                 if (e.type == SDL_QUIT)
                     running = false;
+                // SDL scales mouse coordinates to the renderer's logical size and
+                // emits mouse events for the primary touch finger.
+                if ((e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) &&
+                    e.button.button == SDL_BUTTON_LEFT)
+                    hemel::pointer(e.button.x, e.button.y, e.type == SDL_MOUSEBUTTONDOWN);
+                if (e.type == SDL_MOUSEMOTION && (e.motion.state & SDL_BUTTON_LMASK))
+                    hemel::pointer(e.motion.x, e.motion.y, true);
                 if (e.type != SDL_KEYDOWN || e.key.repeat)
                     continue;
                 switch (e.key.keysym.sym) {
                 case SDLK_ESCAPE:
-                    running = false;
+                    if (!hemel::dismiss())
+                        running = false;
                     break;
                 case SDLK_SPACE:
                     paused = !paused;
@@ -163,13 +225,14 @@ int run(Options o) {
                     hemel::view(o.view);
                     break;
                 case SDLK_TAB:
+                    if (o.live)
+                        break;
                     o.sample = static_cast<Sample>((int(o.sample) + 1) % 3);
                     hemel::replay(o.sample);
                     at = 0;
                     break;
                 case SDLK_t:
-                    o.light = !o.light;
-                    hemel::light(o.light);
+                    hemel::toggleLight();
                     break;
                 case SDLK_f:
                     speed = speed == 1 ? 4 : speed == 4 ? 12 : 1;
@@ -178,14 +241,17 @@ int run(Options o) {
                     break;
                 }
             }
-            hemel::seek(at, now);
+            if (o.live)
+                hemel::updateLive(now);
+            else
+                hemel::seek(at, now);
             lv_timer_handler();
             const char *names[] = {"15-mile sector", "Hemel pilot", "Watford junction"};
             char title[160];
             std::snprintf(
                 title, sizeof(title), "Hemel ESP32 simulator  |  %s recording  |  %u:%02u  |  %s %dx",
                 names[int(o.sample)], at / 60000, (at / 1000) % 60, paused ? "Paused" : "Replay", speed);
-            SDL_SetWindowTitle(window, title);
+            SDL_SetWindowTitle(window, o.live ? "Hemel ESP32 simulator | Bridge input" : title);
             SDL_Delay(16);
         }
     }
