@@ -2,32 +2,47 @@ export const isTrainCode = (head) => /^(?:[0-9][A-Z][0-9]{2}|[A-Z][0-9]{3})$/.te
 
 export function hemelBerths(layout) {
   const mile = layout.stations.find((station) => station.code === 'HML').mile;
-  return layout.tracks.map((track) => {
-    const index = track.berths.findIndex((berth) => berth.mile === mile);
-    return {
+  return layout.tracks.flatMap((track) => {
+    const incoming = track.berths.filter((berth) => (mile - berth.mile) * track.direction >= 0);
+    if (track.direction === 1) incoming.reverse();
+    return incoming.map((berth, index) => ({
+      id: berth.id,
       line: track.id.endsWith('F') ? 'fast' : 'slow',
       track: track.name,
-      station: track.berths[index].id,
-      approach: track.berths[index - track.direction].id,
-    };
+      stage: berth.mile === mile ? 'station' : 'approach',
+      distance: Math.abs(berth.mile - mile),
+      immediate: index === 1,
+    }));
   });
 }
 
-export function hemelTrains(berths, board) {
+export function hemelTrains(berths, board, areaFresh) {
   const groups = { fast: [], slow: [] };
-  for (const stage of ['station', 'approach']) {
-    for (const berth of berths) {
-      const trains = groups[berth.line];
-      if (stage === 'approach' && trains[0]?.stage === 'station') continue;
-      const id = berth[stage];
-      const head = board.values[id];
-      const match = board.services[id.slice(0, 2) + '/' + head];
-      if (head && (match?.id || isTrainCode(head))) {
-        trains.push({ head, track: berth.track, stage, service: match?.id ? match : null });
-      }
+  for (const berth of berths) {
+    const head = board.values[berth.id];
+    const area = berth.id.slice(0, 2);
+    if (!head || !areaFresh(area)) continue;
+    const match = board.services[area + '/' + head];
+    if (match?.id || (berth.stage === 'station' && isTrainCode(head))) {
+      groups[berth.line].push({ ...berth, head, service: match?.id ? match : null });
     }
   }
+  for (const trains of Object.values(groups)) trains.sort((a, b) => a.distance - b.distance);
   return groups;
+}
+
+export function cardCandidates(trains, lookup) {
+  const occupied = trains.filter((t) => t.stage === 'station');
+  if (occupied.length) return occupied.map((t) => ({ ...t, call: lookup(t.service, true) }));
+  // Check nearer trains first. A previously verified stop can stay on screen
+  // while the timetable of a closer train is being fetched.
+  let canRequest = true;
+  for (const train of trains) {
+    const call = lookup(train.service, canRequest);
+    if (call?.booked) return [{ ...train, call }];
+    if (call?.pending) canRequest = false;
+  }
+  return [];
 }
 
 // One clock per line. Feed updates and changes in speed of replay do not restart the rotation.

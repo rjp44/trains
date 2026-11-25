@@ -8,7 +8,7 @@ import {
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
-import { isTrainCode, hemelBerths, hemelTrains, cardRotation, schedulePath, readHemelSchedule, callText } from '/hemel.mjs';
+import { isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, callText } from '/hemel.mjs';
 
 const $ = (id) => document.getElementById(id);
 const panel = document.querySelector('.panel');
@@ -838,20 +838,23 @@ function queueCardPosition() {
   });
 }
 
-function scheduleFor(service, activeKeys) {
+function scheduleFor(service, canRequest) {
   if (!service) return null;
-  const archived = mode === 'replay' && recording.hemelCalls?.[service.id];
-  if (archived && archived.uid === service.uid) return archived;
+  if (mode === 'replay' && recording.hemelCalls) {
+    const archived = recording.hemelCalls[service.id];
+    return archived?.uid === service.uid ? archived : null;
+  }
   const path = schedulePath(service, mode === 'replay' ? cursor : undefined);
   if (!path) return null;
   const key = mode + '/' + service.id + path;
-  activeKeys.add(key);
   let entry = activeSchedules.get(key);
   if (!entry) {
+    if (!canRequest) return null;
     entry = { call: null, retryAt: 0 };
     activeSchedules.set(key, entry);
   }
-  if (!document.hidden && Date.now() >= entry.retryAt) {
+  entry.lastUsed = Date.now();
+  if (canRequest && !document.hidden && entry.lastUsed >= entry.retryAt) {
     entry.retryAt = Infinity;
     const replay = mode === 'replay';
     fetch(path, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
@@ -871,18 +874,18 @@ function scheduleFor(service, activeKeys) {
 }
 
 function updateHemelCards(board) {
-  const groups = fresh('R1') ? hemelTrains(hemel, board) : { fast: [], slow: [] };
-  const activeKeys = new Set();
+  const groups = fresh('R1') ? hemelTrains(hemel, board, fresh) : { fast: [], slow: [] };
   for (const [line, trains] of Object.entries(groups)) {
-    for (const train of trains) train.call = scheduleFor(train.service, activeKeys);
     const card = $('hemel-' + line);
-    const train = rotateCard[line](trains, performance.now());
+    const train = rotateCard[line](cardCandidates(trains, scheduleFor), performance.now());
     card.hidden = !train;
     if (!train) continue;
     const { service, stage, track, head, call } = train;
     const route = service ? stationName(service.origin) + ' → ' + stationName(service.destination) : 'Service details unavailable';
     const company = service && (operators[service.operator] || service.operator || 'Operator unknown');
-    const context = track + ' · ' + (stage === 'station' ? 'At Hemel' : 'Approaching Hemel');
+    let location = 'At Hemel';
+    if (stage !== 'station') location = train.immediate ? 'Approaching Hemel' : train.distance.toFixed(1) + ' mi to Hemel';
+    const context = track + ' · ' + location;
     const timing = callText(call, service?.delay);
     const signature = JSON.stringify([head, route, company, context, timing]);
     if (card.dataset.signature === signature) continue;
@@ -895,7 +898,8 @@ function updateHemelCards(board) {
     card.replaceChildren(heading, node('strong', route, 'card-route'), running);
     queueCardPosition();
   }
-  for (const key of activeSchedules.keys()) if (!activeKeys.has(key)) activeSchedules.delete(key);
+  const expiry = Date.now() - 15 * 60000;
+  for (const [key, entry] of activeSchedules) if (entry.lastUsed < expiry) activeSchedules.delete(key);
 }
 let markerPressed = false;
 document.addEventListener(

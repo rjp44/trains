@@ -2,28 +2,54 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Corridor } from './rail.mjs';
-import { hemelBerths, hemelTrains, cardRotation, schedulePath, hemelCall, callText } from './public/hemel.mjs';
+import { hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, hemelCall, callText } from './public/hemel.mjs';
 
 const layout = JSON.parse(readFileSync(new URL('./public/data/corridor.json', import.meta.url)));
 const berths = hemelBerths(layout);
 
-test('Hemel uses the four platform berths and the immediately inbound berth on each track', () => {
-  assert.deepEqual(berths.map((b) => [b.track, b.station, b.approach]), [
+test('Hemel maps the four station berths and searches only their inbound sides', () => {
+  const nearest = layout.tracks.map((track) => {
+    const [station, next] = berths.filter((b) => b.track === track.name);
+    assert.equal(station.stage, 'station');
+    assert.equal(next.immediate, true);
+    return [track.name, station.id, next.id];
+  });
+  assert.deepEqual(nearest, [
     ['Down fast', 'R13143', 'R13139'], ['Up fast', 'R13144', 'R13146'],
     ['Down slow', 'R15145', 'R19880'], ['Up slow', 'R15146', 'R15148'],
   ]);
   const board = new Corridor(layout);
   board.values = { R13143: '1A80', R13146: '1B22', R15145: 'ITEM', R15148: '2K60', R15147: '2K65' };
-  let groups = hemelTrains(berths, board);
-  assert.deepEqual(groups.fast.map((t) => t.head), ['1A80']);
-  assert.deepEqual(groups.slow.map((t) => [t.head, t.stage]), [['2K60', 'approach']]);
+  for (const head of ['1B22', '2K60', '1A44']) board.services['R1/' + head] = { id: head };
+  const select = (line) => cardCandidates(hemelTrains(berths, board, () => true)[line], () => ({ booked: '21:55' }));
+  assert.deepEqual(select('fast').map((t) => t.head), ['1A80']);
+  assert.deepEqual(select('slow').map((t) => [t.head, t.stage]), [['2K60', 'approach']]);
   board.values.R13143 = '';
   board.values.R13139 = '1A44';
   board.values.R15145 = '2K65';
   board.values.R15146 = '2K64';
-  groups = hemelTrains(berths, board);
-  assert.deepEqual(groups.fast.map((t) => t.head), ['1A44', '1B22']);
-  assert.deepEqual(groups.slow.map((t) => [t.head, t.stage]), [['2K65', 'station'], ['2K64', 'station']]);
+  assert.equal(select('fast').length, 1);
+  assert.deepEqual(select('slow').map((t) => [t.head, t.stage]), [['2K65', 'station'], ['2K64', 'station']]);
+});
+
+test('the closest confirmed Hemel call wins across both directions, skipping passing, stale and outbound trains', () => {
+  const board = new Corridor(layout);
+  board.values = { R13146: '1A80', R13137: '2N71', R13170: '2N32', WJ3129: '2N69', R13140: '2T01' };
+  for (const [id, head] of Object.entries(board.values)) board.services[id.slice(0, 2) + '/' + head] = { id: head };
+  const fast = hemelTrains(berths, board, (area) => area === 'R1').fast;
+  assert.deepEqual(fast.map((t) => t.head), ['1A80', '2N71', '2N32']);
+  let calls = { '1A80': { passing: true }, '2N71': { booked: '23:41' }, '2N32': { booked: '23:04' } };
+  const pick = () => cardCandidates(fast, (service) => calls[service.id]).map((t) => t.head);
+  assert.deepEqual(pick(), ['2N71']);
+  delete calls['2N71'];
+  assert.deepEqual(pick(), ['2N32']);
+  calls = { '1A80': { pending: true } };
+  const requests = [];
+  assert.deepEqual(cardCandidates(fast, (service, canRequest) => {
+    requests.push(canRequest);
+    return calls[service.id];
+  }), []);
+  assert.deepEqual(requests, [true, false, false]);
 });
 
 test('opposing trains rotate independently of feed updates, with immediate handover when a berth clears', () => {
@@ -74,8 +100,20 @@ test('the Hemel pilot reproduces the passing and stopping trains offline at the 
     if (frame.time > replay.frames[0].time + 90000) break;
     board.apply(frame);
   }
-  const { fast, slow } = hemelTrains(berths, board);
+  const { fast, slow } = hemelTrains(berths, board, (area) => Boolean(board.areaTimes[area]));
   const label = (t) => callText(replay.hemelCalls[t.service.id], t.service.delay);
   assert.deepEqual([fast[0].head, label(fast[0])], ['1A80', 'Passing']);
   assert.deepEqual([slow[0].head, label(slow[0])], ['2K65', 'Booked 21:55 · Est. on time']);
+});
+
+test('the 15-mile recording can show its incoming booked stop offline beyond the next berth', () => {
+  const replay = JSON.parse(readFileSync(new URL('./public/data/replay.json', import.meta.url)));
+  const board = new Corridor(layout);
+  for (const frame of replay.frames) {
+    if (frame.time > replay.frames[0].time + 5000) break;
+    board.apply(frame);
+  }
+  const { fast } = hemelTrains(berths, board, (area) => Boolean(board.areaTimes[area]));
+  const [train] = cardCandidates(fast, (s) => replay.hemelCalls[s.id]);
+  assert.deepEqual([train.head, train.call.booked, train.distance, train.immediate], ['2N71', '23:41', 3.531, false]);
 });
