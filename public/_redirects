@@ -1,4 +1,5 @@
 /api/abbey-lookup  https://api.railinfo.uk/services/lookup  200
 /api/hemel-schedule/:uid/:day/:month/:year  https://openrail.railcam.uk/rail/livetrain/:uid/:day/:month/:year  200
+/api/rail-reports  https://api.railinfo.uk/map/trains  200
 /api/vehicles  https://lakes-transit.netlify.app/api/vehicles  200
 https://transport.pickering.org/  /apps/  302!

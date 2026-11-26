@@ -1,3 +1,6 @@
+import {panelSettings, settingGroup} from './panel/settings.mjs';
+import {mapGestures} from './panel/gestures.mjs';
+import {readSetting, saveSetting} from './panel/appearance.mjs';
 import {
   Corridor,
   locateTrain,
@@ -8,39 +11,12 @@ import {
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
-import { isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, describeCard, stationName, operators } from '/hemel.mjs';
+import { stationArrivals, isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, describeCard, stationName, operators } from '/hemel.mjs';
 
 const $ = (id) => document.getElementById(id);
 const panel = document.querySelector('.panel');
-const themeButton = $('diagram-theme');
-const themeKey = 'traintimes.diagramTheme';
-function setTheme(light) {
-  panel.dataset.theme = light ? 'light' : 'dark';
-  themeButton.title = light ? 'Switch to dark diagram' : 'Switch to light diagram';
-  themeButton.setAttribute('aria-label', themeButton.title);
-}
-try {
-  setTheme(localStorage.getItem(themeKey) === 'light');
-} catch {
-  setTheme(false);
-}
-themeButton.addEventListener('click', () => {
-  setTheme(panel.dataset.theme !== 'light');
-  try {
-    localStorage.setItem(themeKey, panel.dataset.theme);
-  } catch {
-    // Keep this choice for the current page.
-  }
-});
-window.addEventListener('storage', (e) => {
-  if (e.key === themeKey || e.key === null) setTheme(e.newValue === 'light');
-});
 const viewLink = $('diagram-view');
-const installed =
-  matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches ||
-  navigator.standalone === true;
-const defaultDisplay =
-  document.documentElement.classList.contains('diagram-only') || installed ? 'diagram' : 'dashboard';
+const defaultDisplay = 'diagram';
 function readDisplayMode() {
   const url = new URL(location.href);
   const only = (url.searchParams.get('display') ?? defaultDisplay) === 'diagram';
@@ -49,6 +25,7 @@ function readDisplayMode() {
   if (next === defaultDisplay) url.searchParams.delete('display');
   else url.searchParams.set('display', next);
   viewLink.href = url.href;
+  viewLink.textContent = only ? 'Show dashboard' : 'Expand map';
   viewLink.title = only ? 'Return to dashboard' : 'Open diagram-only view';
   viewLink.setAttribute('aria-label', viewLink.title);
   return only;
@@ -86,9 +63,7 @@ let inspectedSignal = false;
 let trainSelection = null;
 let zoom = 1,
   centre,
-  selection = 'R103:7',
-  dragging = null,
-  moved = false;
+  selection = 'R103:7';
 let lastDraw = '';
 const request = async (path) => {
   if (globalThis.transportApp && path.startsWith('/data/')) return transportApp.json(path);
@@ -97,7 +72,8 @@ const request = async (path) => {
   return response.json();
 };
 const layout = await request('/data/corridor.json');
-const feed = createLiveFeed(layout, { abbeyEndpoint: new URL('/api/abbey-lookup', location.origin) });
+const arrivals = stationArrivals(layout);
+const feed = createLiveFeed(layout, { onFrame: arrivals.accept, onReset: arrivals.reset, abbeyEndpoint: new URL('/api/abbey-lookup', location.origin) });
 let live = feed.snapshot();
 const watford = layout.stations.find((s) => s.code === layout.junction.code);
 const dc = layout.branches.find((b) => b.id === 'dc'),
@@ -145,6 +121,7 @@ function clampCentre() {
 function setZoom(value) {
   zoom = Math.max(minZoom, Math.min(4, value));
   clampCentre();
+  saveSetting('hemel.view', {zoom, centre});
   render(true);
 }
 const popout = $('train-popout');
@@ -178,7 +155,7 @@ function closeTrain(restoreFocus = false) {
   if (popout.open) popout.close();
   render(true);
   if (restoreFocus)
-    (document.querySelector('.marker[data-key="' + CSS.escape(key ?? '') + '"]') ?? viewLink).focus({
+    (document.querySelector('.marker[data-key="' + CSS.escape(key ?? '') + '"]') ?? $('open-settings')).focus({
       preventScroll: true,
     });
 }
@@ -205,7 +182,7 @@ function closeSignal(restoreFocus = false) {
   inspectedSignal = false;
   $('signal-readout').hidden = true;
   if (restoreFocus)
-    (drawing.querySelector('.marker[data-key="' + CSS.escape(selection) + '"]') ?? viewLink).focus({
+    (drawing.querySelector('.marker[data-key="' + CSS.escape(selection) + '"]') ?? $('open-settings')).focus({
       preventScroll: true,
     });
 }
@@ -239,10 +216,10 @@ document.addEventListener('click', (e) => {
 });
 function fresh(area) {
   if (area === 'AB') {
-    const report = (mode === 'replay' ? replayBoard : live).abbey;
-    return Boolean(report?.available && (mode === 'replay' || Date.now() - report.checked < 90000));
+    const report = (mode !== 'live' ? replayBoard : live).abbey;
+    return Boolean(report?.available && (mode !== 'live' || Date.now() - report.checked < 90000));
   }
-  return mode === 'replay'
+  return mode !== 'live'
     ? Boolean(replayBoard.areaTimes[area])
     : live.areaStatus[area] === 'Live';
 }
@@ -260,9 +237,7 @@ function activate(parent, xy, key, label, shownHead) {
     'data-key': key,
   });
   shape(el, 'title', {}, label);
-  el.addEventListener('click', () => {
-    if (!moved) select(key, el, shownHead);
-  });
+  el.addEventListener('click', () => select(key, el, shownHead));
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -423,9 +398,7 @@ function stationLabel(plot, { station, column, labelX, width, size, label }, y) 
     centre = column;
     setZoom(station.code === 'WFJ' ? 2 : 1.5);
   };
-  button.addEventListener('click', () => {
-    if (!moved) visit();
-  });
+  button.addEventListener('click', visit);
   button.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -554,7 +527,9 @@ function drawMap(values) {
     if (w > 0 && h > 0) {
       // Reflow the track coordinates along both axes. A uniform SVG scale
       // keeps the lettering, signal circles and train badges in proportion.
-      const scale = Math.min(w / 840, h / (naturalHeight * 0.82), 1.5);
+      // On phones, give names and train badges more of the available width.
+      const designWidth = w < 600 ? (zoom === minZoom ? 590 : 460) : 840;
+      const scale = Math.min(w / designWidth, h / (naturalHeight * 0.82), 1.5);
       mapWidth = w / scale;
       height = h / scale;
     }
@@ -691,7 +666,7 @@ function drawMap(values) {
   const reports = (mode === 'live' ? live : replayBoard).abbey;
   $('branch-status').hidden = !merged;
   $('branch-status').textContent =
-    mode === 'replay' && !reports
+    mode !== 'live' && !reports
       ? 'Abbey station reports were not captured in this recording.'
       : !fresh('AB')
         ? 'Abbey station reports unavailable · showing any last-known reports.'
@@ -700,6 +675,8 @@ function drawMap(values) {
           : 'Awaiting the next Abbey station report.';
   $('zoomin').disabled = zoom === 4;
   $('zoomout').disabled = zoom === minZoom;
+  for (const [id, selected] of [['sector',zoom === minZoom],['home',centre === home && zoom === 1],['junction',centre === junction && zoom === 2]])
+    $(id).setAttribute('aria-pressed',String(selected));
   const target = new URL(viewLink.href);
   if (centre === home && zoom === 1) target.searchParams.set('view', 'hemel');
   else if (centre === junction && zoom === 2) target.searchParams.set('view', 'watford');
@@ -826,11 +803,11 @@ function queueCardPosition() {
 
 function scheduleFor(service, canRequest) {
   if (!service) return null;
-  if (mode === 'replay' && recording.hemelCalls) {
+  if (mode !== 'live' && recording.hemelCalls) {
     const archived = recording.hemelCalls[service.id];
     return archived?.uid === service.uid ? archived : null;
   }
-  const path = schedulePath(service, mode === 'replay' ? cursor : undefined);
+  const path = schedulePath(service, mode !== 'live' ? cursor : undefined);
   if (!path) return null;
   const key = mode + '/' + service.id + path;
   let entry = activeSchedules.get(key);
@@ -842,7 +819,7 @@ function scheduleFor(service, canRequest) {
   entry.lastUsed = Date.now();
   if (canRequest && !document.hidden && entry.lastUsed >= entry.retryAt) {
     entry.retryAt = Infinity;
-    const replay = mode === 'replay';
+    const replay = mode !== 'live';
     fetch(path, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
       .then(async (response) => response.ok ? readHemelSchedule(await response.text(), service, path) : null)
       .then((call) => {
@@ -902,19 +879,24 @@ function render(force = false) {
   const board = state(),
     stale = mode === 'live' && !['Live', 'Partial'].includes(board.status);
   updateHemelCards(board);
-  const label = mode === 'replay' ? 'Recorded replay' : board.status;
+  if (mode === 'live') {
+    const incoming = arrivals.take(fresh('R1'), Date.now(), head => scheduleFor(board.services['R1/' + head], false)?.booked);
+    for (const d of incoming) settings.sound.play(d.toUpperCase() === 'D', d === d.toLowerCase());
+  }
+  const label = mode === 'preview' ? (navigator.onLine ? 'Replay · awaiting live' : 'Offline replay')
+    : mode === 'replay' ? 'Recorded replay' : board.status;
   $('status').textContent = label;
-  $('indicator').className = mode === 'replay' ? 'replay' : label === 'Live' ? 'live' : '';
-  const shownTime = mode === 'replay' ? cursor : board.observed;
+  $('indicator').className = mode !== 'live' ? 'replay' : label === 'Live' ? 'live' : '';
+  const shownTime = mode !== 'live' ? cursor : board.observed;
   $('asof').textContent = shownTime
-    ? (mode === 'replay' ? day.format(shownTime) + ' · ' : '') + clock.format(shownTime)
+    ? (mode !== 'live' ? day.format(shownTime) + ' · ' : '') + clock.format(shownTime)
     : '';
   $('areas').textContent = layout.areas
     .map(
       (area) =>
         area +
         ' ' +
-        (mode === 'replay'
+        (mode !== 'live'
           ? board.areaTimes[area]
             ? 'recorded'
             : 'unrecorded'
@@ -928,7 +910,7 @@ function render(force = false) {
         : 'Waiting for the public feed. You can also open the recorded replay.'
       : mode === 'live' && board.status === 'Partial'
         ? 'Partial live coverage · check feed status for each area.'
-        : mode === 'replay' && (zoom < 1 || centre !== home) && !board.areaTimes.WJ
+        : mode !== 'live' && (zoom < 1 || centre !== home) && !board.areaTimes.WJ
           ? 'Recorded coverage is Rugby R1. Watford WJ has no observations in this sample.'
           : '';
   const signature = JSON.stringify([
@@ -1013,7 +995,7 @@ function render(force = false) {
   }
 }
 function syncLiveFeed() {
-  if (mode === 'live' && !document.hidden && navigator.onLine) feed.start();
+  if (mode !== 'replay' && !document.hidden && navigator.onLine) feed.start();
   else feed.stop();
   live = feed.snapshot();
   if (mode === 'live') render();
@@ -1040,7 +1022,7 @@ const recordings = new Map();
 let modeRequest = 0;
 async function switchMode(next, fitRecording = false) {
   const requestId = ++modeRequest;
-  if (next === 'replay') {
+  if (next !== 'live') {
     const sample = $('sample').value;
     try {
       if (!recordings.has(sample)) recordings.set(sample, await request(sample));
@@ -1052,9 +1034,10 @@ async function switchMode(next, fitRecording = false) {
     recording = recordings.get(sample);
     replayStart = recording.startTime ?? recording.frames[0].time;
     if (fitRecording) {
-      const pilot = $('sample').selectedOptions[0].dataset.view === 'hemel';
-      centre = pilot ? home : overview;
-      zoom = pilot ? 1 : minZoom;
+      const watfordSample = sample.includes('watford'), hemelSample = sample.includes('/hemel-');
+      centre = watfordSample ? junction : hemelSample ? home : overview;
+      zoom = watfordSample ? 2 : hemelSample ? 1 : minZoom;
+      saveSetting('hemel.view', {zoom, centre});
     }
   }
   if (requestId !== modeRequest) return;
@@ -1063,9 +1046,9 @@ async function switchMode(next, fitRecording = false) {
   if (popout.open) popout.close();
   trainSelection = null;
   selection = 'R103:7';
-  for (const name of ['live', 'replay']) $(name).setAttribute('aria-pressed', String(name === mode));
+  for (const name of ['live', 'replay']) $(name).setAttribute('aria-pressed', String(name === (mode === 'replay' ? 'replay' : 'live')));
   $('replaybar').hidden = mode !== 'replay';
-  if (mode === 'replay') {
+  if (mode !== 'live') {
     $('scrub').max = recording.frames.at(-1).time - replayStart;
     replayBoard = null;
     playing = true;
@@ -1092,12 +1075,12 @@ setInterval(() => {
   const now = performance.now(),
     dt = now - previous;
   previous = now;
-  if (mode !== 'replay' || !playing) return;
+  if (mode === 'live' || !playing) return;
   const end = recording.frames.at(-1).time;
   seek(Math.min(end, cursor + dt * rate));
   if (cursor >= end) {
-    playing = false;
-    $('run').textContent = 'Play again';
+    if (mode === 'preview') seek(replayStart);
+    else {playing = false; $('run').textContent = 'Play again';}
   }
 }, 250);
 $('sector').onclick = () => {
@@ -1116,26 +1099,25 @@ $('home').onclick = () => {
 };
 const svg = $('map');
 
-svg.addEventListener('pointerdown', (e) => {
-  moved = false;
-  dragging = { x: e.clientX, centre };
-});
-svg.addEventListener('pointermove', (e) => {
-  if (!dragging || zoom === minZoom) return;
-  const dx = e.clientX - dragging.x;
-  if (Math.abs(dx) > 5) {
-    moved = true;
-    svg.setPointerCapture(e.pointerId);
-    centre = dragging.centre - dx / svg.getScreenCTM().a / slotPitch();
-    clampCentre();
-    render(true);
-  }
-});
-window.addEventListener('pointerup', () => {
-  dragging = null;
-});
-svg.addEventListener('pointercancel', () => {
-  dragging = null;
+let stepped = false;
+mapGestures(svg, {
+  drag(from, to) {
+    if (zoom === minZoom) return;
+    centre -= (to.x - from.x) / svg.getScreenCTM().a / slotPitch();
+    clampCentre(); render(true);
+  },
+  pinch(from, to) {
+    const ratio = to.span / from.span;
+    if (stepped || Math.abs(to.span - from.span) < 18 || (ratio < 1.25 && ratio > .8)) return false;
+    stepped = true;
+    if (to.span < from.span) $('sector').click();
+    else if (zoom === minZoom) {
+      const x = new DOMPoint(from.x,from.y).matrixTransform(svg.getScreenCTM().inverse()).x;
+      $(Math.abs(x-position(home)) <= Math.abs(x-position(junction)) ? 'home' : 'junction').click();
+    }
+    return true;
+  },
+  finish() { stepped = false; saveSetting('hemel.view',{zoom,centre}); }
 });
 function updateDisplay() {
   diagramOnly = readDisplayMode();
@@ -1156,9 +1138,27 @@ viewLink.addEventListener('click', (event) => {
     document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
   }
   history.pushState(null, '', viewLink.href);
+  settings.close();
   updateDisplay();
 });
 window.addEventListener('popstate', updateDisplay);
+let initialTheme = 'dark';
+try { if (localStorage.getItem('traintimes.diagramTheme') === 'light') initialTheme = 'light'; } catch {}
+const settings = panelSettings({
+  id:'hemel', name:'Hemel rail monitor', toolbar:document.querySelector('.diagram-tools'),
+  status:document.querySelector('.source-status'), map:drawing, initialTheme,
+  applyTheme(value) { panel.dataset.theme = value; },
+  appControls:[
+    settingGroup('Diagram view', $('sector'), $('home'), $('junction')),
+    settingGroup('Zoom', $('zoomout'), $('zoomin')),
+    settingGroup('Data source', $('live'), $('replay')), $('replaybar'),
+    settingGroup('Layout', viewLink), $('areas'), $('notice'), $('branch-status')
+  ],
+  installHelp:document.querySelector('.mobile-install'),
+  credits:'Network Rail via Signal Maps; schedules from Open Rail, Abbey reports from Railinfo and mappings from EASMData.'
+});
+document.querySelector('.zoom').remove();
+document.querySelector('.modebox').remove();
 new ResizeObserver(() => {
   if (diagramOnly) render(true);
   else {
@@ -1175,6 +1175,10 @@ if (initialView === 'sector') {
   centre = junction;
   zoom = 2;
 }
+const saved = readSetting('hemel.view');
+if (!new URLSearchParams(location.search).has('view') && Number.isFinite(saved?.centre) && Number.isFinite(saved.zoom)) {
+  centre = saved.centre; zoom = Math.max(minZoom,Math.min(4,saved.zoom)); clampCentre();
+}
 if (initialView === 'watford') $('sample').value = '/data/watford-replay.json';
 if (initialView === 'hemel') $('sample').value = '/data/hemel-replay.json';
 document.addEventListener('visibilitychange', syncLiveFeed);
@@ -1182,11 +1186,12 @@ window.addEventListener('offline', syncLiveFeed);
 window.addEventListener('online', syncLiveFeed);
 window.addEventListener('pagehide', feed.stop);
 window.addEventListener('pageshow', syncLiveFeed);
-if (globalThis.transportApp && !navigator.onLine) switchMode('replay');
-else syncLiveFeed();
+syncLiveFeed();
+switchMode('preview');
 setInterval(() => {
-  if (mode === 'live' && !document.hidden) {
+  if (mode !== 'replay' && !document.hidden) {
     live = feed.snapshot();
-    render();
-  } else if (mode === 'replay' && !playing && !document.hidden) updateHemelCards(replayBoard);
+    if (mode === 'preview' && ['Live','Partial'].includes(live.status)) switchMode('live');
+    else render();
+  } else if (mode !== 'live' && !playing && !document.hidden) updateHemelCards(replayBoard);
 }, 1000);

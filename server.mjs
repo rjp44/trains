@@ -36,6 +36,8 @@ const feed = createLiveFeed(layout, {
 });
 
 const files = {
+  ...Object.fromEntries(['settings.mjs','settings.css','appearance.mjs','downloads.mjs','gestures.mjs','horn.mjs'].map(name =>
+    ['/panel/'+name, ['../web/panel/'+name, name.endsWith('.css') ? 'text/css' : 'text/javascript']])),
   '/': ['index.html', 'text/html'],
   '/app.js': ['app.js', 'text/javascript'],
   '/hemel.mjs': ['hemel.mjs', 'text/javascript'],

@@ -9,7 +9,9 @@ Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and 
 
 ## Get the apps
 
-Open the public directory to search by name or description. Each browser app can be installed from its own page. After an online installation, its recorded data works offline. The site root still opens the full-window Hemel diagram. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
+The public site opens the app directory. Choose **Open in browser** for Hemel or Lakes. Each map has Settings at the top left and a sun/moon button at the top right. **App** holds views, filters and replay controls. **Downloads** lets you search the directory, save another app for offline use, check for updates and remove a saved copy. Both recordings work offline after the browser finishes downloading the app.
+
+In **Display**, choose **Sunrise / sunset** to follow the active map’s UK location or adjust map brightness. **Sound** controls train horns, **Wi-Fi** reports browser connectivity, and **About** credits the data sources. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
 
 On a commissioned tablet, connect to Wi-Fi in **Settings**, then open **Downloads** (**Apps** on core 0.9.5 and earlier). From core 0.9.6, opening Downloads checks both firmware and app versions in the background. **Directory** shows each app's download size and flash space, and the header shows remaining capacity. **Installed** lets you open or delete apps offline. **About** shows versions, data credits and a QR link to this repository. [Hardware, commissioning and OTA](firmware/core/README.md)
 

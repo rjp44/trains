@@ -13,6 +13,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Lake District · Transport map</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="./panel/settings.css" />
   </head>
   <body class="map-only">
     <main class="board">
@@ -26,12 +27,12 @@
             ><button id="live" aria-pressed="true">Live</button
             ><button id="replay" aria-pressed="false">Replay</button></span
           >
-          <button class="theme icon" id="theme" aria-label="Use dark theme" title="Use dark theme">
-            ☾
-          </button>
+
         </div>
       </header>
       <section class="map-panel" aria-label="Lake District transport map">
+        <div id="lakes-toolbar"></div>
+        <div class="lakes-surface">
         <svg
           id="map"
           viewBox="0 0 480 748"
@@ -266,7 +267,7 @@
             </g>
           </defs>
         </svg>
-        <div class="map-bar">
+        <div class="map-bar" hidden>
           <div id="routes" role="group" aria-label="Routes on the map">
             <button id="show-all" class="route" aria-pressed="true" title="Show all routes">All</button>
           </div>
@@ -274,24 +275,10 @@
             <button class="icon" id="plus" title="Zoom in" aria-label="Zoom in">+</button>
             <button class="icon" id="minus" title="Zoom out" aria-label="Zoom out">−</button>
             <button class="icon" id="reset" title="Fit visible routes" aria-label="Fit visible routes">
-              ⌖
+              Fit routes
             </button>
             <button class="icon" id="view-toggle" title="Show dashboard" aria-label="Show dashboard">
-              <svg
-                viewBox="0 0 24 24"
-                width="19"
-                height="19"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.65"
-                aria-hidden="true"
-              >
-                <g class="dashboard-glyph">
-                  <rect x="3" y="4" width="18" height="16" rx="2" />
-                  <path d="M14 4v16m3-11h2m-2 4h2" />
-                </g>
-                <path class="expand-glyph" d="M3 9V4h5m8 0h5v5m0 6v5h-5m-8 0H3v-5" />
-              </svg>
+              Show dashboard
             </button>
           </div>
         </div>
@@ -322,6 +309,7 @@
         <div id="vehicle" hidden role="region" aria-label="Map details">
           <button id="close" class="close" aria-label="Close details">×</button>
           <div id="vehicle-info" tabindex="0"></div>
+        </div>
         </div>
       </section>
       <aside>

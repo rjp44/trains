@@ -100,3 +100,19 @@ export function visibleFixes(snapshot, now) {
       .map((v) => ({ ...v, stale: !snapshot[type].ok || now - v.time >= freshMs })),
   );
 }
+
+// A later estimate on the same rail leg is not a new station report.
+export function railTransitions(previous, current, now) {
+  if (!previous?.ok || !current?.ok) return [];
+  return current.vehicles.filter(train => {
+    const old = previous.vehicles.find(v => v.id === train.id && v.route === train.route);
+    return old && train.direction && (train.lastCode || train.last) &&
+      (old.lastCode || old.last) !== (train.lastCode || train.last) &&
+      train.time > old.time && train.time - old.time < freshMs &&
+      now - train.time < freshMs && train.time <= now + 5000;
+  });
+}
+export function confirmedRailStop(fix, reports) {
+  return reports.some(({id, last}) => 'rail-' + id === fix.id && last?.stop === true &&
+    last.crs === fix.lastCode && last.name === fix.last && last.time === fix.lastTime);
+}

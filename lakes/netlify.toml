@@ -10,3 +10,8 @@
   for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+[[redirects]]
+  from = "/api/rail-reports"
+  to = "https://api.railinfo.uk/map/trains"
+  status = 200

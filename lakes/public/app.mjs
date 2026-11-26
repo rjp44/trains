@@ -1,8 +1,13 @@
+import {panelSettings, settingGroup} from './panel/settings.mjs';
+import {mapGestures} from './panel/gestures.mjs';
+import {readSetting, saveSetting} from './panel/appearance.mjs';
 import {
   routes,
   order,
   project,
   railBearing,
+  railTransitions,
+  confirmedRailStop,
   visibleFixes,
   londonTime,
   freshMs,
@@ -78,6 +83,8 @@ let mode = 'live',
   generation = 0,
   polling = null,
   replayTimer = null;
+let previewing = false;
+const recorded = () => mode === 'replay' || previewing;
 let fixes = [],
   fetchFailed = false;
 
@@ -198,7 +205,7 @@ function fillStopPicker() {
 function openStop(id, centre) {
   selection = null;
   selectedStop = id;
-  if (mode === 'replay') runReplay(false);
+  if (recorded()) runReplay(false);
   $('stop-picker').value = String(id);
   if (centre) {
     fitOnResize = false;
@@ -210,7 +217,7 @@ function openStop(id, centre) {
   $('vehicle-info').focus({ preventScroll: true });
 }
 $('stop-picker').onchange = (e) => {
-  if (e.target.value !== '') openStop(Number(e.target.value), true);
+  if (e.target.value !== '') { settings.close(); openStop(Number(e.target.value), true); saveView(); }
   else $('close').click();
 };
 fillStopPicker();
@@ -330,26 +337,9 @@ for (const [key, line] of Object.entries(railways)) {
     );
   }
 }
-function theme(dark) {
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  $('theme').textContent = dark ? '☀' : '☾';
-  $('theme').ariaLabel = dark ? 'Use light theme' : 'Use dark theme';
-  $('theme').title = $('theme').ariaLabel;
-  document.querySelector('meta[name=theme-color]').content = dark ? '#182822' : '#f6f7f1';
+function saveView() {
+  saveSetting('lakes.view',{routes:[...selectedRoutes], zoom, cx, cy, fit:fitOnResize});
 }
-try {
-  theme(localStorage.getItem('lakes.theme') === 'dark');
-} catch {
-  theme(false);
-}
-$('theme').onclick = () => {
-  const dark = document.documentElement.dataset.theme !== 'dark';
-  theme(dark);
-  try {
-    localStorage.setItem('lakes.theme', dark ? 'dark' : 'light');
-  } catch {}
-};
-
 for (const key of order) {
   const r = routes[key];
   const button = text('button', r.chip || key, 'route');
@@ -396,6 +386,7 @@ function applyRoutes() {
   fillStopPicker();
   drawSharedLinks();
   fitRoutes();
+  saveView();
   render();
 }
 $('show-all').onclick = () => {
@@ -405,7 +396,8 @@ $('show-all').onclick = () => {
 $('view-toggle').onclick = () => {
   const fullMap = document.body.classList.toggle('map-only');
   $('view-toggle').ariaLabel = fullMap ? 'Show dashboard' : 'Expand map';
-  $('view-toggle').title = $('view-toggle').ariaLabel;
+  $('view-toggle').textContent = $('view-toggle').title = $('view-toggle').ariaLabel;
+  settings.close();
   window.scrollTo(0, 0);
   viewport();
 };
@@ -478,10 +470,11 @@ function changeZoom(factor, anchor = [cx, cy]) {
   cy = anchor[1] + (cy - anchor[1]) * ratio;
   zoom = next;
   viewport();
+  saveView();
 }
 $('plus').onclick = () => changeZoom(1.5);
 $('minus').onclick = () => changeZoom(1 / 1.5);
-$('reset').onclick = fitRoutes;
+$('reset').onclick = () => {fitRoutes(); saveView();};
 function world(event) {
   const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
   return [p.x, p.y];
@@ -494,24 +487,24 @@ svg.addEventListener(
   },
   { passive: false },
 );
-let drag;
-svg.onpointerdown = (e) => {
-  if (!$('vehicle').hidden || e.target.closest('[data-vehicle], [data-stop]') || zoom === 1) return;
-  drag = { x: e.clientX, y: e.clientY, cx, cy };
-  svg.setPointerCapture(e.pointerId);
-};
-svg.onpointermove = (e) => {
-  if (!drag) return;
-  fitOnResize = false;
-  const unit = svg.getScreenCTM().a;
-  cx = drag.cx - (e.clientX - drag.x) / unit;
-  cy = drag.cy - (e.clientY - drag.y) / unit;
-  viewport();
-};
-svg.onpointerup = svg.onpointercancel = () => {
-  drag = null;
-};
-
+mapGestures(svg, {
+  drag(from,to) {
+    if (!$('vehicle').hidden || zoom === 1) return;
+    const scale = svg.getScreenCTM().a;
+    cx -= (to.x - from.x) / scale; cy -= (to.y - from.y) / scale;
+    fitOnResize = false; viewport();
+  },
+  pinch(from,to) {
+    if (Math.abs(to.span - from.span) < 1 && Math.hypot(to.x-from.x,to.y-from.y) < 1) return false;
+    if (!$('vehicle').hidden) dismissDetail(false);
+    const next = Math.max(1, Math.min(24, zoom * to.span / from.span)), ratio = zoom / next;
+    const anchor = world({clientX:from.x, clientY:from.y}), scale = svg.getScreenCTM().a / ratio;
+    cx = anchor[0] + (cx - anchor[0])*ratio - (to.x-from.x)/scale;
+    cy = anchor[1] + (cy - anchor[1])*ratio - (to.y-from.y)/scale;
+    zoom = next; fitOnResize = false; viewport(); return true;
+  },
+  finish:saveView
+});
 function inspect(id) {
   const fix = fixes.find((v) => v.id === id);
   const marker = markers.querySelector('[data-vehicle="' + CSS.escape(id) + '"] > use');
@@ -526,7 +519,7 @@ function inspect(id) {
   selection = id;
   selectedStop = null;
   $('stop-picker').value = '';
-  if (mode === 'replay') runReplay(false);
+  if (recorded()) runReplay(false);
   viewport();
   detail();
   $('vehicle-info').focus({ preventScroll: true });
@@ -543,7 +536,7 @@ function drawBoard(body, now) {
     text(
       'small',
       'Scheduled departures · ' +
-        (mode === 'replay' ? 'Replay ' : '') +
+        (recorded() ? 'Replay ' : '') +
         londonTime(now).slice(0, 5) +
         ' London · ≈ approximate',
     ),
@@ -673,8 +666,7 @@ function placeDetail() {
   }
   const ax = (mark.left + mark.right) / 2 - map.left,
     ay = (mark.top + mark.bottom) / 2 - map.top;
-  const margin = 8,
-    top = Math.max(margin, document.querySelector('.map-bar').getBoundingClientRect().bottom - map.top + 5);
+  const margin = 8, top = margin;
   const bottom = Math.max(top + 80, map.height - margin);
   box.style.maxHeight = Math.min(470, bottom - top) + 'px';
   const w = box.offsetWidth,
@@ -720,7 +712,7 @@ function detail() {
   const focusGap = same && body.contains(document.activeElement) ? document.activeElement.dataset.gap : null;
   const focusList = listBefore && listBefore === document.activeElement;
   if (!same) expandedGap = -1;
-  const now = mode === 'replay' ? snapshot?.time : Date.now();
+  const now = recorded() ? snapshot?.time : Date.now();
   box.hidden = (!v && selectedStop === null) || !Number.isFinite(now);
   if (box.hidden) {
     delete body.dataset.key;
@@ -737,7 +729,7 @@ function detail() {
     const pattern = trip && timetable.patterns[trip.pattern];
     const town = pattern && timetable.groups[timetable.stops[pattern.at(-1)[0]].group].town;
     const header = text('div', '', 'card-meta');
-    const status = mode === 'replay' ? 'Replay' : v.stale ? 'Stale fix' : 'Live';
+    const status = recorded() ? 'Replay' : v.stale ? 'Stale fix' : 'Live';
     header.append(
       text('b', routes[v.route].chip || v.route, 'service-badge'),
       text(
@@ -925,7 +917,7 @@ function drawMarkers() {
   }
 }
 function render() {
-  const now = mode === 'replay' ? snapshot?.time : Date.now();
+  const now = recorded() ? snapshot?.time : Date.now();
   const vehicles = visibleFixes(snapshot, now);
   fixes = vehicles.filter((v) => routeVisible(v.route));
   if (!fixes.some((v) => v.id === selection)) selection = null;
@@ -947,11 +939,11 @@ function render() {
     $(kind + '-status').textContent = status;
   }
   $('observed').textContent = snapshot
-    ? (mode === 'replay' ? 'Recorded ' : 'Checked ') + londonTime(snapshot.time) + ' London'
+    ? (recorded() ? 'Recorded ' : 'Checked ') + londonTime(snapshot.time) + ' London'
     : '';
   const problems = fetchFailed || (snapshot && (!snapshot.bus.ok || !snapshot.rail.ok));
   $('status').textContent = !navigator.onLine
-    ? mode === 'replay'
+    ? recorded()
       ? 'Offline · showing recorded journeys.'
       : 'Offline · choose Replay to see recorded journeys.'
     : problems
@@ -959,8 +951,8 @@ function render() {
       : selectedRoutes.size && !fixes.length
         ? 'No vehicles reported for the selected routes.'
         : '';
-  const mapState =
-    mode === 'replay'
+  const mapState = previewing && navigator.onLine ? 'Replay · awaiting live' :
+    recorded()
       ? navigator.onLine
         ? 'Replay'
         : 'Offline replay'
@@ -980,21 +972,40 @@ function render() {
       'button',
       (routes[v.route].chip || v.route) + ' · ' + (v.destination || v.label) + (v.stale ? ' · stale' : ''),
     );
-    b.onclick = () => inspect(v.id);
+    b.onclick = () => { settings.close(); inspect(v.id); };
     list.append(b);
   }
+}
+async function soundReports(token, trains) {
+  const unknown = [];
+  for (const v of trains) {
+    if (settings.sound.mode === 'stops' && typeof v.lastStop !== 'boolean') unknown.push(v);
+    else settings.sound.play(v.direction > 0, v.lastStop === true);
+  }
+  if (!unknown.length) return;
+  // Some live feed editions omit the stop flag. Match the same Railinfo report as the tablet.
+  try {
+    const raw = await get('/api/rail-reports');
+    if (token !== generation || !Array.isArray(raw.trains)) return;
+    for (const v of unknown) if (routeVisible(v.route) && Date.now() - v.time < freshMs && confirmedRailStop(v, raw.trains))
+      settings.sound.play(v.direction > 0, true);
+  } catch { /* An unconfirmed report stays silent. */ }
 }
 async function poll(token) {
   if (token !== generation || document.hidden || mode !== 'live') return;
   try {
     const s = await get('/api/vehicles');
     if (token !== generation) return;
+    if ((!snapshot || previewing) && !s.rail?.ok && !s.bus?.ok) throw Error('Waiting for live reports');
+    if (!previewing && !fetchFailed && settings.sound.mode !== 'off')
+      soundReports(token, railTransitions(snapshot?.rail, s.rail, Date.now()).filter(v => routeVisible(v.route)));
+    previewing = false;
     snapshot = s;
     fetchFailed = false;
   } catch {
     if (token !== generation) return;
     fetchFailed = true;
-    if (snapshot)
+    if (snapshot && !previewing)
       snapshot = {
         ...snapshot,
         bus: { ...snapshot.bus, ok: false },
@@ -1030,6 +1041,7 @@ async function setMode(next) {
   runReplay(false);
   const token = ++generation;
   mode = next;
+  previewing = false;
   selectedStop = null;
   $('stop-picker').value = '';
   viewport();
@@ -1039,16 +1051,14 @@ async function setMode(next) {
   for (const key of ['live', 'replay']) $(key).setAttribute('aria-pressed', String(key === next));
   $('playback').hidden = next !== 'replay';
   render();
-  if (next === 'live') {
-    poll(token);
-    return;
-  }
+  if (next === 'live') poll(token);
   try {
     replay ??= await get('/data/replay.json');
-    if (token !== generation) return;
+    if (next !== mode || (next === 'live' ? snapshot !== null : token !== generation)) return;
+    previewing = next === 'live';
     $('frame').max = replay.frames.length - 1;
     showFrame(0);
-    runReplay(true);
+    if (!previewing) runReplay(true);
   } catch {
     if (token === generation) $('status').textContent = 'Recording unavailable.';
   }
@@ -1072,6 +1082,33 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => {
   if (!document.hidden && mode === 'live' && (snapshot || selectedStop !== null)) render();
 }, 10_000);
+let initialTheme = 'light';
+try { if (localStorage.getItem('lakes.theme') === 'dark') initialTheme = 'dark'; } catch {}
+const nextFrame = document.createElement('button'); nextFrame.textContent = 'Next frame';
+nextFrame.onclick = () => { if (replay) { runReplay(false); showFrame((frameIndex+1)%replay.frames.length); } };
+$('play').after(nextFrame);
+const settings = panelSettings({
+  id:'lakes', name:'Lakes Transit', toolbar:$('lakes-toolbar'), status:$('map-status'), map:document.querySelector('.lakes-surface'),
+  initialTheme, applyTheme(value) {
+    document.documentElement.dataset.theme = value;
+    document.querySelector('meta[name=theme-color]').content = value === 'dark' ? '#182822' : '#f6f7f1';
+  },
+  appControls:[settingGroup('Data source',$('live'),$('replay')), $('playback'),
+    settingGroup('Map zoom',$('minus'),$('plus'),$('reset')), settingGroup('Routes',$('routes')),
+    document.querySelector('.stop-finder'), settingGroup('Layout',$('view-toggle'))],
+  installHelp:$('install-help'), credits:'OpenStreetMap, OpenFreeMap, OpenMapTiles, Mapzen, Stagecoach, BODS, NaPTAN and Railinfo.'
+});
+document.querySelector('.map-bar').remove();
+document.querySelector('.mast-tools').remove();
+const saved = readSetting('lakes.view');
+if (Array.isArray(saved?.routes)) {
+  for (const r of saved.routes) if (order.includes(r)) selectedRoutes.add(r);
+  applyRoutes();
+  if (!saved.fit && [saved.zoom,saved.cx,saved.cy].every(Number.isFinite)) {
+    zoom = Math.max(1,Math.min(24,saved.zoom)); cx = saved.cx; cy = saved.cy; fitOnResize = false;
+    viewport(); saveView();
+  }
+}
 new ResizeObserver(() => (fitOnResize ? fitRoutes() : viewport())).observe(svg);
 viewport();
 window.addEventListener('offline', render);
@@ -1082,4 +1119,4 @@ window.addEventListener('online', () => {
     poll(++generation);
   }
 });
-setMode(navigator.onLine ? 'live' : 'replay');
+setMode('live');

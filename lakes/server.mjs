@@ -55,6 +55,12 @@ createServer(async (req, res) => {
         .end(await offlineWorker());
       return;
     }
+    if (path === '/api/rail-reports') {
+      const reports = await fetch('https://api.railinfo.uk/map/trains', {signal:AbortSignal.timeout(8000)});
+      if (!reports.ok) throw Error('Rail reports unavailable');
+      res.writeHead(200, {'Content-Type':'application/json'}).end(await reports.text());
+      return;
+    }
     if (path === '/api/vehicles') {
       const data = await snapshot();
       res
@@ -62,8 +68,10 @@ createServer(async (req, res) => {
         .end(JSON.stringify(data));
       return;
     }
-    const file = resolve(root, '.' + (path === '/' ? '/index.html' : decodeURIComponent(path)));
-    if (!file.startsWith(resolve(root) + sep) || !mime[extname(file)]) {
+    const shared = path.startsWith('/panel/');
+    const folder = shared ? fileURLToPath(new URL('../web/panel/', import.meta.url)) : root;
+    const file = resolve(folder, '.' + (shared ? path.slice(6) : path === '/' ? '/index.html' : decodeURIComponent(path)));
+    if (!file.startsWith(resolve(folder) + sep) || !mime[extname(file)]) {
       res.writeHead(404).end();
       return;
     }

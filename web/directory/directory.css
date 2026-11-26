@@ -89,3 +89,10 @@ footer p {
     color: #edf4e9;
   }
 }
+
+article nav {align-items:center;flex-wrap:wrap;gap:.4rem 1rem;}
+article nav a {display:inline-flex;align-items:center;min-height:44px;}
+article nav a:first-child {background:#245f4e;color:#fff;padding:.4rem .95rem;border-radius:6px;text-decoration:none;}
+@media (prefers-color-scheme:dark) {
+  article nav a:first-child {background:#a5d6bd;color:#173b30;}
+}

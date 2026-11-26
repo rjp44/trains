@@ -182,3 +182,19 @@ test('555 workings south of Kendal and Lancaster X4 workings stay off the map', 
       id,
     );
 });
+
+test('rail horns require a fresh change of reporting point and match a confirmed stop exactly', async () => {
+  const {railTransitions, confirmedRailStop} = await import('./public/model.mjs');
+  const now = Date.now();
+  const from = {id:'rail-42',route:'rail',direction:1,lastCode:'WDM',time:now-30000};
+  const to = {...from,lastCode:'STV',last:'Staveley',lastTime:'15:42',time:now};
+  const before = {ok:true, vehicles:[from]};
+  const feed = vehicles => ({ok:true,vehicles});
+  assert.deepEqual(railTransitions(before,feed([to]),now),[to]);
+  assert.deepEqual(railTransitions(before,feed([{...from,time:now}]),now),[]);
+  assert.deepEqual(railTransitions({ ...before,ok:false },feed([to]),now),[]);
+  assert.deepEqual(railTransitions(before,feed([to]),now+120000),[]);
+  const report = {id:'42',last:{crs:'STV',name:'Staveley',time:'15:42',stop:true}};
+  assert.equal(confirmedRailStop(to,[report]),true);
+  assert.equal(confirmedRailStop({...to,lastTime:'15:43'},[report]),false);
+});

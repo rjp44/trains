@@ -1,13 +1,10 @@
-import { cp, copyFile, readFile, writeFile } from 'node:fs/promises';
+import { cp, copyFile } from 'node:fs/promises';
 
 const dist = new URL('./dist/', import.meta.url);
 await cp(new URL('./public/', import.meta.url), dist, { recursive: true });
+await cp(new URL('./web/panel/', import.meta.url), new URL('panel/', dist), { recursive:true });
 for (const name of ['rail.mjs', 'live.mjs', 'abbey.mjs'])
   await copyFile(new URL(name, import.meta.url), new URL(name, dist));
-const index = new URL('index.html', dist);
-const html = await readFile(index, 'utf8');
-await writeFile(index, html.replace('<html ', '<html class="diagram-only" '));
-
 const { buildPublicSite } = await import('./tools/release/public.mjs');
 const { fileURLToPath } = await import('node:url');
 buildPublicSite(fileURLToPath(new URL('./releases/', import.meta.url)), fileURLToPath(dist));

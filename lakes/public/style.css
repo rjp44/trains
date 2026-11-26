@@ -785,3 +785,14 @@ body.map-only {
     grid-template-columns: repeat(2, auto);
   }
 }
+
+.map-panel {display:flex;flex-direction:column;}
+#lakes-toolbar {flex:none;}
+.lakes-surface {position:relative;flex:1;min-height:0;}
+.transport-caption #map-status {display:inline;color:inherit;border:0;background:none;}
+.settings-content #routes {display:flex;flex-wrap:wrap;background:none;border:0;padding:0;box-shadow:none;}
+.settings-content #routes .route {height:auto;border:1px solid var(--tp-line);border-bottom:3px solid var(--accent);background:var(--tp-control);color:var(--tp-ink);}
+.settings-content #routes .route[aria-pressed=true] {background:var(--tp-active);color:var(--tp-on);}
+.settings-content #view-toggle,.settings-content .icon {width:auto;border:0;}
+.settings-content #playback,.settings-content .stop-finder,.settings-content .reports,.settings-content .list {color:inherit;background:none;}
+.settings-content .stop-finder {margin:16px 0;}

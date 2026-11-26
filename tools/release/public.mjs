@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { writeAppShell } from './shell.mjs';
+import { versionName } from '../../packages/app-format/version.mjs';
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const board = 'crowpanel-p4-v1.2-rev1';
 function signed(bytes, key) {
@@ -91,6 +92,7 @@ export function buildPublicSite(src, dest) {
     applications.push({
       id,
       ...e,
+      minCoreName: versionName(e.minCore),
       storageBytes: Math.ceil(e.bytes / 4096) * 4096,
       app: '/apps/' + id + '/',
       download: '/artifacts/' + name,

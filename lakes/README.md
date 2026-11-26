@@ -2,7 +2,10 @@
 
 From the checkout root run `node lakes/server.mjs` and open [the portrait map](http://127.0.0.1:8186/). The prototype needs Node.js 22.4+ and Python 3. The Python standard library reads the DfT archive. All map assets and the recording are included.
 
-The map fills the viewport on launch with all ten routes visible. Tap a route chip to focus it, then add or remove routes by tapping their chips. **All** restores the overview. The crosshair fits the visible routes. The dashboard button opens the stop finder, Live/Replay switch and other controls. Vehicle icons grow to 2.4 times their overview size as you zoom in. Use + and − to zoom, drag to pan and tap a vehicle for its source and timestamp age. The removable detail card stays inside the map. The vehicle list gives a second way to inspect crowded stops. Light and dark themes are saved on the device.
+The map opens full-window. Choose **Settings → App** for live or recorded fixes, route filters, zoom, the stop finder and the dashboard. Select a route to focus it, add other routes or choose **All** for the overview. **Fit routes** frames the selection. Pinch around the point you want to inspect, use the mouse wheel to zoom, or drag to pan. Route filters and the map position are saved in the browser. The map follows screen rotation.
+
+Tap a vehicle for its anchored journey card. Expand a numbered chevron for intermediate stops and tap outside the card to dismiss it. The dashboard also lists vehicles. The top-right sun/moon switches theme. **Settings → Display → Sunrise / sunset** follows Windermere using cached UK sunrise and sunset times. **Downloads** manages offline maps and **Sound** controls the directional rail horn. While waiting for its first live feed, the map labels the bundled recording as replay.
+
 
 Choose **Replay** for snapshots captured on 25 November 2026. The snapshots advance every five seconds and show the original London time. Pause or use the slider to inspect a frame. Positions jump only when there is another observation. The first frame contains all eight bus routes, a Lakes Line train and three coastal trains.
 

@@ -32,7 +32,7 @@ self.addEventListener('activate', (event) =>
   event.waitUntil(
     (async () => {
       for (const old of await caches.keys())
-        if (old.startsWith(prefix) && key !== old) await caches.delete(old);
+        if (old.startsWith(prefix) && /^[a-f0-9]{64}$/.test(old.slice(prefix.length)) && key !== old) await caches.delete(old);
       await self.clients.claim();
     })(),
   ),
@@ -41,7 +41,12 @@ self.addEventListener('fetch', (event) => {
   const req = event.request,
     url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== base.origin) return;
-  const target = req.mode === 'navigate' && url.pathname === base.pathname ? local('index.html') : req.url;
+  const entryPage = url.pathname === base.pathname || url.pathname === base.pathname + 'index.html';
+  const target = req.mode === 'navigate' && entryPage ? local('index.html') : req.url;
   if (assets.has(target))
-    event.respondWith(caches.open(key).then(async (c) => (await c.match(target)) || fetch(req)));
+    event.respondWith(caches.match(target, {cacheName:key}).then(hit => hit || fetch(req)));
+});
+
+self.addEventListener('message', event => {
+  if (event.data === 'activate-update') event.waitUntil(self.skipWaiting());
 });

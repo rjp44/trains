@@ -21,7 +21,8 @@ try {
           size(a.bytes) +
           ' download · ' +
           size(a.storageBytes) +
-          ' on tablet';
+          ' on tablet' +
+          (a.minCoreName ? ' · Requires tablet core ' + a.minCoreName : '');
         const [open, download] = card.querySelectorAll('a');
         open.href = a.app;
         download.href = a.download;

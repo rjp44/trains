@@ -11,6 +11,7 @@
     <link rel="apple-touch-icon" sizes="192x192" href="/icons/rail-192.png" />
     <title>Hemel Hempstead · Traintimes</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="./panel/settings.css" />
   </head>
   <body>
     <header class="brandbar">
@@ -41,39 +42,21 @@
           <span class="mini" id="areas"></span>
         </div>
       </div>
-      <div class="zoom" role="group" aria-label="Diagram view and zoom">
-        <button id="sector">15-mile view</button><button id="junction">Watford Junction</button
-        ><button id="zoomout" aria-label="Zoom out">−</button><button id="home">Centre on Hemel</button
+      <div class="zoom" hidden role="group" aria-label="Diagram view and zoom">
+        <button id="sector">15-mile sector</button><button id="junction">Watford Junction</button
+        ><button id="zoomout" aria-label="Zoom out">−</button><button id="home">Hemel Hempstead</button
         ><button id="zoomin" aria-label="Zoom in">+</button>
       </div>
       <section class="panel" aria-label="Track diagram">
         <div class="diagram-tools">
-          <button
-            id="diagram-theme"
-            class="icon-control"
-            type="button"
-            aria-label="Switch to light diagram"
-            title="Switch to light diagram"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <g class="sun">
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
-              </g>
-              <path class="moon" d="M20.5 13.1A8.6 8.6 0 0 1 10.9 3.5a8.6 8.6 0 1 0 9.6 9.6Z" />
-            </svg>
-          </button>
           <a
             id="diagram-view"
-            class="icon-control"
+            class="layout-link"
             href="?display=diagram"
             aria-label="Open diagram-only view"
             title="Open diagram-only view"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path class="expand" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" />
-              <path class="collapse" d="M4 9h5V4m6 0v5h5M9 20v-5H4m16 0h-5v5" />
-            </svg>
+            Show dashboard
           </a>
         </div>
         <div id="drawing">

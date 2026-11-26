@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 
 export const publicDir = new URL('./public/', import.meta.url);
+export const panelDir = new URL('../web/panel/', import.meta.url);
 export async function offlineWorker() {
   const files = [];
   async function visit(prefix) {
@@ -12,10 +13,11 @@ export async function offlineWorker() {
     }
   }
   await visit('');
+  for (const file of await readdir(panelDir)) files.push('panel/' + file);
   files.sort();
   const template = await readFile(new URL('./worker-template.js', import.meta.url), 'utf8');
   const hash = createHash('sha256').update(template);
-  for (const file of files) hash.update(file).update(await readFile(new URL(file, publicDir)));
+  for (const file of files) hash.update(file).update(await readFile(file.startsWith('panel/') ? new URL(file.slice(6), panelDir) : new URL(file, publicDir)));
   return template
     .replace('__REVISION__', JSON.stringify(hash.digest('hex').slice(0, 16)))
     .replace('__ASSETS__', JSON.stringify(files.map((file) => '/' + file)));

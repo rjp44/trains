@@ -11,6 +11,7 @@ export function writeAppShell(dir, id, entry, signedEntry, publicKey) {
     if (name === 'data' || name.startsWith('_')) continue;
     fs.cpSync(path.join(src, name), path.join(appDir, name), { recursive: true });
   }
+  fs.cpSync(path.join(root, 'web/panel'), path.join(appDir, 'panel'), {recursive:true});
   const write = (file, data) => fs.writeFileSync(path.join(appDir, file), data);
   const read = (name) => fs.readFileSync(path.join(appDir, name), 'utf8');
   if (entry.adapter === 'hemel-corridor/1') {
