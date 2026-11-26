@@ -1,5 +1,6 @@
 #include "core.h"
 #include "directory.h"
+#include "version.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -88,7 +89,7 @@ void render() {
     lv_obj_set_state(directoryTab, LV_STATE_CHECKED, !installedOnly);
     lv_obj_clean(rows);
     if (d.updateCore)
-        button(rows, "Update firmware", "install core", !d.busy);
+        button(rows, ("Update firmware to " + versionLabel(d.updateCore)).c_str(), "install core", !d.busy);
     auto query = folded(lv_textarea_get_text(search));
     std::vector<const Listing *> matches;
     for (const auto &a : d.apps) {
@@ -116,11 +117,11 @@ void render() {
             label(card, a.description);
         std::string meta;
         if (a.installed)
-            meta = "Installed v" + std::to_string(a.installed) + " · " + sizeText(a.used) + " used";
+            meta = "Installed " + versionLabel(a.installed) + " · " + sizeText(a.used) + " used";
         if (a.version) {
             if (!meta.empty())
                 meta += "   ";
-            meta += "v" + std::to_string(a.version) + " download " + sizeText(a.size) + " · " +
+            meta += versionLabel(a.version) + " download " + sizeText(a.size) + " · " +
                     sizeText((a.size + 4095u) & ~4095u) + " storage";
         }
         label(card, meta);
@@ -205,6 +206,7 @@ void pollApps() {
     }
 }
 void aboutPage(lv_obj_t *parent) {
+    label(parent, installedVersions());
     label(parent, "Made for Jack with love from @rjp44");
     constexpr char link[] = "https://github.com/rjp44/trains";
     label(parent, link);

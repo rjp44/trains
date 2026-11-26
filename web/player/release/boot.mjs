@@ -4,10 +4,15 @@ async function start() {
   const release = await descriptor(await (await fetch('./release.json')).json(), id);
   const bytes = new Uint8Array(await (await fetch('/artifacts/' + release.sha256 + '.tda')).arrayBuffer());
   const app = await verifyApp(bytes, release, id);
+  const label = document.querySelector('[data-app-version]');
+  if (label)
+    label.textContent =
+      (release.versionName ? 'v' + release.versionName : 'Build ' + release.version) + ' · ';
   const urls = new Map();
   globalThis.transportApp = {
     id,
     version: release.version,
+    versionName: release.versionName,
     manifest: app.manifest,
     json: (path) => app.json(path.replace(/^\//, '').toLowerCase()),
     async asset(path, type) {

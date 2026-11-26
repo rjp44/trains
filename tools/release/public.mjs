@@ -82,6 +82,7 @@ export function buildPublicSite(src, dest) {
   const { catalogue, artifacts } = readRelease(src, key);
   fs.mkdirSync(dest, { recursive: true });
   fs.writeFileSync(path.join(dest, 'catalog.json'), catalogue);
+  copy(path.join(repo, 'LICENSE'), path.join(dest, 'LICENSE.txt'));
   const applications = [];
   for (const [id, e] of Object.entries(artifacts)) {
     const name = entryName(id, e);

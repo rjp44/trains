@@ -1,16 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, createPublicKey, sign } from 'node:crypto';
+import { versionCode, versionName } from '../../packages/app-format/version.mjs';
 import { writeAppShell } from './shell.mjs';
 import { directory, openArchive } from '../../packages/app-format/archive.mjs';
 const [privateDir, output, ...args] = process.argv.slice(2);
 if (!privateDir || !output || !args.length)
-  throw Error('Usage: publish.mjs PRIVATE OUTPUT APP.tda ... [CORE.bin VERSION]');
+  throw Error('Usage: publish.mjs PRIVATE OUTPUT APP.tda ... [CORE.bin [VERSION]]');
 const coreIndex = args.findIndex((f) => f.endsWith('.bin'));
-if (coreIndex >= 0 && (coreIndex !== args.length - 2 || !/^[1-9]\d*$/.test(args.at(-1))))
+if (coreIndex >= 0 && coreIndex < args.length - 2)
   throw Error('Expected CORE.bin VERSION after app packages');
-const ver = coreIndex < 0 ? null : args.at(-1);
-const files = coreIndex < 0 ? args : args.slice(0, -1);
+const ver =
+  coreIndex < 0
+    ? null
+    : (args[coreIndex + 1] ??
+      fs.readFileSync(new URL('../../firmware/core/VERSION', import.meta.url), 'utf8').trim());
+const files = coreIndex < 0 ? args : args.slice(0, coreIndex + 1);
 const out = path.resolve(output);
 fs.mkdirSync(path.join(out, 'editions'), { recursive: true });
 const lock = path.join(out, '.publishing');
@@ -45,7 +50,7 @@ for (const file of files) {
   if (Object.hasOwn(entries, id)) throw Error('Duplicate release entry ' + id);
   const sha256 = digest(b),
     ext = id === 'core' ? '.bin' : '.tda';
-  let version = Number(ver),
+  let version = firmware && !/^[1-9]\d*$/.test(ver) ? versionCode(ver) : Number(ver),
     minCore = 1;
   if (id === 'core') {
     if (
@@ -54,7 +59,7 @@ for (const file of files) {
       b[0] !== 0xe9 ||
       b.readUInt16LE(12) !== 18 ||
       b.readUInt32LE(32) !== 0xabcd5432 ||
-      b.subarray(48, 80).toString().split('\0')[0] !== ver ||
+      b.subarray(48, 80).toString().split('\0')[0] !== String(version) ||
       b.subarray(80, 112).toString().split('\0')[0] !== 'transport_display'
     )
       throw Error('Incompatible board image, project or core version');
@@ -82,6 +87,12 @@ for (const file of files) {
   )
     throw Error('Version already assigned: ' + id);
   entries[id] = { version, minCore, bytes: b.length, sha256 };
+  const displayVersion = versionName(version);
+  if (displayVersion) {
+    if (app && app.manifest.versionName !== displayVersion)
+      throw Error('App release version does not match its OTA code');
+    entries[id].versionName = displayVersion;
+  }
   if (app) {
     const { name, description, adapter } = app.manifest;
     if (
@@ -125,7 +136,6 @@ for (const [id, entry] of Object.entries(oldEntries)) {
   entries[id] = entry;
 }
 
-fs.copyFileSync(path.join(privateDir, 'ca.pem'), path.join(dir, 'local-ca.pem'));
 fs.writeFileSync(path.join(dir, 'catalog.json'), signCatalog(entries));
 fs.writeFileSync(
   path.join(dir, 'index.html'),

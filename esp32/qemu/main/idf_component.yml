@@ -1,2 +1,0 @@
-dependencies:
-  espressif/esp_lcd_qemu_rgb: "1.0.2"

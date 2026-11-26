@@ -1,10 +1,4 @@
 #include "cJSON.h"
-#ifdef TRANSPORT_DEV
-#include "terrain.h"
-#include <atomic>
-static std::atomic<unsigned> requests{0};
-unsigned lakes::httpsActivity() { return requests.load(); }
-#endif
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -42,9 +36,6 @@ bool readBody(std::string &body, const char *url = "https://lakes-transit.netlif
     auto client = esp_http_client_init(&cfg);
     if (!client)
         return false;
-#ifdef TRANSPORT_DEV
-    ++requests;
-#endif
     bool ok = false;
     if (esp_http_client_open(client, 0) == ESP_OK) {
         auto length = esp_http_client_fetch_headers(client);
@@ -62,9 +53,6 @@ bool readBody(std::string &body, const char *url = "https://lakes-transit.netlif
         esp_http_client_close(client);
     }
     esp_http_client_cleanup(client);
-#ifdef TRANSPORT_DEV
-    ++requests;
-#endif
     return ok;
 }
 // Older deployed Lakes responses omit lastStop. Only consult the upstream map

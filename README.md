@@ -1,63 +1,38 @@
-# Hemel Hempstead rail monitor
+# Transport Display
 
-This branch also contains the [Lake District bus and rail map](lakes/README.md). Start it with `node lakes/server.mjs` and open [the local map on port 8186](http://127.0.0.1:8186/).
+Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. Release **0.9.0** includes the tablet core and two independently installable apps. Made for Jack with love from @rjp44.
 
-Run `node server.mjs` in this directory with Node.js 22.4 or later. Open [the local display](http://127.0.0.1:8174/). The server serves files on the laptop’s loopback interface and forwards Abbey station reports and dated Hemel timetable lookups. Each visible live display opens a WebSocket to Signal Maps. There are no packages to install or credentials to configure.
+| App | What it shows |
+| --- | --- |
+| [Hemel rail monitor](https://transport.pickering.org/apps/hemel/) | Live trains, signals and booked calls around Hemel Hempstead and Watford Junction, with three recorded journeys through the diagram. |
+| [Lakes Transit](https://transport.pickering.org/apps/lakes/) | Lake District buses and trains on a relief map, with route filters, stop timetables and recorded journeys. |
 
-The [ESP32 port](esp32/README.md) runs the Hemel diagram with live bridge input, touch controls and offline recordings on the laptop and an emulated ESP32-C3.
+## Get the apps
 
-The [Transport Display development preview](tests/conformance/README.md) loads one recorded Hemel service from the same editable overlay on the browser and the CrowPanel.
+Open the public directory to search by name or description. Each browser app can be installed from its own page. After an online installation, its recorded data works offline. The site root still opens the full-window Hemel diagram. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
 
-## Netlify preview
+On a commissioned tablet, connect to Wi-Fi in **Settings**, then open **Apps → Directory**. Each entry shows its download size and flash space, and the header shows remaining capacity. Download the apps you want. **Installed** lets you open or delete them offline. A firmware update appears here when available. **About** shows the running versions, data credits and a QR link to this repository. [Hardware, commissioning and OTA](firmware/core/README.md)
 
-Import this repository into Netlify and select the `main` branch. The included `netlify.toml` runs `node build-preview.mjs` and publishes `dist`. The site root opens the full-window 15-mile sector with live trains and signal indications. Each browser connects directly to Signal Maps for R1, WJ and WS. The build includes a Netlify `_redirects` file that forwards Abbey service lookups and Hemel timetable lookups to their public sources. Use the toolbar to return to the dashboard, or bookmark `/?display=dashboard`. Open `/?view=watford` for the live junction view. Select **Recorded replay** on the dashboard for the bundled recordings. Returning to **Live feed**, bringing the app back to the foreground or recovering connectivity starts a fresh subscription. [Netlify build configuration](https://docs.netlify.com/build/configure-builds/file-based-configuration/)
+## Run locally
 
-### Launch fullscreen on a phone
+Use Node.js 22.4 or newer. From the repository root, install the dependencies and run the development server for the app you want.
 
-Open the HTTPS preview at its root and install it once. Launch **Traintimes** from the Home Screen to go straight to the live 15-mile diagram without the browser address bar.
+```sh
+npm ci --prefix esp32
+npm ci --prefix lakes
+node server.mjs
+# In another terminal, or separately
+node lakes/server.mjs
+```
 
-- **Android Chrome** — Open the ⋮ menu and choose **Install**. Depending on the Chrome version, it appears under **Install and create shortcut** or **Add to Home screen**. [Google Chrome instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en)
-- **iPhone Safari** — Tap **Share** (under **More** on some layouts), then **Add to Home Screen**. Enable **Open as Web App** if shown and tap **Add**. iOS can still show its system status bar or Home indicator. [Apple instructions](https://support.apple.com/guide/iphone/iphea86e5236/ios)
+Hemel listens on port 8174. Lakes listens on port 8186 and uses Python for its local bus-data reader. For a static build of the public app directory and signed PWAs, run `node build-preview.mjs`. Netlify publishes the resulting `dist/` and proxies the live HTTP endpoints. [Hemel guide](apps/hemel/README.md) · [Lakes guide](lakes/README.md) · [Tests and simulator](tests/conformance/README.md)
 
-For a single session in Android Chrome, the dashboard’s expand icon also requests fullscreen. An ordinary browser link opens with the browser’s own controls.
+## How a release works
 
-## Using the diagram
+The core owns the touchscreen, Wi-Fi, app storage and updater. Each app package contains a manifest, data, attribution and tables for one of the core’s renderers. A new app can reuse a renderer. Adding a renderer requires a core update. A browser app verifies the same signed package and uses its web renderer. The release key stays with the publisher. Netlify deploys the public catalogue and content-addressed files committed under `releases/`. [Package format](packages/app-format/README.md) · [Publishing guide](firmware/core/README.md#publishing-a-release)
 
-The map opens at **15-mile view**, showing the WCML, Watford DC and Abbey line. **Centre on Hemel** zooms in to Apsley, Hemel Hempstead and Berkhamsted. Click a station to zoom or drag the diagram to pan. Use **Watford Junction** to zoom straight to all ten passenger platforms. Each station has a shared column across its tracks. The line with the most berth steps sets the minimum space to the next station. Lines with fewer berths spread them across that space. Labels use the full station name where it fits and shorten later words when space is tight. On the Abbey line, each reported station has its own slot. The 15-mile limit still follows rail mileage.
+The core version lives in `firmware/core/VERSION`. Each app owns the version in `apps/<id>/app.json`. Change the component that ships. The Git tag `v0.9.0` identifies the source for this combined release.
 
-The expand icon opens a full-window diagram. Use the same icon to return to the dashboard, where the view presets and zoom controls sit above the panel. You can bookmark the [Hemel close-up](http://127.0.0.1:8174/?display=diagram&view=hemel) or the [Watford diagram](http://127.0.0.1:8174/?display=diagram&view=watford) for a dedicated display. The sun switches to light colours and the moon restores dark colours. Click or tap a train to open its details inside the track drawing.
+## Licence and credits
 
-- The DC diagram covers both directions between Watford Junction and the sector edge south of Kenton. The terminal fans out to platforms 1–4. The connection towards the main line via platform 6 is shown separately. The map includes the Harrow reversing siding. Platforms 6–9 serve the four WCML running lines. Platform 10 is the south-facing bay. The Abbey single line at platform 11 runs to St Albans Abbey, with the yard connection drawn to the Up Slow.
-- Click or tap a train on either diagram or in the list. Its popout shows the service, booked times, reported delay, operator, schedule UID and latest position when available. Leave it open to follow a matched train. Close it with **×**, Escape or a click outside. Train badges sit on the track baseline, with signal dots directly above their berths. Grey-green operational descriptions such as ITEM can also be inspected.
-- Hemel’s automatic cards share the colour of its station band and sit inside the track drawing. In the 15-mile view, the fast card sits above the Kings Langley–Cheddington station labels and the slow card sits just below the WCML in the gap towards the Abbey line. A train in a Hemel berth takes priority, including a passing train. If both directions occupy station berths, their card alternates every five seconds. When both berths on a pair are clear, its card shows the closest inbound train on that pair with a verified Hemel stop, looking across the full 15-mile sector. Distance is measured along the railway from the occupied berth. The card clears when there is no qualifying train or the live R1 feed goes stale.
-- The card shows the booked Hemel departure, or arrival for a terminating service. Until a local observation is available, **Est.** uses the train’s latest reported delay. **Passing** means the matched timetable has no Hemel stop. **Timetable unavailable** means the calling pattern could not be verified. Live lookups use the schedule UID, operating date and train ID. The bundled recordings include the verified calling patterns and use the delay at the replay cursor. [Open Rail running schedules](https://openrail.railcam.uk/rail/liverail/)
-- On the main and DC lines, train descriptions move when a signalling berth changes. On the Abbey line the diagram also shows the last station explicitly reported as arrived or departed by the public calling-point feed. The marker stays there until another confirmed call arrives. An unmatched description may remain in the Watford platform 11 berth. The popout distinguishes it from a station report.
-- Click a signal to inspect its indication. **On** is the most restrictive indication. **Off** means a less restrictive indication. Each TD area has its own freshness indicator. After loss of the relay, train labels turn grey and signal indications become unknown. Abbey report freshness is tracked separately.
-- **Recorded replay** works offline while the local server is running. The default **15-mile sector** recording runs from 23:47:32 to 23:50:49 London time on 24 November 2026. It starts with observations for all three signal areas and the Abbey line’s last reported station. Early in playback, the fast card shows 2N71 approaching its booked 23:41 Hemel call from 3.5 rail miles away. During playback, 4L26 advances along the Up Fast and 2D70 moves towards Watford on the DC line. Choose **Watford branches** to follow a shuttle through successive stops, or **Hemel pilot** for the original four-line recording. Pause, seek and change playback speed using the replay bar.
-
-## Reproducing the pilot
-
-The Hemel pilot was recorded on 24 November 2026 from 21:51:31 to 21:59:28 London time. Select **Recorded replay**, choose **Hemel pilot**, click **2K65**, then choose 4× or 12× to follow the booked 21:24 London Euston to Milton Keynes Central service. It reached berth 5145 at Hemel on the Down Slow at 21:52:56. The Manchester Piccadilly to London Euston service **1A80** traversed seven pilot berths on the Up Fast. Signals WT3144 and WT5139 both changed indication during the sample. The independent running records show 2K65 calling at Hemel platform 3 and 1A80 passing Bourne End Junction on the fast line. [2K65 running record](https://openrail.railcam.uk/rail/livetrain/W70438/24/11/26) · [1A80 running record](https://openrail.railcam.uk/rail/livetrain/W34161/24/11/26)
-
-Run the regression checks with `node --test`. To record all three live areas, stop the server with Ctrl+C and run `node server.mjs --record session.ndjson`. Use a new filename for each recording. Stop it with Ctrl+C, then run `node server.mjs --replay session.ndjson` and select **Recorded replay**. Use `--port 8175` to run another instance on a different local port.
-
-## Data and direct subscriptions
-
-The public relay supplies train descriptions, signal bits and a timetable/running-data match. This prototype consumes its public WebSocket at `wss://ws.signalmaps.co.uk/new`, filters to R1, WJ and WS, and matches train details in the browser. The optional Node recorder uses the same feed code. Network Rail TD alone supplies signalling observations. An app switching to direct TD would also need a running-information source to retain the train detail panel. [Signal Maps](https://signalmaps.co.uk/about/) · [Network Rail open feeds](https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/)
-
-For direct access, a **subscription** grants permission to use a dataset. **STOMP** is a messaging protocol an application can use to receive it. Both routes below offer free access to Network Rail train-describer data.
-
-1. Register with the Rail Data Marketplace, open **NWR Train Describer (TD)** and select **Subscribe**. The product is listed as free, in beta, with a one-year term. Once active, use the Kafka connection details provided for your subscription. [TD product and terms](https://raildata.org.uk/dashboard/dataProduct/P-8d5f90a7-2fce-4179-b233-0dd272cee896/overview)
-2. For direct STOMP delivery, create a Network Rail Open Data Feeds account, sign in, then enable **Train Describer** in **My Feeds**. Use those account credentials with a STOMP client. Network Rail publishes a 1,000-user limit for this access route. [Create a feeds account](https://publicdatafeeds.networkrail.co.uk/ntrod/create-account) · [Network Rail access information](https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/)
-
-## Map references and attribution
-
-The berth and signal mappings in `public/data/corridor.json` are adapted from the Tring, Watford and Watford DC diagrams in EASMData. This adaptation selects the main and DC running lines, the DC terminal berths and the Abbey platform 11 berth, associates berth identifiers with published signal addresses and orders them along each running line. The map data is distributed under GPLv3 with the licence in `public/data/EASM-LICENSE.txt`. Station mileages are measured relative to Hemel at 24 miles 39 chains from Euston. Network Rail SMART records provide local reporting and platform anchors. [EASMData source revision](https://github.com/Shwam3/EASMData/tree/76ad5669ce8e351716a1b5b79e8c12fad60dd89b) · [LEC1 route mileages](https://railwaycodes.org.uk/elrs/_mileages/l/lec1.shtm) · [SMART berth finder](https://vaildata.uk/bplan/berth-find)
-
-The 15-mile budget spends 7 miles 5 chains reaching Watford from Hemel, leaving 7 miles 75 chains on each branch from the interchange. On the DC line, Kenton is inside and South Kenton lies beyond the cut. The Abbey route is 6 miles 30 chains from Watford Junction to St Albans Abbey. Distances use each branch's own datum. The schematic spaces berths evenly within each station-to-station stretch on a given line. Watford’s paired platform berths straddle the shared station centre. Elsewhere the nearest mapped berth on each running line anchors the schematic station column when the data has no explicit platform assignment. The platform assignments and connections follow the published Watford diagram. [DC line mileages](https://railwaycodes.org.uk/elrs/_mileages/c/cwj.shtm) · [Abbey line mileages](https://railwaycodes.org.uk/elrs/_mileages/w/wsa.shtm) · [Watford Yard connection, paragraphs 10–12](https://assets.publishing.service.gov.uk/media/5a805c86e5274a2e87db960c/060328_R022006_Watford_Junction_Yard.pdf)
-
-Abbey calling-point reports come from railinfo's public service lookup. The live client checks every 30 seconds for active Watford Junction–St Albans Abbey services in the running feed and checks the origin, destination and booked departure before accepting a report. The app waits for an explicit arrival or departure and displays the reported time when supplied. [Public API](https://railinfo.uk/developers)
-
-Contains public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
-
-The shared Transport Display firmware runs Hemel and Lakes from downloadable packages. Browse the public app directory, download firmware, or install apps from Settings on the tablet. [App directory](https://transport.pickering.org/apps/) · [CrowPanel release guide](firmware/core/README.md)
+The project's original software is licensed under the GNU General Public License, version 3 only (SPDX `GPL-3.0-only`). Third-party software, rail mappings, map tiles, timetable data, terrain and fonts retain their respective licences and attribution. [GPLv3 licence](LICENSE) · [Hemel credits](apps/hemel/credits.md) · [Lakes credits](apps/lakes/credits.md)

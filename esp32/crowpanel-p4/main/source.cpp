@@ -1,37 +1,24 @@
 #include "source.h"
 #include "esp_log.h"
 #include "panel.h"
-#include "wifi.h"
 
 namespace {
-enum class Source { Replay, Wifi, Usb };
-Source source = Source::Replay;
-uint32_t lastUsb;
-#ifdef TRANSPORT_CORE
+bool receivedSnapshot;
 bool replayOnly;
-#endif
 }
 
-void usb_input(const char *bytes, size_t length, uint32_t now) {
-    if (source == Source::Wifi) hemel::linkEnded();
-    source = Source::Usb;
-    lastUsb = now;
-    hemel::feedInput(bytes, length, now, wifi_save);
+void setManualReplay(bool enabled) {
+    replayOnly = enabled;
+    receivedSnapshot = false;
 }
 
-#ifdef TRANSPORT_CORE
-void setManualReplay(bool enabled){replayOnly=enabled;source=Source::Replay;}
-#endif
-bool wifi_needs_snapshot() { return source != Source::Wifi; }
+bool wifi_needs_snapshot() { return !receivedSnapshot; }
 
 void wifi_packet(const char *bytes, size_t length, uint32_t now) {
-#ifdef TRANSPORT_CORE
-    if(replayOnly)return;
-#endif
-    if (source == Source::Usb && now - lastUsb < 6500) return;
-    bool first = source != Source::Wifi;
+    if (replayOnly) return;
+    bool first = !receivedSnapshot;
     if (first) hemel::linkEnded();
-    source = Source::Wifi;
+    receivedSnapshot = true;
     hemel::feedInput(bytes, length, now);
     if (first && hemel::isLive()) ESP_LOGI("feed", "Wi-Fi projection received");
 }

@@ -10,10 +10,11 @@ struct Listing {
 struct Directory {
     std::vector<Listing> apps;
     std::string message;
-    unsigned free{}, capacity{};
-    bool busy{}, updateCore{};
+    unsigned free{}, capacity{}, updateCore{};
+    bool busy{};
 };
 unsigned directoryRevision();
 Directory directory();
 std::string sourceCredits();
+std::string installedVersions();
 } // namespace transport

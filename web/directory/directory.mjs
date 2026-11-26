@@ -16,11 +16,16 @@ try {
         card.querySelector('h2').textContent = a.name;
         card.querySelector('p').textContent = a.description;
         card.querySelector('small').textContent =
-          'v' + a.version + ' · ' + size(a.bytes) + ' download · ' + size(a.storageBytes) + ' on tablet';
+          (a.versionName ? 'v' + a.versionName : 'build ' + a.version) +
+          ' · ' +
+          size(a.bytes) +
+          ' download · ' +
+          size(a.storageBytes) +
+          ' on tablet';
         const [open, download] = card.querySelectorAll('a');
         open.href = a.app;
         download.href = a.download;
-        download.download = a.id + '-v' + a.version + '.tda';
+        download.download = a.id + '-v' + (a.versionName ?? a.version) + '.tda';
         return card;
       }),
     );
@@ -30,7 +35,11 @@ try {
   if (firmware) {
     $('firmware').hidden = false;
     $('image').href = firmware.download;
-    $('image').textContent = 'Download core v' + firmware.version + ' · ' + size(firmware.bytes);
+    $('image').textContent =
+      'Download core ' +
+      (firmware.versionName ? 'v' + firmware.versionName : 'build ' + firmware.version) +
+      ' · ' +
+      size(firmware.bytes);
   }
 } catch {
   $('count').textContent = 'The application directory could not be loaded. Reload to try again.';

@@ -1,4 +1,4 @@
-# Lake District transport map
+# Lakes Transit
 
 From the checkout root run `node lakes/server.mjs` and open [the portrait map](http://127.0.0.1:8186/). The prototype needs Node.js 22.4+ and Python 3. The Python standard library reads the DfT archive. All map assets and the recording are included.
 
@@ -56,16 +56,8 @@ For a map-data refresh, use a Python environment with `mapbox-vector-tile`, `sha
 
 Run `node --test` from the checkout root. The [CrowPanel ESP32-P4 firmware](esp32/README.md) uses the same map, timetable and public live feed.
 
-## Mobile app and Netlify
+## Browser installation and live hosting
 
-Install **Lakes Transit** from the site on the phone. In Android Chrome use **Install app** when offered, or the browser's Add to home screen menu. In iPhone Safari use **Share → Add to Home Screen** and enable **Open as Web App** if offered. Launching from the home screen opens the map in its own window.
+Open the Lakes app from the public directory. After its first online installation, the service worker caches a verified package, map, timetable and recordings for offline use. Live vehicle positions need a network connection. [Open Lakes Transit](https://transport.pickering.org/apps/lakes/)
 
-After an online visit finishes caching the app, the map, winter timetable and recorded journeys work offline. An offline launch opens Replay. Live positions require a connection. Each build versions the offline files by content so a new edition takes effect after the previous app windows close.
-
-The public site is a direct deploy from this checkout under the Aplisay team. Deploy again from `lakes/` with the authorized Netlify CLI using the commands below. The site ID selects the Lakes project. Its function uses the same feed selection and freshness rules as the laptop server and reads the bus archive in Node. [Open Lakes Transit](https://lakes-transit.netlify.app/)
-
-```sh
-npm ci
-node build-pwa.mjs
-netlify deploy --site 7276cd59-f7ca-4dfc-8c2a-c1d26679e844 --prod --no-build --dir dist --functions functions
-```
+The standalone Lakes Netlify project hosts the live vehicle function at `/api/vehicles`. The main Transport Display site proxies that endpoint, and the tablet fetches it directly from the Lakes host. Its separate build runs in this directory with `npm ci` and `node build-pwa.mjs`, using `netlify.toml` and the functions under `functions/`. The combined app directory and signed downloads build from the repository root. [Public directory](https://transport.pickering.org/apps/) · [Tablet assets](esp32/README.md)

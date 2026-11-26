@@ -1,4 +1,5 @@
 #include "core.h"
+#include "version.h"
 #include "package.h"
 #include "display.h"
 #include "map.h"
@@ -196,7 +197,7 @@ extern "C" void app_main() {
     panel::startBacklight();
     panel::hornInit();
     transport::validated();
-    printf("TRANSPORT_READY %s v%d\n", transport::activeApp(), TRANSPORT_VERSION);
+    printf("TRANSPORT_READY %s %s\n", transport::activeApp(), transport::versionLabel(TRANSPORT_VERSION).c_str());
     wifi_start([] {
         if (isLakes)
             lakes_feed_start();

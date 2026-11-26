@@ -5,6 +5,7 @@
 #include "package.h"
 #include "library.h"
 #include "directory.h"
+#include "version.h"
 #include "esp_crt_bundle.h"
 #include <map>
 #include <set>
@@ -534,10 +535,10 @@ const char *activeAdapter() { return mounted.adapter.c_str(); }
 std::string status() {
     std::lock_guard<std::mutex> l(guard);
     std::string s =
-        "Running " + std::string(activeApp()) + " | Core v" + std::to_string(TRANSPORT_VERSION) + "\n";
+        "Running " + std::string(activeApp()) + " | Core " + versionLabel(TRANSPORT_VERSION) + "\n";
     for (auto i : state.items) {
         const auto &a = stored.at(i.file.start);
-        s += a.id + " v" + std::to_string(a.version) + "\n";
+        s += a.id + " " + versionLabel(a.version) + "\n";
     }
     return s + "Free " + std::to_string(state.freeBytes()) + " bytes; directory " +
            std::to_string(catalog.size() - (std::any_of(catalog.begin(), catalog.end(),
@@ -599,7 +600,7 @@ Directory directory() {
     std::map<std::string, Listing> all;
     for (auto r : catalog) {
         if (r.id == "core") {
-            d.updateCore = r.version > TRANSPORT_VERSION;
+            if (r.version > TRANSPORT_VERSION) d.updateCore = r.version;
             continue;
         }
         r.fits = state.allocate(r.size).pages;
@@ -624,6 +625,11 @@ Directory directory() {
         d.apps.push_back(std::move(e.second));
     std::sort(d.apps.begin(), d.apps.end(), [](const auto &a, const auto &b) { return a.name < b.name; });
     return d;
+}
+std::string installedVersions() {
+    auto text = "Core " + versionLabel(TRANSPORT_VERSION);
+    if (mounted.version) text += " · " + mounted.name + " " + versionLabel(mounted.version);
+    return text;
 }
 std::string sourceCredits() { return mounted.credits; }
 } // namespace transport

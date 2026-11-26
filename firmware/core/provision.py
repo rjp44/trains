@@ -1,4 +1,4 @@
-"""Save credentials in the Hemel firmware's NVS namespace over local USB."""
+"""Save credentials in the Transport Display's NVS namespace over local USB."""
 import argparse
 from getpass import getpass
 import time

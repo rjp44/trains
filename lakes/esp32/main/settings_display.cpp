@@ -13,16 +13,12 @@ lv_display_t *ui;
 lv_indev_t *input;
 lv_indev_data_t pointer{};
 bool rotated;
-#ifdef TRANSPORT_CORE
 bool renderApp;
-#endif
 uint16_t *canvas, *presented;
 void flush(lv_display_t *display, const lv_area_t *, uint8_t *data) {
     // FULL mode supplies the entire logical frame on each flush.
     if (panel::settingsOpen()
-#ifdef TRANSPORT_CORE
         || renderApp
-#endif
     ) {
         presented = crowpanel_back_buffer();
         const auto *src = reinterpret_cast<uint16_t *>(data);
@@ -72,12 +68,10 @@ static bool configure(bool portrait) {
     pointer.state = LV_INDEV_STATE_RELEASED;
     return true;
 }
-#ifdef TRANSPORT_CORE
 lv_display_t *coreDisplay(bool landscapeApp) {
     renderApp=landscapeApp;
     return configure(false)?ui:nullptr;
 }
-#endif
 void openPanelSettings(bool portrait) {
     if (!configure(portrait)) return;
     panel::openSettings(requestRedraw, "Stopping trains only");

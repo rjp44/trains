@@ -1,9 +1,13 @@
 #include "../../firmware/core/main/library.h"
+#include "../../firmware/core/main/version.h"
 #include <cstdlib>
 #include <iostream>
 using namespace transport;
 void check(bool ok){if(!ok){std::cerr<<"library invariant failed\n";std::abort();}}
 int main(){
+    check(versionLabel(5) == "build 5");
+    check(versionLabel(9000) == "v0.9.0");
+    check(versionLabel(1012003) == "v1.12.3");
     Library s;
     const unsigned capacity=s.freeBytes();
     for(unsigned i=0;i<210;i++){

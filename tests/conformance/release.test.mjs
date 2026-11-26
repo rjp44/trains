@@ -7,7 +7,24 @@ import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { archive } from '../../packages/compiler/app.mjs';
+import { versionCode, versionName } from '../../packages/app-format/version.mjs';
 import { directory, openArchive } from '../../packages/app-format/archive.mjs';
+
+test('public release versions preserve OTA ordering and distinguish earlier builds', () => {
+  assert.equal(versionName(5), null);
+  for (const [name, code] of [
+    ['0.9.0', 9000],
+    ['0.9.12', 9012],
+    ['0.10.0', 10000],
+    ['1.0.0', 1000000],
+    ['2147.483.646', 2147483646],
+  ]) {
+    assert.equal(versionCode(name), code);
+    assert.equal(versionName(code), name);
+  }
+  for (const invalid of ['0.8.999', '0.9', '0.09.0', '0.9.0-rc1', '0.9.1000', '2147.483.647'])
+    assert.throws(() => versionCode(invalid));
+});
 
 function app(id, version, note = 'fixture') {
   const adapter = id === 'hemel' ? 'hemel-corridor/1' : 'lakes-map/1';
@@ -48,7 +65,6 @@ test('a release preserves the other app, rejects a mismatched image and verifies
   t.after(() => rmSync(d, { recursive: true, force: true }));
   const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   writeFileSync(join(d, 'signing.key'), privateKey.export({ type: 'pkcs8', format: 'pem' }));
-  writeFileSync(join(d, 'ca.pem'), 'test CA');
   const out = join(d, 'release'),
     h = join(d, 'h.tda'),
     l = join(d, 'l.tda'),
@@ -58,11 +74,24 @@ test('a release preserves the other app, rejects a mismatched image and verifies
   const publish = (...extra) =>
     spawnSync(process.execPath, ['tools/release/publish.mjs', d, out, h, l, ...extra], { encoding: 'utf8' });
   assert.equal(publish().status, 0);
+  const releaseName = readFileSync(new URL('../../firmware/core/VERSION', import.meta.url), 'utf8').trim();
+  const code = versionCode(releaseName);
+  const image = Buffer.alloc(128);
+  image[0] = 0xe9;
+  image.writeUInt16LE(18, 12);
+  image.writeUInt32LE(0xabcd5432, 32);
+  image.write(String(code), 48);
+  image.write('transport_display', 80);
+  writeFileSync(core, image);
+  assert.equal(publish(core).status, 0);
   const current = join(out, 'current'),
     read = (file) => readFileSync(join(current, file), 'utf8');
   const first = readlinkSync(current),
     lake = read('apps/lakes/sw.js');
   const envelope = JSON.parse(read('catalog.json'));
+  const coreEntry = JSON.parse(Buffer.from(envelope.payload, 'base64')).artifacts.core;
+  assert.equal(coreEntry.version, code);
+  assert.equal(coreEntry.versionName, releaseName);
   assert.ok(
     verify(
       'sha256',

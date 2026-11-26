@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { deflateSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { directory, magic, entrySize, maxDecoded } from '../app-format/archive.mjs';
+import { versionCode } from '../app-format/version.mjs';
 export const root = fileURLToPath(new URL('../../', import.meta.url));
 export const sha = (b) => createHash('sha256').update(b).digest();
 export function archive(parts) {
@@ -38,17 +39,18 @@ export function buildApp(id) {
   const manifest = JSON.parse(fs.readFileSync(join(root, 'apps', id, 'app.json')));
   if (
     manifest.id !== id ||
-    !Number.isInteger(manifest.version) ||
-    manifest.version < 1 ||
     !['hemel-corridor/1', 'lakes-map/1'].includes(manifest.adapter)
   )
     throw Error('Invalid app definition');
+  manifest.versionName = manifest.version;
+  manifest.version = versionCode(manifest.versionName);
   const parts = new Map([['manifest.json', Buffer.from(JSON.stringify(manifest))]]);
   const inputs = join(root, manifest.adapter === 'hemel-corridor/1' ? 'public/data' : 'lakes/public/data');
   for (const name of manifest.data) {
     if (!/^[a-zA-Z0-9-]+\.(json|txt|webp)$/.test(name)) throw Error('Invalid data asset');
     parts.set('data/' + name.toLowerCase(), fs.readFileSync(join(inputs, name)));
   }
+  parts.set('license.txt', fs.readFileSync(join(root, 'LICENSE')));
   parts.set('credits.md', fs.readFileSync(join(root, 'apps', id, 'credits.md')));
   const temp = fs.mkdtempSync(join(tmpdir(), 'transport-tables-')),
     table = join(temp, 'tables.json');

@@ -1,13 +1,4 @@
 #include "map.h"
-#ifdef TRANSPORT_DEV
-#include "dev.h"
-#include "terrain.h"
-#include "display.h"
-#include "esp_heap_caps.h"
-#include "esp_timer.h"
-#include "esp_rom_crc.h"
-#include "miniz.h"
-#endif
 #include "settings_display.h"
 #include "preferences.h"
 #include "rail_events.h"
@@ -22,11 +13,9 @@
 #include <tuple>
 #include <utility>
 
-#ifdef TRANSPORT_CORE
 #include "rows.h"
 #include "view-settings.h"
 #include "esp_heap_caps.h"
-#endif
 namespace lakes {
 namespace {
 struct XY {
@@ -70,14 +59,7 @@ struct Trip {
     int route, service, start, pattern;
     const char *dest;
 };
-#ifdef TRANSPORT_CORE
 #include "lakes-runtime.inc"
-#else
-#include "art.inc"
-#include "network.inc"
-#include "replay.inc"
-extern "C" const uint8_t terrain[] asm("_binary_terrain_bin_start");
-#endif
 
 uint16_t *pixels;
 int W = 600, H = 1024;
@@ -212,9 +194,6 @@ void fit() {
                           scale,
                       1.f, 20.f);
 }
-#ifdef TRANSPORT_DEV
-#include "terrain.inc"
-#endif
 void baseMap() {
     const auto *pal = dark ? nightPalette : dayPalette;
     static int columns[panelWidth];
@@ -225,9 +204,6 @@ void baseMap() {
         rows[y] =
             rasterW * std::clamp(int((cy + (y - (top + bottom) * .5f) / scale - rasterY) * rasterScale), 0,
                                  rasterH - 1);
-#ifdef TRANSPORT_DEV
-    if (scratch) { tileError = !drawTiles(columns,rows,pal); return; }
-#endif
     // Read source rows sequentially, transpose in internal SRAM, then write long
     // contiguous bursts to the inactive PSRAM framebuffer (also in portrait).
     constexpr int block = 16;
@@ -651,27 +627,21 @@ void project(double lon, double lat, double &x, double &y) {
     y = (north - lat) * units;
 }
 void replayInput(const char *json) { decode(json, recorded); }
-#ifdef TRANSPORT_CORE
 bool mountPackage(){
     if(!loadLakes()) return false;
     for(auto json:recordings){Snapshot test;if(!decode(json,test))return false;}
     return true;
 }
-#endif
-#ifdef TRANSPORT_CORE
 struct MapSettings {float zoom,x,y;uint32_t mask,portrait,dark;};
 void saveView(){ transport::saveView("lakes_view",MapSettings{zoom,cx,cy,mask,portrait,dark}); }
 bool portraitView(){return portrait;}
-#endif
 void init() {
     cx=mapW*.5f; cy=mapH*.5f;
-#ifdef TRANSPORT_CORE
     zoom=transport::defaultZoom;
     MapSettings s{};
     if(transport::loadView("lakes_view",s) && s.zoom>=1 && s.zoom<=24 && std::isfinite(s.x) && std::isfinite(s.y)){
         zoom=s.zoom;cx=s.x;cy=s.y;mask=s.mask&((1u<<routes.size())-1);portrait=s.portrait!=0;dark=s.dark!=0;
     }
-#endif
     setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0/2", 1);
     tzset();
     loadFrame();
@@ -743,9 +713,7 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             cx = std::clamp(cx - dx / scale, 0.f, float(mapW));
             cy = std::clamp(cy - dy / scale, 0.f, float(mapH));
             dirty = true;
-#ifdef TRANSPORT_CORE
             saveView();
-#endif
         }
         return;
     }
@@ -822,14 +790,9 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             }
             break;
         }
-#ifdef TRANSPORT_CORE
         if(a==All||a==Filter||a==Minus||a==Plus||a==Fit||a==Rotate||a==Theme)saveView();
-#endif
         dirty = true;
         return;
     }
 }
-#ifdef TRANSPORT_DEV
-#include "benchmark.inc"
-#endif
 } // namespace lakes

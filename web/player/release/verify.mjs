@@ -62,6 +62,7 @@ export async function verifyApp(bytes, entry, id) {
   if (
     app.manifest.id !== id ||
     app.manifest.version !== entry.version ||
+    app.manifest.versionName !== entry.versionName ||
     !['hemel-corridor/1', 'lakes-map/1'].includes(app.manifest.adapter) ||
     (entry.adapter && entry.adapter !== app.manifest.adapter)
   )
