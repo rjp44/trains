@@ -8,4 +8,4 @@ The app compiler runs `pack.mjs` for the map, timetable and replay tables, `pack
 node packages/compiler/app.mjs lakes /tmp/lakes.tda
 ```
 
-Set `ART_PYTHON` to the Python executable with Pillow if needed. The core loads these assets from the installed package. The native rail-event tests exercise the report transitions that drive the horn. [Lakes data and asset sources](../README.md) · [Test commands](../../tests/conformance/README.md)
+Set `ART_PYTHON` to the Python executable with Pillow if needed. The core loads these assets from the installed package. The browser and tablet share the 64 × 64 RGBA night icons in `lakes/public/icons/night/`. The packer appends their RGB565 colours and opacity to the day atlas. To regenerate the PNGs after changing the vehicle art, run `python3 lakes/tools/build-night-icons.py` with NumPy, Pillow and librsvg installed. The native rail-event tests exercise the report transitions that drive the horn. [Lakes data and asset sources](../README.md) · [Test commands](../../tests/conformance/README.md)

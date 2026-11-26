@@ -3,6 +3,10 @@ float rasterScale;
 double west, north, units, aspect;
 uint8_t *terrain, *advances, *fontMask;
 uint16_t *dayPalette, *nightPalette, *sprites;
+const uint16_t *nightSprites;
+const uint8_t *nightOpacity;
+constexpr unsigned nightSide = 64, nightFrames = 13;
+constexpr size_t nightPixels = nightFrames * nightSide * nightSide;
 unsigned spriteCount;
 std::vector<Route> routes;
 std::vector<XY> vertices;
@@ -81,8 +85,11 @@ bool loadLakes() {
         return false;
     const size_t artHeader = 24 + 4 * colors + 95 * (1 + 19 * 23);
     const size_t spriteBytes = 48 * 48 * 2;
-    if (atlas.size < artHeader || (atlas.size - artHeader) % spriteBytes) return false;
-    spriteCount = (atlas.size - artHeader) / spriteBytes;
+    const size_t dayEnd = artHeader + nightFrames * spriteBytes;
+    const bool hasNight = atlas.size == dayEnd + nightPixels * 3;
+    const size_t daySize = hasNight ? dayEnd : atlas.size;
+    if (daySize < artHeader || (daySize - artHeader) % spriteBytes) return false;
+    spriteCount = (daySize - artHeader) / spriteBytes;
     if (spriteCount == 10 || spriteCount == 13) {
         auto raw = unpack("native/bus-paths.bin");
         if (raw.size < 4) return false;
@@ -117,6 +124,8 @@ bool loadLakes() {
     advances = (uint8_t *)(nightPalette + colors);
     fontMask = advances + 95;
     sprites = (uint16_t *)(fontMask + 95 * 19 * 23);
+    nightSprites = hasNight ? reinterpret_cast<const uint16_t *>(p + dayEnd) : nullptr;
+    nightOpacity = hasNight ? p + dayEnd + 2 * nightPixels : nullptr;
     auto tiles = unpack("native/terrain.tiles");
     const unsigned nx = (rasterW + 127) / 128, ny = (rasterH + 127) / 128, index = nx * ny * 8;
     if (tiles.size < index)

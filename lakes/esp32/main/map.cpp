@@ -352,6 +352,30 @@ double railAngle(const Vehicle &v) {
         }
     return fmod(angle + 360, 360);
 }
+void drawVehicleSprite(int x, int y, int asset, float size, double angle, int flip, bool stale) {
+    const bool useNight = dark && nightSprites;
+    const int side = useNight ? nightSide : 48;
+    const auto *colors = (useNight ? nightSprites : sprites) + side * side * asset;
+    const auto *opacity = useNight ? nightOpacity + side * side * asset : nullptr;
+    const float c = cos(angle) / size, s = sin(angle) / size;
+    const int radius = std::ceil(side * .5f * size);
+    for (int j = std::max(-radius, -y); j <= std::min(radius, H - 1 - y); ++j) {
+        for (int h = std::max(-radius, -x); h <= std::min(radius, W - 1 - x); ++h) {
+            const int u = int(side / 2 + h * c + j * s), v = int(side / 2 + (-h * s + j * c) * flip);
+            if (unsigned(u) >= unsigned(side) || unsigned(v) >= unsigned(side)) continue;
+            const int index = v * side + u;
+            const uint16_t col = colors[index];
+            if (opacity) {
+                const int a = stale ? opacity[index] * 150 / 255 : opacity[index];
+                if (!a) continue;
+                auto &bg = pixels[offset(x + h, y + j)];
+                bg = a == 255 ? col : blend(bg, col, a);
+            } else if (col) {
+                pixels[offset(x + h, y + j)] = stale ? blend(paper, col, 150) : col;
+            }
+        }
+    }
+}
 void vehicles(uint32_t now) {
     const auto &data = active();
     count = 0;
@@ -410,19 +434,11 @@ void vehicles(uint32_t now) {
         auto view = asset == 3 ? bus::View::Side : bus::busView(direction, m.path >= 0 ? spriteCount : 7);
         asset += static_cast<int>(view);
         double angle = view == bus::View::Front ? 0 : (direction - 90) * M_PI / 180;
-        float c = cos(angle) / size, s = sin(angle) / size, flip = view != bus::View::Roof && direction > 180 ? -1 : 1;
+        int flip = view != bus::View::Roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);
         int radius = int(24 * size);
         if (v.id == selection) anchor = {x - radius, y - radius, 2 * radius, 2 * radius};
-        const auto *sprite = sprites + 48 * 48 * asset;
-        for (int j = -radius; j <= radius; j++)
-            for (int h = -radius; h <= radius; h++) {
-                int u = int(24 + h * c + j * s), w = int(24 + (-h * s + j * c) * flip);
-                if (unsigned(u) < 48 && unsigned(w) < 48 && sprite[w * 48 + u]) {
-                    uint16_t col = sprite[w * 48 + u];
-                    pixel(x + h, y + j, stale ? blend(paper, col, 150) : col);
-                }
-            }
+        drawVehicleSprite(x, y, asset, size, angle, flip, stale);
         std::string badge = routes[k].name;
         int width = textWidth(badge) + 7;
         int left = sx(m.box.x), up = sy(m.box.y);

@@ -35,6 +35,15 @@
   --active: #a9d5ac;
   --pressed: #183527;
 }
+.vehicle-night {
+  display: none;
+}
+:root[data-theme='dark'] .vehicle-night {
+  display: inline;
+}
+:root[data-theme='dark'] .vehicle-day {
+  opacity: 0;
+}
 * {
   box-sizing: border-box;
 }

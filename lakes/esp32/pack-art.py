@@ -78,3 +78,14 @@ with (out/'atlas.bin').open('wb') as atlas:
     atlas.write(bytes(glyphs))
     atlas.write(bytes(coverage))
     atlas.write(struct.pack('<'+'H'*len(sprites), *sprites))
+    # Night frames use the same IDs and centre. Preserve alpha so headlights
+    # can be blended over individual road and terrain pixels at render time.
+    opacity = bytearray()
+    for icon in ids:
+        with Image.open(public/'icons'/'night'/(icon+'.png')) as night:
+            if night.mode != 'RGBA' or night.size != (64, 64):
+                raise ValueError(f'Expected a 64×64 RGBA night sprite for {icon}')
+            night_colors = [rgb565(r,g,b) for r,g,b,a in night.getdata()]
+            atlas.write(struct.pack('<4096H', *night_colors))
+            opacity.extend(night.getchannel('A').tobytes())
+    atlas.write(opacity)

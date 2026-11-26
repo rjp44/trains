@@ -901,27 +901,16 @@ function drawMarkers() {
     const known = Number.isFinite(bearing) && view !== 'front';
     const angle = known ? bearing - 90 : 0;
     const flip = known && view !== 'roof' && bearing > 180 ? -1 : 1;
-    const icon = rail ? '#northern-carriage' : '#' + routes[v.route].icon + '-' + view;
-    shape(
-      'use',
-      {
-        href: icon,
-        color: fill,
-        transform:
-          'translate(' +
-          x +
-          ' ' +
-          y +
-          ') scale(' +
-          drawUnit +
-          ') rotate(' +
-          angle +
-          ') scale(1 ' +
-          flip +
-          ')',
-      },
-      g,
-    );
+    const icon = rail ? 'northern-carriage' : routes[v.route].icon + '-' + view;
+    const transform = `translate(${x} ${y}) scale(${drawUnit}) rotate(${angle}) scale(1 ${flip})`;
+    // The vector body continues to anchor journey cards and receive taps in either theme.
+    shape('use', {href: '#' + icon, color: fill, transform, class: 'vehicle-day'}, g);
+    const nightWidth = 64 * 44 / 48; // Same map units per pixel as the tablet atlas.
+    shape('image', {
+      href: './icons/night/' + icon + '.png', transform, class: 'vehicle-night',
+      x: -nightWidth / 2, y: -nightWidth / 2, width: nightWidth, height: nightWidth,
+      'pointer-events': 'none',
+    }, g);
     if (selection === v.id) shape('circle', { cx:x, cy:y, r:21*drawUnit, fill:'none',
       stroke:fill, 'stroke-width':1.6*unit, 'pointer-events':'none' },g);
     shape('circle', { cx: x, cy: y, r: 17 * drawUnit, fill: 'transparent' }, g);
