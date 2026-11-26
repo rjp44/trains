@@ -1,7 +1,7 @@
 {
   "id": "hemel",
   "name": "Hemel rail monitor",
-  "version": 3,
+  "version": 4,
   "adapter": "hemel-corridor/1",
   "viewport": [
     1024,
@@ -16,6 +16,6 @@
     "watford-replay.json",
     "EASM-LICENSE.txt"
   ],
-  "credits": "Signal Maps, Network Rail and Open Rail. Berth mappings adapted from EASMData (GPLv3). Contains public sector information licensed under the Open Government Licence v3.0.",
+  "credits": "Live signalling from Signal Maps and Network Rail. Train schedules from Open Rail and Abbey station reports from Railinfo. Berth mappings adapted from EASMData (GPLv3). Contains public sector information licensed under the Open Government Licence v3.0.",
   "description": "Live West Coast Main Line signals, train movements and booked calls around Hemel Hempstead and Watford."
 }
