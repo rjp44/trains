@@ -6,7 +6,8 @@
 
 namespace panel {
 namespace {
-enum class Page { Wifi, Sound, Display };
+enum class Page { Wifi, Sound, Display, Apps };
+void (*apps)(lv_obj_t*);
 Page page;
 lv_obj_t *overlay, *content, *kbd, *ssidInput, *password, *notice;
 lv_obj_t *levelLabel;
@@ -293,14 +294,16 @@ void render() {
     label(header, "Settings");
     button(header, "Done", finish);
     auto *nav = group(overlay, LV_FLEX_FLOW_ROW);
-    const char *names[] = {"Wi-Fi", "Sound", "Display"};
-    for (unsigned i = 0; i < 3; ++i)
+    const char *names[] = {"Wi-Fi", "Sound", "Display", "Apps"};
+    for (unsigned i = 0; i < (apps ? 4u : 3u); ++i)
         button(nav, names[i], visit, i, unsigned(page) == i);
     content = group(overlay, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_grow(content, 1);
     lv_obj_add_flag(content, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(content, LV_DIR_VER);
-    if (page != Page::Wifi)
+    if (page == Page::Apps && apps)
+        apps(content);
+    else if (page != Page::Wifi)
         soundOrDisplay();
     else if (editing)
         form();
@@ -308,6 +311,7 @@ void render() {
         networks();
 }
 } // namespace
+void setAppsPage(void (*draw)(lv_obj_t*)){apps=draw;}
 bool settingsOpen() { return overlay != nullptr; }
 void openSettings(void (*onClose)(), const char *stopsLabel) {
     if (overlay)

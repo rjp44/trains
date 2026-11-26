@@ -12,6 +12,8 @@ void setSound(Sound value);
 void setVolume(unsigned value);
 bool setBrightness(unsigned value);
 void startBacklight();
+// Temporarily gate the LCD backlight during flash programming. Preserves the saved level.
+bool gateBacklight(bool off);
 void hornInit();
 void trainHorn(bool down, bool bookedStop);
 } // namespace panel

@@ -1,0 +1,8 @@
+## Geographic assets and attribution
+
+- Bus paths use the BODS regional GTFS road shapes for the displayed Stagecoach trips. Shared edges are joined before simplification at approximately ten metres. Alternating colours show the services using each shared road segment. [DfT North West GTFS](https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/north_west/)
+- Water, road and rail geometry is derived from © OpenStreetMap contributors, available under ODbL, via OpenFreeMap and © OpenMapTiles. Both railways follow connected track checked against their ordered station locations from Railinfo. The map build includes the Bransty Tunnel centreline from OpenStreetMap. [Tunnel geometry](https://www.openstreetmap.org/way/5940205) The bundled map data and rebuild script provide the local geographic extract. [OSM attribution and licence](https://www.openstreetmap.org/copyright) · [OpenFreeMap](https://openfreemap.org/) · [OpenMapTiles](https://openmaptiles.org/) · [Railinfo station locations](https://api.railinfo.uk/stations/geo)
+- The shaded terrain is derived from Mapzen Terrain Tiles, accessed on 25 November 2026. The local rendering includes 100 m contour shading. [Terrain dataset](https://registry.opendata.aws/terrain-tiles/) · [Mapzen source attribution and licences](https://github.com/tilezen/joerd/blob/master/docs/attribution.md)
+- Contains public sector information supplied through BODS under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+
+The tablet letter atlas uses Pillow’s bundled Aileron Regular. The rail observations use Railinfo. [Aileron](https://dotcolon.net/fonts/aileron/) · [Railinfo](https://railinfo.uk/developers)

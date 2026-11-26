@@ -1,0 +1,6 @@
+{
+  "id": "hemel", "name": "Hemel rail monitor", "version": 2, "adapter": "hemel-corridor/1",
+  "viewport": [1024, 600], "defaultView": "sector", "defaultRecording": "sector",
+  "data": ["corridor.json", "replay.json", "hemel-replay.json", "watford-replay.json", "EASM-LICENSE.txt"],
+  "credits": "Signal Maps, Network Rail and Open Rail. Berth mappings adapted from EASMData (GPLv3). Contains public sector information licensed under the Open Government Licence v3.0."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "lakes", "name": "Lakes Transit", "version": 2, "adapter": "lakes-map/1",
+  "viewport": [600, 1024], "defaultZoom": 1, "feed": "https://lakes-transit.netlify.app/api/vehicles",
+  "data": ["map.json", "rail.json", "timetable.json", "replay.json", "relief.webp"],
+  "credits": "Map data © OpenStreetMap contributors (ODbL), OpenFreeMap and OpenMapTiles. Terrain derived from Mapzen Terrain Tiles. Bus data from BODS under the Open Government Licence v3.0. Rail observations from Railinfo."
+}

@@ -6,6 +6,7 @@ extern "C" {
 #endif
 void crowpanel_display_init(void);
 uint16_t *crowpanel_back_buffer(void);
+const uint16_t *crowpanel_front_buffer(void);
 void crowpanel_present(void);
 void crowpanel_prime_other_buffer(void);
 uint32_t crowpanel_refresh_count(void);

@@ -1,3 +1,8 @@
 /dist/
 /.netlify/
 .DS_Store
+/.transport-private/
+/.transport-release/
+/firmware/core/build/
+/firmware/core/managed_components/
+/firmware/core/sdkconfig

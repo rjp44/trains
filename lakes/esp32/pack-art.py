@@ -1,12 +1,14 @@
 """Pack the PWA's terrain, water, roads and vehicle art into a flash-mapped indexed image and sprites."""
 from pathlib import Path
 from io import BytesIO
-import json, re, subprocess
+import argparse, json, re, subprocess, struct
 from PIL import Image, ImageDraw, ImageFont
 
 here = Path(__file__).resolve().parent
 public = here.parent / 'public'
-out = here / 'generated'
+cli = argparse.ArgumentParser(description=__doc__)
+cli.add_argument('--output-dir', type=Path, default=here / 'generated')
+out = cli.parse_args().output_dir
 out.mkdir(exist_ok=True)
 m = json.loads((public / 'data/map.json').read_text())
 f = m['frame']
@@ -65,3 +67,12 @@ for icon in ids:
     sprites.extend(rgb565(r,g,b) or 1 if a>=110 else 0 for r,g,b,a in im.getdata())
 data+=arr('uint16_t','sprites',sprites)
 (out/'art.inc').write_text(data)
+
+# Portable little-endian atlas for the data-only overlay.
+with (out/'atlas.bin').open('wb') as atlas:
+    atlas.write(struct.pack('<IIiifI', w,h,x0,y0,scale,len(colors)))
+    for palette in ([rgb565(*c) for c in colors], [dark(*c) for c in colors]):
+        atlas.write(struct.pack('<'+'H'*len(palette), *palette))
+    atlas.write(bytes(glyphs))
+    atlas.write(bytes(coverage))
+    atlas.write(struct.pack('<'+'H'*len(sprites), *sprites))

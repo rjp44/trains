@@ -13,6 +13,9 @@ int width();
 int height();
 bool attach(lv_display_t *display);
 void view(View value);
+#ifdef TRANSPORT_CORE
+void restoreView(View fallback);
+#endif
 void light(bool enabled);
 void replay(Sample value);
 uint32_t duration();

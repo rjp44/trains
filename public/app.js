@@ -91,6 +91,7 @@ let zoom = 1,
   moved = false;
 let lastDraw = '';
 const request = async (path) => {
+  if (globalThis.transportApp && path.startsWith('/data/')) return transportApp.json(path);
   const response = await fetch(path, { signal: AbortSignal.timeout(6000) });
   if (!response.ok) throw Error('Unavailable');
   return response.json();
@@ -1166,7 +1167,7 @@ new ResizeObserver(() => {
   }
 }).observe(drawing);
 new ResizeObserver(positionPopout).observe(popout);
-const initialView = new URLSearchParams(location.search).get('view') ?? 'sector';
+const initialView = new URLSearchParams(location.search).get('view') ?? globalThis.transportApp?.manifest?.defaultView ?? 'sector';
 if (initialView === 'sector') {
   centre = overview;
   zoom = minZoom;
@@ -1181,7 +1182,8 @@ window.addEventListener('offline', syncLiveFeed);
 window.addEventListener('online', syncLiveFeed);
 window.addEventListener('pagehide', feed.stop);
 window.addEventListener('pageshow', syncLiveFeed);
-syncLiveFeed();
+if (globalThis.transportApp && !navigator.onLine) switchMode('replay');
+else syncLiveFeed();
 setInterval(() => {
   if (mode === 'live' && !document.hidden) {
     live = feed.snapshot();

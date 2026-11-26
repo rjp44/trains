@@ -22,6 +22,11 @@
 #include <tuple>
 #include <utility>
 
+#ifdef TRANSPORT_CORE
+#include "rows.h"
+#include "view-settings.h"
+#include "esp_heap_caps.h"
+#endif
 namespace lakes {
 namespace {
 struct XY {
@@ -65,10 +70,14 @@ struct Trip {
     int route, service, start, pattern;
     const char *dest;
 };
+#ifdef TRANSPORT_CORE
+#include "lakes-runtime.inc"
+#else
 #include "art.inc"
 #include "network.inc"
 #include "replay.inc"
 extern "C" const uint8_t terrain[] asm("_binary_terrain_bin_start");
+#endif
 
 uint16_t *pixels;
 int W = 600, H = 1024;
@@ -272,7 +281,7 @@ void network() {
         for (unsigned k = 0; k < std::size(routes); k++)
             if (owners & (1u << k))
                 colors[n++] = color(routes[k].rgb);
-        auto p = vertices + s.offset;
+        auto p = std::data(vertices) + s.offset;
         int x = sx(p->x / 8.f), y = sy(p->y / 8.f);
         for (unsigned j = 1; j < s.count; j++) {
             int a = sx(p[j].x / 8.f), b = sy(p[j].y / 8.f);
@@ -642,7 +651,27 @@ void project(double lon, double lat, double &x, double &y) {
     y = (north - lat) * units;
 }
 void replayInput(const char *json) { decode(json, recorded); }
+#ifdef TRANSPORT_CORE
+bool mountPackage(){
+    if(!loadLakes()) return false;
+    for(auto json:recordings){Snapshot test;if(!decode(json,test))return false;}
+    return true;
+}
+#endif
+#ifdef TRANSPORT_CORE
+struct MapSettings {float zoom,x,y;uint32_t mask,portrait,dark;};
+void saveView(){ transport::saveView("lakes_view",MapSettings{zoom,cx,cy,mask,portrait,dark}); }
+bool portraitView(){return portrait;}
+#endif
 void init() {
+    cx=mapW*.5f; cy=mapH*.5f;
+#ifdef TRANSPORT_CORE
+    zoom=transport::defaultZoom;
+    MapSettings s{};
+    if(transport::loadView("lakes_view",s) && s.zoom>=1 && s.zoom<=24 && std::isfinite(s.x) && std::isfinite(s.y)){
+        zoom=s.zoom;cx=s.x;cy=s.y;mask=s.mask&((1u<<routes.size())-1);portrait=s.portrait!=0;dark=s.dark!=0;
+    }
+#endif
     setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0/2", 1);
     tzset();
     loadFrame();
@@ -714,6 +743,9 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             cx = std::clamp(cx - dx / scale, 0.f, float(mapW));
             cy = std::clamp(cy - dy / scale, 0.f, float(mapH));
             dirty = true;
+#ifdef TRANSPORT_CORE
+            saveView();
+#endif
         }
         return;
     }
@@ -790,6 +822,9 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             }
             break;
         }
+#ifdef TRANSPORT_CORE
+        if(a==All||a==Filter||a==Minus||a==Plus||a==Fit||a==Rotate||a==Theme)saveView();
+#endif
         dirty = true;
         return;
     }

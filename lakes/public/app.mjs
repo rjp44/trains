@@ -27,6 +27,7 @@ function text(tag, value, cls) {
   return el;
 }
 async function get(url) {
+  if (globalThis.transportApp && url.startsWith('/data/')) return transportApp.json(url);
   const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12_000) });
   if (!res.ok) throw Error('Unavailable');
   return res.json();
@@ -58,7 +59,7 @@ const positions = [
 const path = (points) => 'M' + points.map((p) => p.join(',')).join('L');
 const multi = (lines) => lines.map(path).join('');
 let fitOnResize = true,
-  zoom = 1,
+  zoom = globalThis.transportApp?.manifest?.defaultZoom ?? 1,
   cx = W / 2,
   cy = H / 2,
   selection = null,
@@ -83,7 +84,7 @@ const bleedX = frame.bleedX ?? frame.bleed,
 shape(
   'image',
   {
-    href: '/data/relief.webp',
+    href: globalThis.transportApp ? await transportApp.asset('/data/relief.webp', 'image/webp') : '/data/relief.webp',
     x: -bleedX,
     y: -bleedY,
     width: W + 2 * bleedX,

@@ -12,9 +12,11 @@ const layout = data('corridor'),
 const home = diagram.columns.get('HML'),
   round = Math.round;
 const { markers, project, fingerprint } = createProjection(layout);
+const tables = { layoutFingerprint: fingerprint };
 const out = ['// Generated from corridor.json, the panel stylesheet and bundled recordings.'];
 const c = (value) => (Array.isArray(value) ? '{' + value.map(c).join(', ') + '}' : JSON.stringify(value));
 function array(type, name, rows) {
+  tables[name] = rows;
   out.push(
     'static constexpr ' +
       type +
@@ -90,6 +92,7 @@ for (const [name, selector] of [
 ]) {
   const rules = css.split(selector)[1].split('}')[0];
   const values = colours.map((k) => '0x' + rules.match(new RegExp('--' + k + ': #([a-f0-9]{6})'))[1]);
+  tables[name + 'Palette'] = values.map(Number);
   out.push('static constexpr uint32_t ' + name + 'Palette[] = {' + values.join(', ') + '};');
 }
 
@@ -285,6 +288,7 @@ function compileView(view) {
     Math.max(slowTop, mainY(3) + 12 * scale),
     slowBottom,
   ];
+  tables[view + 'Space'] = [fast.map(round), slow.map(round), round(50 * scale), round(21 * scale)];
   out.push(
     'static constexpr Scene ' +
       view +
@@ -342,6 +346,7 @@ for (const [name, file] of [
       frames.push([Math.max(0, frame.time - start), changes.length, ids]);
     previousCards = ids.join();
   }
+  tables[name + 'Duration'] = recording.frames.at(-1).time - start;
   array('Change', name + 'Changes', changes);
   array('Frame', name + 'Frames', frames);
   out.push(
@@ -358,4 +363,4 @@ for (const [name, file] of [
 }
 array('Card', 'cards', cards);
 array('Detail', 'details', details);
-writeFileSync(process.argv[4], out.join('\n') + '\n');
+writeFileSync(process.argv[4], process.argv[5] === '--tables' ? JSON.stringify(tables) : out.join('\n') + '\n');

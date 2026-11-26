@@ -7,6 +7,11 @@
 #include <array>
 #include <cstring>
 
+#ifdef TRANSPORT_CORE
+#include "rows.h"
+#include "view-settings.h"
+#endif
+
 namespace hemel {
 namespace {
 template <typename T> struct List {
@@ -95,17 +100,26 @@ struct Reading {
     const char *head = "";
     Detail detail{"", "", ""};
 };
+#ifdef TRANSPORT_CORE
+#include "hemel-runtime.inc"
+#else
 #include "panel_assets.h"
+#endif
 
 const Scene *scene = &sectorScene;
 const Recording *recording = &sectorRecording;
 const uint32_t *palette = darkPalette;
 lv_obj_t *screen = nullptr;
+#ifdef TRANSPORT_CORE
+std::vector<Reading> current;
+std::vector<std::string> liveText;
+#else
 std::array<Reading, markerCount> current{};
+std::array<std::string, markerCount> liveText;
+#endif
 bool liveMode = false, offline = false, frameDirty = false;
 unsigned feedStatus = 0;
 uint32_t observedAt = 0;
-std::array<std::string, markerCount> liveText;
 std::array<std::string, 4> liveCardText;
 Card liveCards[4]{};
 const Card *choices[4]{};
@@ -476,7 +490,7 @@ void draw(lv_event_t *event) {
     drawControls(layer);
 }
 void reset() {
-    current.fill({});
+    std::fill(current.begin(), current.end(), Reading{});
     nextFrame = nextChange = cursor = 0;
     std::fill_n(choices, 4, nullptr);
     selected = {};
@@ -485,6 +499,12 @@ void reset() {
     invalidate();
 }
 } // namespace
+#ifdef TRANSPORT_CORE
+bool mountPackage(){
+    if(!loadHemel()) return false;
+    current.resize(markerCount);liveText.resize(markerCount);return true;
+}
+#endif
 int width() { return panelWidth; }
 int height() { return panelHeight; }
 bool attach(lv_display_t *display) {
@@ -532,13 +552,31 @@ bool dismiss() {
     return true;
 }
 void toggleLight() { light(palette == darkPalette); }
+#ifdef TRANSPORT_CORE
+struct SchematicSettings {uint32_t view,light;};
+static bool restoringView;
+static void saveSchematic(){
+    if(!restoringView)transport::saveView("hemel_view",SchematicSettings{scene==&hemelScene?1u:scene==&watfordScene?2u:0u,palette==lightPalette});
+}
+void restoreView(View fallback){
+    SchematicSettings s{static_cast<unsigned>(fallback),0};
+    transport::loadView("hemel_view",s);restoringView=true;
+    view(s.view<=2?static_cast<View>(s.view):fallback);light(s.light==1);restoringView=false;
+}
+#endif
 void view(View value) {
     dismiss();
     scene = value == View::Hemel ? &hemelScene : value == View::Watford ? &watfordScene : &sectorScene;
+#ifdef TRANSPORT_CORE
+    saveSchematic();
+#endif
     invalidate();
 }
 void light(bool enabled) {
     palette = enabled ? lightPalette : darkPalette;
+#ifdef TRANSPORT_CORE
+    saveSchematic();
+#endif
     if (screen)
         lv_obj_set_style_bg_color(screen, colour(Board), 0);
     invalidate();
@@ -608,7 +646,7 @@ void startFrame(bool full) {
         beginLive();
     frameDirty = full;
     if (full) {
-        current.fill({});
+        std::fill(current.begin(), current.end(), Reading{});
         std::fill_n(choices, 4, nullptr);
     }
 }

@@ -1,4 +1,7 @@
 #include "feed_vm.h"
+#ifdef TRANSPORT_CORE
+#include "package.h"
+#endif
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_rom_crc.h"
@@ -76,6 +79,12 @@ bool FeedVM::init() {
     JSValue global = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global, "panelCRC", JS_NewCFunction(ctx, crc, "crc32", 1));
     JS_SetPropertyStr(ctx, global, "londonDate", JS_NewCFunction(ctx, londonDay, "londonDate", 1));
+#ifdef TRANSPORT_CORE
+    auto& layout=transport::corridor;
+    JSValue data=JS_ParseJSON(ctx,(const char*)layout.data,layout.size,"corridor.json");
+    check(data);
+    JS_SetPropertyStr(ctx,global,"transportCorridor",data);
+#endif
     JSValue loaded = JS_Eval(ctx, script, scriptEnd - script - 1, "board_feed.js", JS_EVAL_TYPE_GLOBAL);
     check(loaded);
     JS_FreeValue(ctx, loaded);

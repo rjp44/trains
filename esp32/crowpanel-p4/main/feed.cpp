@@ -5,7 +5,13 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_netif_sntp.h"
+#ifdef TRANSPORT_CORE
+#include "core.h"
+#define lvgl_port_lock(timeout) transport::lockDisplay()
+#define lvgl_port_unlock() transport::unlockDisplay()
+#else
 #include "esp_lvgl_port.h"
+#endif
 #include "esp_timer.h"
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"

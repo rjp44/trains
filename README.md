@@ -59,3 +59,5 @@ The 15-mile budget spends 7 miles 5 chains reaching Watford from Hemel, leaving 
 Abbey calling-point reports come from railinfo's public service lookup. The live client checks every 30 seconds for active Watford Junction–St Albans Abbey services in the running feed and checks the origin, destination and booked departure before accepting a report. The app waits for an explicit arrival or departure and displays the reported time when supplied. [Public API](https://railinfo.uk/developers)
 
 Contains public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+
+The shared Transport Display firmware runs Hemel and Lakes from downloadable packages. Build and serve the two installable web apps, commission a tablet, or publish an OTA release with the [CrowPanel release guide](firmware/core/README.md).

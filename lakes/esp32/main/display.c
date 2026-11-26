@@ -137,6 +137,7 @@ void crowpanel_display_init(void) {
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
 }
 
+const uint16_t *crowpanel_front_buffer(void) { return buffers[front]; }
 uint16_t *crowpanel_back_buffer(void) { return buffers[front ^ 1]; }
 uint32_t crowpanel_refresh_count(void) { return refresh_count; }
 

@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+set(IDF_TARGET esp32p4)
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../esp32/panel_settings")
+set(TRANSPORT_CORE ON)
+set(PROJECT_VER "4" CACHE STRING "Numeric transport core release")
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(transport_display)

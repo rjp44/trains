@@ -64,6 +64,10 @@ bool savePreferences() {
                  brightness());
     return ok;
 }
+bool gateBacklight(bool off) {
+    if (!pwm) return gpio_set_level(GPIO_NUM_31, off ? 0 : 1) == ESP_OK;
+    return off ? ledc_stop(speed, channel, 0) == ESP_OK : setBrightness(light);
+}
 void startBacklight() {
     ledc_timer_config_t timer{};
     timer.speed_mode = speed;
