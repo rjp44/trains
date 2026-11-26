@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Timetable, hhmm, serviceSeconds } from './public/timetable.mjs';
+import { Timetable, hhmm, serviceSeconds, journeySummary } from './public/timetable.mjs';
 const read = (file) => JSON.parse(readFileSync(new URL('./public/data/' + file, import.meta.url)));
 const replay = read('replay.json');
 const schedule = new Timetable(read('timetable.json'));
@@ -85,4 +85,30 @@ test('London time handles summer midnight and a service day continuing past 24:0
   assert.equal(timetable.departures(0, instant - 60_000).sections.get(1)[0].time, '00:15');
   assert.equal(timetable.departures(1, instant).sections.size, 0);
   assert.equal(timetable.departures(2, instant).sections.size, 0);
+});
+
+test('a journey card keeps the next call, interchanges and terminus in timetable order', () => {
+  const calls = Array.from({ length: 22 }, (_, i) => ({
+    at: 23 * 3600 + i * 300,
+    name: 'Road ' + i,
+    town: 'A',
+    exact: false,
+    routes: 1,
+  }));
+  Object.assign(calls[10], { name: 'Bus Rail Interchange', town: 'B', exact: true, routes: 4 });
+  Object.assign(calls[16], { name: 'Bus Station', town: 'C', exact: true, routes: 3 });
+  const kept = journeySummary(calls, calls[3].at + 1);
+  assert.equal(kept.length, 6);
+  assert.equal(kept[0], 4);
+  assert.ok(kept.includes(10) && kept.includes(16));
+  assert.equal(kept.at(-1), 21);
+  assert.deepEqual(
+    kept,
+    kept.toSorted((a, b) => a - b),
+  );
+  const restored = kept.flatMap((k, i) => calls.slice(k, kept[i + 1] ?? k + 1));
+  assert.deepEqual(restored, calls.slice(4));
+  assert.deepEqual(journeySummary(calls, calls[20].at), [20, 21]);
+  assert.deepEqual(journeySummary(calls, calls[21].at + 1), [21]);
+  assert.deepEqual(journeySummary([], 0), []);
 });

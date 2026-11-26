@@ -315,40 +315,51 @@ summary {
 a {
   color: inherit;
 }
+#detail-leader {
+  position: absolute;
+  pointer-events: none;
+  height: 2px;
+  transform-origin: left center;
+}
 #vehicle {
   position: absolute;
-  bottom: 30px;
-  left: 8px;
-  right: 8px;
-  margin: auto;
-  max-width: 315px;
-  background: var(--card);
+  width: max-content;
+  max-width: min(365px, calc(100% - 16px));
+  padding: 13px 15px 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--accent);
-  border-radius: 6px;
-  padding: 10px 30px 10px 11px;
-  box-shadow: 0 3px 12px #18322628;
-  font-size: 12px;
-}
-#vehicle strong,
-#vehicle small {
-  display: block;
-}
-#vehicle small {
-  color: var(--muted);
-  margin-top: 4px;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow:
+    0 4px 14px #102a2130,
+    0 1px 2px #102a2118;
+  font-size: 14px;
 }
 #vehicle strong {
-  font-size: 14px;
-  margin: 2px 0;
+  display: block;
+  font-size: 20px;
+  letter-spacing: -0.025em;
+  line-height: 1.14;
 }
-.close {
+#vehicle small {
+  display: block;
+  color: var(--muted);
+}
+#vehicle .close {
   position: absolute;
-  right: 3px;
-  top: 3px;
-  padding: 1px 7px;
-  font-size: 18px;
+  right: 1px;
+  top: 1px;
+  width: 38px;
+  height: 38px;
+  background: transparent;
   border: 0;
+  border-radius: 50%;
+  font-size: 23px;
+  color: var(--muted);
+  line-height: 1;
 }
 aside {
   min-width: 0;
@@ -511,77 +522,152 @@ aside {
 [data-stop] {
   cursor: pointer;
 }
-#vehicle {
-  max-width: 380px;
-  max-height: calc(100% - 84px);
-  padding: 10px 11px;
-  overflow: hidden;
-}
 #vehicle-info {
-  max-height: inherit;
-  overflow: auto;
-  overscroll-behavior: contain;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+  outline-offset: -2px;
 }
-#vehicle-info > :is(strong, .kicker) {
-  padding-right: 25px;
+#vehicle-info > :not(.schedule-list) {
+  flex-shrink: 0;
 }
-#vehicle-info .kicker {
+#vehicle-info > .kicker,
+.card-meta {
+  min-height: 22px;
+  padding-right: 27px;
+  margin-bottom: 5px;
   color: var(--muted);
-  font: 600 10px var(--mono);
-}
-#vehicle-info h3 {
   font-size: 12px;
-  margin: 9px 0 4px;
+}
+.card-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.service-badge,
+.line-number {
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: white;
+  font: 650 12px var(--mono);
+  background: var(--accent);
+}
+#vehicle-info h3,
+#vehicle-info > small {
+  margin: 7px 0 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
 }
 #vehicle-info p {
-  margin: 8px 0;
+  margin: 8px 0 2px;
 }
 .schedule-list {
-  max-height: min(30dvh, 235px);
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  border-top: 1px solid var(--rule);
 }
 .schedule-list h3 {
-  background: var(--card);
   position: sticky;
   top: 0;
-  border-bottom: 1px solid var(--rule);
+  background: var(--card);
   padding: 3px 0;
 }
-.departure-row,
-.call-row {
+.departure-row {
   display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 7px;
   align-items: baseline;
-  column-gap: 7px;
-  padding: 4px 1px;
+  padding: 5px 1px;
   border-bottom: 1px solid var(--rule);
 }
-.departure-row {
-  grid-template-columns: auto auto 1fr;
+.departure-row small,
+.stop-name small {
+  font-size: 11px;
+  margin-top: 2px;
 }
-.call-row {
-  grid-template-columns: 45px 1fr;
+.journey-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.2em 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 1px;
+  min-height: 33px;
 }
-.schedule-list time,
-.line-number {
-  font: 600 11px var(--mono);
+.journey-row:has(.gap-toggle) {
+  min-height: 39px;
 }
-.line-number {
-  padding: 2px 4px;
-  color: white;
-  border-radius: 3px;
+.journey-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3.35em;
+  width: 2px;
+  background: color-mix(in srgb, var(--accent) 32%, var(--card));
 }
-#vehicle .schedule-list small {
-  margin: 1px 0 0;
-  font-size: 10px;
+.journey-row::after {
+  content: '';
+  position: absolute;
+  left: calc(3.35em - 2px);
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
-.next-call {
+.journey-row .stop-name {
+  padding-left: 3px;
+  line-height: 1.2;
+}
+.journey-row.next-call .stop-name {
+  font-weight: 700;
+}
+.journey-row .stop-name small {
+  font-weight: 450;
+}
+.journey-row.intermediate {
+  color: var(--muted);
+}
+.journey-row.intermediate::after {
+  width: 4px;
+  height: 4px;
+  left: calc(3.35em - 1px);
+  background: var(--muted);
+}
+.gap-toggle {
   background: color-mix(in srgb, var(--accent) 10%, var(--card));
-}
-#vehicle .next-note {
+  border: none;
+  border-radius: 7px;
+  padding: 6px 8px;
+  min-width: 38px;
+  min-height: 32px;
   color: var(--ink);
+  font-size: 12px;
   font-weight: 650;
+}
+.gap-toggle::after {
+  content: '';
+  display: inline-block;
+  margin-left: 6px;
+  margin-bottom: 2px;
+  width: 5px;
+  height: 5px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.gap-toggle[aria-expanded='true']::after {
+  transform: rotate(225deg);
+  margin-bottom: -1px;
+}
+.schedule-list time {
+  font: 550 12px var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 .route-lines path,
 .road,
@@ -664,12 +750,6 @@ body.map-only {
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 3px 7px;
-}
-.map-only #vehicle {
-  bottom: calc(36px + env(safe-area-inset-bottom));
-  left: calc(8px + env(safe-area-inset-left));
-  right: calc(8px + env(safe-area-inset-right));
-  max-height: calc(100% - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 @media (pointer: coarse) {
   #routes .route,

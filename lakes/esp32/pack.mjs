@@ -101,13 +101,13 @@ h += rows(
 h += rows(
   'stops',
   'Stop',
-  stops.map(([k, s]) => agg(q(k), s.group, q(s.side))),
+  stops.map(([k, s]) => agg(q(k), s.group, q(s.side), q(s.name))),
 );
 const calls = [],
   patterns = [];
 for (const p of tt.patterns) {
   patterns.push(agg(calls.length, p.length));
-  for (const [ref, a, d, pickup, exact] of p) calls.push(agg(stopIds.get(ref), a, d, pickup, exact));
+  for (const [ref, a, d, pickup, exact, dropoff] of p) calls.push(agg(stopIds.get(ref), a, d, pickup, exact, dropoff));
 }
 h += rows('calls', 'Call', calls) + rows('patterns', 'Pattern', patterns);
 const svc = Object.keys(tt.calendars);

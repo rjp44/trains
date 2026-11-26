@@ -4,11 +4,10 @@ import {
   project,
   railBearing,
   visibleFixes,
-  ageLabel,
   londonTime,
   freshMs,
 } from './model.mjs';
-import { Timetable, hhmm, stopTitle, serviceSeconds } from './timetable.mjs';
+import { Timetable, hhmm, stopTitle, serviceSeconds, journeySummary } from './timetable.mjs';
 import { BusPaths, placeVehicles, roofView } from './bus-layout.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -66,7 +65,7 @@ let fitOnResize = true,
   cx = W / 2,
   cy = H / 2,
   selection = null,
-  selectedStop = null;
+  selectedStop = null, expandedGap = -1;
 // An empty set represents the All chip. The first route chip starts a custom selection.
 const selectedRoutes = new Set();
 const routeVisible = (id) => !selectedRoutes.size || selectedRoutes.has(id);
@@ -205,7 +204,6 @@ function openStop(id, centre) {
     fitOnResize = false;
     [cx, cy] = stops.find((s) => s.id === id).point;
     zoom = Math.max(zoom, 6);
-    cy += (H * 0.19) / zoom;
   }
   viewport();
   detail();
@@ -469,6 +467,7 @@ function viewport() {
   }
   drawStops(1 / matrixScale);
   drawMarkers();
+  placeDetail();
 }
 function changeZoom(factor, anchor = [cx, cy]) {
   const next = Math.max(1, Math.min(24, zoom * factor)),
@@ -497,7 +496,7 @@ svg.addEventListener(
 );
 let drag;
 svg.onpointerdown = (e) => {
-  if (e.target.closest('[data-vehicle], [data-stop]') || zoom === 1) return;
+  if (!$('vehicle').hidden || e.target.closest('[data-vehicle], [data-stop]') || zoom === 1) return;
   drag = { x: e.clientX, y: e.clientY, cx, cy };
   svg.setPointerCapture(e.pointerId);
 };
@@ -514,6 +513,16 @@ svg.onpointerup = svg.onpointercancel = () => {
 };
 
 function inspect(id) {
+  const fix = fixes.find((v) => v.id === id);
+  const marker = markers.querySelector('[data-vehicle="' + CSS.escape(id) + '"] > use');
+  if (fix && marker) {
+    const m = marker.getBoundingClientRect(),
+      bounds = svg.getBoundingClientRect();
+    if (m.right < bounds.left || m.left > bounds.right || m.bottom < bounds.top || m.top > bounds.bottom) {
+      [cx, cy] = project(fix.point, frame);
+      fitOnResize = false;
+    }
+  }
   selection = id;
   selectedStop = null;
   $('stop-picker').value = '';
@@ -541,9 +550,7 @@ function drawBoard(body, now) {
   );
   const list = text('div', '', 'schedule-list');
   body.append(list);
-  const sections = [...board.sections].sort(
-    (a, b) => (a[1][0]?.at ?? Infinity) - (b[1][0]?.at ?? Infinity),
-  );
+  const sections = [...board.sections].sort((a, b) => (a[1][0]?.at ?? Infinity) - (b[1][0]?.at ?? Infinity));
   if (!sections.length) list.append(text('p', 'No boarding departures at this stop.'));
   for (const [via, calls] of sections) {
     list.append(text('h3', 'Towards ' + timetable.groups[via].name));
@@ -562,120 +569,232 @@ function drawBoard(body, now) {
     }
   }
 }
-function drawJourney(body, v, now) {
-  const trip = timetable?.match(v);
+function journeyRow(list, name, time, note, secondary = false) {
+  const row = text('div', '', 'journey-row' + (secondary ? ' intermediate' : ''));
+  const location = text('span', name, 'stop-name');
+  if (note) location.append(text('small', note));
+  row.append(text('time', time), location);
+  list.append(row);
+  return row;
+}
+function drawJourney(body, v, trip, now) {
   if (!trip) {
-    body.append(text('p', 'No matching published timetable for this journey.'));
+    body.append(text('p', 'No matching published timetable.'));
     return;
   }
-  const calls = timetable.patterns[trip.pattern];
-  const seconds = serviceSeconds(now, v.serviceDate);
-  const list = text('div', '', 'schedule-list');
-  const first = timetable.stops[calls[0][0]];
-  body.append(
-    text('h3', 'Scheduled stops · from ' + timetable.groups[first.group].town),
-    text('small', 'London time · ≈ approximate'),
-    list,
-  );
-  let marked = false;
-  for (const [ref, arrival, departure, pickup, exact, dropoff] of calls) {
-    if (!pickup && !dropoff) continue;
-    const pole = timetable.stops[ref],
-      group = timetable.groups[pole.group];
-    const time = trip.start + (pickup ? departure : arrival);
-    const row = text('div', '', 'call-row');
-    const location = text('span', pole.name);
-    location.append(text('small', group.town + (pole.side ? ' · ' + pole.side : '')));
-    if (!marked && time >= seconds) {
-      marked = true;
-      row.classList.add('next-call');
-      location.append(text('small', 'Next by timetable', 'next-note'));
-    }
-    row.append(text('time', (exact ? '' : '≈') + hhmm(time)), location);
-    list.append(row);
+  const calls = timetable.patterns[trip.pattern]
+    .filter((c) => c[3] || c[5])
+    .map(([ref, arr, dep, pickup, exact]) => {
+      const pole = timetable.stops[ref],
+        group = timetable.groups[pole.group];
+      return {
+        name: pole.name,
+        town: group.town,
+        exact,
+        at: trip.start + (pickup ? dep : arr),
+        routes: timetable.routesAt[pole.group].size,
+      };
+    });
+  if (!calls.length) {
+    body.append(text('p', 'No scheduled passenger calls.'));
+    return;
+  }
+  const seconds = serviceSeconds(now, v.serviceDate || timetable.serviceDay(v.departure));
+  const kept = journeySummary(calls, seconds),
+    last = calls.length - 1;
+  const finished = calls[last].at < seconds;
+  body.append(text('h3', finished ? 'Scheduled journey ended' : 'Scheduled stops'));
+  const list = text('div', '', 'schedule-list journey-list');
+  body.append(list);
+  let lastTown;
+  function add(i, primary, group) {
+    const s = calls[i],
+      notes = [];
+    if (i === kept[0] && !finished) notes.push('Next scheduled stop');
+    if (i === last) notes.push('Terminus');
+    else if (s.town && s.town !== lastTown && !s.name.includes(s.town)) notes.push(s.town);
+    lastTown = s.town;
+    return journeyRow(group, s.name, (s.exact ? '' : '≈') + hhmm(s.at), notes.join(' · '), !primary);
+  }
+  kept.forEach((i, k) => {
+    const row = add(i, true, list);
+    if (k === 0 && !finished) row.classList.add('next-call');
+    const hidden = (kept[k + 1] ?? i + 1) - i - 1;
+    if (!hidden) return;
+    const open = expandedGap === i;
+    const button = text('button', String(hidden), 'gap-toggle');
+    button.dataset.gap = i;
+    button.setAttribute('aria-expanded', String(open));
+    button.setAttribute(
+      'aria-label',
+      (open ? 'Hide ' : 'Show ') +
+        hidden +
+        ' intermediate ' +
+        (hidden === 1 ? 'stop' : 'stops') +
+        ' after ' +
+        calls[i].name,
+    );
+    button.setAttribute('aria-controls', 'gap-' + i);
+    button.onclick = () => {
+      expandedGap = open ? -1 : i;
+      detail();
+    };
+    row.append(button);
+    const group = text('div', '', 'intermediates');
+    group.id = 'gap-' + i;
+    group.hidden = !open;
+    if (open) for (let n = i + 1; n < kept[k + 1]; ++n) add(n, false, group);
+    list.append(group);
+  });
+}
+function markerSelector() {
+  return selectedStop !== null
+    ? '[data-stop="' + selectedStop + '"]'
+    : selection
+      ? '[data-vehicle="' + CSS.escape(selection) + '"]'
+      : null;
+}
+function placeDetail() {
+  const box = $('vehicle'),
+    leader = $('detail-leader');
+  leader.hidden = true;
+  if (box.hidden) return;
+  const selector = markerSelector();
+  const target = selector && svg.querySelector(selector + (selectedStop !== null ? ' > circle' : ' > use'));
+  if (!target) {
+    dismissDetail(false);
+    return;
+  }
+  const map = svg.getBoundingClientRect(),
+    mark = target.getBoundingClientRect();
+  if (mark.right < map.left || mark.left > map.right || mark.bottom < map.top || mark.top > map.bottom) {
+    dismissDetail(false);
+    return;
+  }
+  const ax = (mark.left + mark.right) / 2 - map.left,
+    ay = (mark.top + mark.bottom) / 2 - map.top;
+  const margin = 8,
+    top = Math.max(margin, document.querySelector('.map-bar').getBoundingClientRect().bottom - map.top + 5);
+  const bottom = Math.max(top + 80, map.height - margin);
+  box.style.maxHeight = Math.min(470, bottom - top) + 'px';
+  const w = box.offsetWidth,
+    h = box.offsetHeight;
+  const dx = mark.width / 2 + 10,
+    dy = mark.height / 2 + 10;
+  let best;
+  for (const [px, py] of [
+    [ax + dx, ay - h / 2],
+    [ax - dx - w, ay - h / 2],
+    [ax - w / 2, ay - dy - h],
+    [ax - w / 2, ay + dy],
+  ]) {
+    const x = Math.max(margin, Math.min(px, map.width - margin - w)),
+      y = Math.max(top, Math.min(py, bottom - h));
+    const covers = x < ax + dx - 8 && x + w > ax - dx + 8 && y < ay + dy - 8 && y + h > ay - dy + 8;
+    const cost = Math.abs(x - px) + Math.abs(y - py) + (covers ? 10000 : 0);
+    if (!best || cost < best.cost) best = { x, y, cost };
+  }
+  box.style.left = best.x + 'px';
+  box.style.top = best.y + 'px';
+  const ex = Math.max(best.x + 5, Math.min(ax, best.x + w - 5)),
+    ey = Math.max(best.y + 5, Math.min(ay, best.y + h - 5));
+  const len = Math.hypot(ex - ax, ey - ay),
+    inset = Math.min(len, Math.max(4, Math.min(dx, dy) - 10));
+  if (len > inset && ax >= 0 && ay >= 0 && ax <= map.width && ay <= map.height) {
+    leader.hidden = false;
+    leader.style.left = ax + ((ex - ax) * inset) / len + 'px';
+    leader.style.top = ay + ((ey - ay) * inset) / len + 'px';
+    leader.style.width = len - inset + 'px';
+    leader.style.transform = 'rotate(' + Math.atan2(ey - ay, ex - ax) + 'rad)';
+    leader.style.background = box.style.getPropertyValue('--accent');
   }
 }
 function detail() {
   const v = fixes.find((v) => v.id === selection),
     box = $('vehicle'),
     body = $('vehicle-info');
-  box.hidden = !v && selectedStop === null;
-  const key = v ? [v.id, v.route, v.departure].join('/') : 'stop/' + selectedStop;
-  const previousList = body.querySelector('.schedule-list');
-  const restoreFocus = previousList && previousList === document.activeElement;
-  const previous = body.dataset.key === key ? previousList?.scrollTop : null;
+  const key = v ? [v.id, v.route, v.departure, v.terminus].join('/') : 'stop/' + selectedStop;
+  const same = body.dataset.key === key;
+  const listBefore = body.querySelector('.schedule-list');
+  const scroll = same ? listBefore?.scrollTop || 0 : 0;
+  const focusGap = same && body.contains(document.activeElement) ? document.activeElement.dataset.gap : null;
+  const focusList = listBefore && listBefore === document.activeElement;
+  if (!same) expandedGap = -1;
+  const now = mode === 'replay' ? snapshot?.time : Date.now();
+  box.hidden = (!v && selectedStop === null) || !Number.isFinite(now);
   if (box.hidden) {
     delete body.dataset.key;
+    $('detail-leader').hidden = true;
     return;
   }
   body.dataset.key = key;
-  const now = mode === 'replay' ? snapshot?.time : Date.now();
-  if (!Number.isFinite(now)) {
-    box.hidden = true;
-    return;
-  }
   body.replaceChildren();
   box.style.setProperty('--accent', v ? routes[v.route].colour : 'var(--active)');
-  if (selectedStop !== null) drawBoard(body, now);
+  if (!v) drawBoard(body, now);
   else {
-    body.append(
-      text('span', v.agency + ' · ' + (railways[v.route] ? routes[v.route].name : v.route), 'kicker'),
-      text('strong', railways[v.route] ? v.label : 'To ' + (v.destination || 'unknown destination')),
-    );
-    if (railways[v.route])
-      body.append(
-        text(
-          'div',
-          'Last reported ' + v.last + ' ' + v.lastTime + ' · Next ' + v.next + ' ' + (v.nextTime || ''),
-        ),
-      );
-    else
-      body.append(
-        text(
-          'div',
-          v.label +
-            ' · ' +
-            (Number.isFinite(v.bearing) ? 'GPS heading ' + v.bearing + '°' : 'GPS heading unavailable'),
-        ),
-      );
-    body.append(
+    const rail = railways[v.route],
+      trip = !rail && timetable?.match(v);
+    const pattern = trip && timetable.patterns[trip.pattern];
+    const town = pattern && timetable.groups[timetable.stops[pattern.at(-1)[0]].group].town;
+    const header = text('div', '', 'card-meta');
+    const status = mode === 'replay' ? 'Replay' : v.stale ? 'Stale fix' : 'Live';
+    header.append(
+      text('b', routes[v.route].chip || v.route, 'service-badge'),
       text(
-        'small',
-        (mode === 'replay' ? 'Recorded · ' : '') +
-          v.precision +
+        'span',
+        [v.agency, !rail && v.label?.startsWith('Vehicle ') ? v.label.slice(8) : '']
+          .filter(Boolean)
+          .join(' ') +
           ' · ' +
-          ageLabel(now - v.time) +
-          (v.stale ? ' · stale' : '') +
-          ' · ' +
-          (railways[v.route] ? 'Railinfo' : 'DfT BODS'),
+          status,
       ),
     );
-    if (!railways[v.route]) drawJourney(body, v, now);
+    body.append(header, text('strong', town || v.destination ? 'To ' + (town || v.destination) : v.label));
+    if (rail) {
+      body.append(text('h3', 'Rail position estimate'));
+      const list = text('div', '', 'schedule-list journey-list');
+      body.append(list);
+      journeyRow(list, v.last || 'Unavailable', v.lastTime || '—', 'Last reported');
+      journeyRow(list, v.next || 'Unavailable', v.nextTime || '—', 'Next station');
+    } else drawJourney(body, v, trip, now);
   }
   const list = body.querySelector('.schedule-list');
   if (list) {
     list.tabIndex = 0;
-    list.setAttribute('aria-label', selectedStop !== null ? 'Scheduled departures' : 'Scheduled stops');
-    const next = list.querySelector('.next-call');
-    list.scrollTop = previous ?? (next ? next.offsetTop - list.offsetTop : 0);
-    if (restoreFocus) list.focus({ preventScroll: true });
+    list.setAttribute('aria-label', selectedStop !== null ? 'Scheduled departures' : 'Journey stops');
+    list.scrollTop = scroll;
+    const focused = focusGap != null && list.querySelector('[data-gap="' + focusGap + '"]');
+    if (focused) focused.focus({ preventScroll: true });
+    else if (focusList) list.focus({ preventScroll: true });
   }
+  placeDetail();
 }
-$('close').onclick = () => {
+function dismissDetail(restoreFocus) {
   if ($('vehicle').hidden) return;
-  const selector =
-    selectedStop !== null
-      ? '[data-stop="' + selectedStop + '"]'
-      : '[data-vehicle="' + CSS.escape(selection) + '"]';
+  const selector = markerSelector();
   selection = null;
   selectedStop = null;
+  expandedGap = -1;
   $('stop-picker').value = '';
   detail();
   viewport();
-  svg.querySelector(selector)?.focus({ preventScroll: true });
-};
+  if (restoreFocus && selector) svg.querySelector(selector)?.focus({ preventScroll: true });
+}
+$('close').onclick = () => dismissDetail(true);
+document.addEventListener(
+  'click',
+  (e) => {
+    if ($('vehicle').hidden || $('vehicle').contains(e.target)) return;
+    if (svg.contains(e.target)) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    dismissDetail(false);
+  },
+  true,
+);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') $('close').click();
+  if (e.key === 'Escape') dismissDetail(true);
 });
 
 function drawMarkers() {
@@ -803,6 +922,8 @@ function drawMarkers() {
       },
       g,
     );
+    if (selection === v.id) shape('circle', { cx:x, cy:y, r:21*drawUnit, fill:'none',
+      stroke:fill, 'stroke-width':1.6*unit, 'pointer-events':'none' },g);
     shape('circle', { cx: x, cy: y, r: 17 * drawUnit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
     g.onkeydown = (e) => {

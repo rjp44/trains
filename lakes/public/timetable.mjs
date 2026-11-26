@@ -60,6 +60,9 @@ export class Timetable {
       }
     }
   }
+  serviceDay(departure) {
+    return localClock(Date.parse(departure)).date;
+  }
   active(trip, day) {
     return this.calendars[trip.service][day - this.firstDay] === '1';
   }
@@ -118,4 +121,38 @@ export class Timetable {
     }
     return { covered, sections };
   }
+}
+
+// Start with the next scheduled passenger call and the terminus. Fill the middle with
+// interchanges and timing points, preferring different towns and gaps in the summary.
+export function journeySummary(stops, now) {
+  if (!stops.length) return [];
+  const first = stops.findIndex((s) => s.at >= now),
+    last = stops.length - 1;
+  if (first < 0) return [last];
+  const kept = [first];
+  if (first !== last) kept.push(last);
+  while (kept.length < 6 && kept.length < last - first + 1) {
+    let best = -1,
+      bestScore = -Infinity;
+    for (let i = first + 1; i < last; ++i) {
+      if (kept.includes(i)) continue;
+      const s = stops[i];
+      const gap = Math.min(...kept.map((k) => Math.abs(k - i)));
+      const interchange = /interchange|bus station|rail station|railway station/i.test(s.name);
+      const newTown = s.town && !kept.some((k) => stops[k].town === s.town);
+      const score =
+        15 * interchange +
+        9 * s.exact +
+        10 * Number(!!newTown) +
+        Math.min(4, s.routes) +
+        (30 * gap) / (last - first);
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    kept.push(best);
+  }
+  return kept.sort((a, b) => a - b);
 }

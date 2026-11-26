@@ -33,6 +33,8 @@ void render(uint16_t *target, uint32_t now);
 void requestRedraw();
 std::string status();
 bool needsRender(uint32_t now);
+void dismissDetails(uint32_t now);
+bool scrollDetails(int startX, int startY, int dy);
 void toggleTheme();
 void pinch(float ratio, int fromX, int fromY, int toX, int toY);
 void finishPinch();

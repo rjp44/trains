@@ -64,9 +64,9 @@ void settings() {
 void contacts(const TouchFrame &frame) {
     using namespace transport;
     static Gesture gesture;
-    static Point previousCentre, uiPoint;
+    static Point previousCentre, uiPoint, scrollPoint;
     static float previousSpan;
-    static bool eligible, pinched, uiMulti;
+    static bool eligible, pinched, uiMulti, scrollingCard;
     if (panel::settingsOpen() || (!isLakes && !isHemel) || uiMulti) {
         if (frame.count >= 2 && !uiMulti) {
             uiMulti = true;
@@ -88,6 +88,7 @@ void contacts(const TouchFrame &frame) {
     };
     switch (gesture.sample(frame)) {
     case ContactEvent::PinchStart:
+        scrollingCard = false;
         previousSpan = gesture.span;
         previousCentre = gesture.centre;
         eligible = logicalY({frame.points[0].x, frame.points[0].y}) >= toolbarHeight &&
@@ -115,9 +116,11 @@ void contacts(const TouchFrame &frame) {
         if (isLakes && pinched) lakes::finishPinch();
         break;
     case ContactEvent::SingleEnd: {
+        if (scrollingCard) { scrollingCard = false; break; }
         Point start = gesture.start, end = gesture.last;
         if (logicalY(start) < toolbarHeight || logicalY(end) < toolbarHeight) {
             if (gesture.dragged || button(start) != button(end)) break;
+            if (isLakes) lakes::dismissDetails(now());
             if (button(end) == ToolbarButton::Settings) settings();
             if (button(end) == ToolbarButton::Theme) {
                 if (isHemel) hemel::toggleLight();
@@ -132,7 +135,13 @@ void contacts(const TouchFrame &frame) {
         }
         break;
     }
-    case ContactEvent::None: break;
+    case ContactEvent::None:
+        if (isLakes && frame.count == 1 && !gesture.multi && gesture.dragged) {
+            int dy = logicalY(gesture.last) - logicalY(scrollingCard ? scrollPoint : gesture.start);
+            scrollingCard = lakes::scrollDetails(portrait ? gesture.start.y : gesture.start.x, logicalY(gesture.start), dy);
+            scrollPoint = gesture.last;
+        }
+        break;
     }
 }
 void capture() {

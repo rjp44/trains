@@ -46,10 +46,11 @@ bool loadLakes() {
                          value(at(p, 3), a.mask);
               }) ||
         !load("stops", stops,
-              [](auto p, Stop &a) { return row(p, a.ref, a.group, a.side) && a.group < groups.size(); }) ||
+              [](auto p, Stop &a) { return (row(p, a.ref, a.group, a.side, a.name) || row(p, a.ref, a.group, a.side)) && a.group < groups.size(); }) ||
         !load("calls", calls,
               [](auto p, Call &a) {
-                  return row(p, a.stop, a.arrival, a.departure, a.pickup, a.exact) && a.stop < stops.size();
+                  return (row(p, a.stop, a.arrival, a.departure, a.pickup, a.exact, a.dropoff) ||
+                          row(p, a.stop, a.arrival, a.departure, a.pickup, a.exact)) && a.stop < stops.size();
               }) ||
         !load("patterns", patterns,
               [](auto p, Pattern &a) {

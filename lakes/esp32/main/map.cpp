@@ -6,6 +6,7 @@
 #include "preferences.h"
 #include "rail_events.h"
 #include "bus_layout.h"
+#include "detail_card.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -49,12 +50,12 @@ struct Group {
 struct Stop {
     const char *ref;
     unsigned group;
-    const char *side;
+    const char *side, *name = nullptr;
 };
 struct Call {
     unsigned stop;
     int arrival, departure;
-    bool pickup, exact;
+    bool pickup, exact, dropoff = true;
 };
 struct Pattern {
     unsigned offset, count;
@@ -72,7 +73,7 @@ int W = 600, H = 1024;
 bool portrait = true, dark = false, dirty = true, liveFailed = false, manualReplay = false,
      haveLive = false;
 uint32_t updated = 0, lastDraw = 0, replayAt = 0;
-int replayFrame = 0, count = 0, page = 0, stopSelection = -1;
+int replayFrame = 0, count = 0, stopSelection = -1;
 std::string selection;
 Snapshot latest, recorded;
 unsigned mask = 0;
@@ -83,8 +84,8 @@ enum Action {
     Marker,
     BusStop,
     Close,
-    Back,
-    More
+    CardBody,
+    ToggleStops
 };
 struct Rect {
     int x, y, w, h;
@@ -95,6 +96,12 @@ struct Hit {
     int index;
 };
 std::vector<Hit> hits;
+Rect cardBox{}, anchor{};
+int scrollY = 0, maxScroll = 0;
+std::string journeyKey;
+int expanded = -1;
+bool detailDirty = true;
+int64_t detailMinute = -1;
 uint16_t ink, paper, edge, muted;
 uint16_t color(unsigned v) { return ((v >> 8) & 0xf800) | ((v >> 5) & 0x07e0) | ((v >> 3) & 0x001f); }
 uint16_t blend(uint16_t bg, uint16_t fg, int a) {
@@ -149,12 +156,6 @@ void text(int x, int y, const std::string &s, uint16_t c, int limit = 2000) {
             }
         x += w;
     }
-}
-void tag(Rect box, const std::string &name, uint16_t fill, uint16_t fg, Action action, int index = -1) {
-    rect(box.x, box.y, box.w, box.h, edge);
-    rect(box.x + 1, box.y + 1, box.w - 2, box.h - 2, fill);
-    text(box.x + std::max(3, (box.w - textWidth(name)) / 2), box.y + (box.h - 20) / 2, name, fg, box.w - 4);
-    hits.push_back({box, action, index});
 }
 bool visible(int r) { return !mask || (mask & (1u << r)); }
 int sx(double x) { return std::lround((x - cx) * scale + W * .5); }
@@ -413,6 +414,7 @@ void vehicles(uint32_t now) {
         float c = cos(angle) / size, s = sin(angle) / size, flip = !roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);
         int radius = int(24 * size);
+        if (v.id == selection) anchor = {x - radius, y - radius, 2 * radius, 2 * radius};
         const auto *sprite = sprites + 48 * 48 * asset;
         for (int j = -radius; j <= radius; j++)
             for (int h = -radius; h <= radius; h++) {
@@ -533,18 +535,36 @@ void locateBuses(Snapshot &snapshot) {
         }
     }
 }
-std::vector<std::string> details;
-std::string title, subtitle;
+struct DetailRow {
+    std::string name, time, note;
+    int toggle = -1, hidden = 0;
+    bool intermediate = false;
+};
+std::vector<DetailRow> details;
+std::string title, subtitle, badge, section;
+uint16_t accent;
+void closeDetail() {
+    selection.clear();
+    stopSelection = -1;
+    expanded = -1;
+    journeyKey.clear();
+    cardBox = {};
+    scrollY = 0;
+    detailDirty = true;
+}
 void fillDetails(uint32_t now) {
     details.clear();
-    page = 0;
+    section.clear();
     Clock clock = london(clockMs(now));
     if (stopSelection >= 0) {
         const auto &g = groups[stopSelection];
         title = g.name;
-        subtitle = std::string(g.town) + "  |  Scheduled departures";
+        subtitle = g.town;
+        badge = "Bus stop";
+        section = "Scheduled departures";
+        accent = color(0x397766);
         if (clock.day < firstDay || clock.day >= firstDay + int(strlen(calendar[0]))) {
-            details.push_back("Outside the loaded timetable dates.");
+            details.push_back({"Outside the loaded timetable dates.", {}, {}});
             return;
         }
         using Row = std::pair<int, std::string>;
@@ -583,12 +603,12 @@ void fillDetails(uint32_t now) {
         }
         for (auto &[idx, rows] : byDirection)
             if (!rows.empty()) {
-                details.push_back(std::string("Towards ") + groups[idx].name);
+                details.push_back({std::string("Towards ") + groups[idx].name, {}, {}});
                 for (auto &r : rows)
-                    details.push_back(r.second);
+                    details.push_back({r.second, {}, {}});
             }
         if (details.empty())
-            details.push_back("No scheduled departures in the next seven days.");
+            details.push_back({"No scheduled departures in the next seven days.", {}, {}});
         return;
     }
     const auto &rows = active().vehicles;
@@ -598,55 +618,63 @@ void fillDetails(uint32_t now) {
         return;
     }
     auto &v = *it;
-    title = std::string(routes[v.route].name) + "  " + (v.route >= 8 ? v.label : "to " + v.destination);
-    subtitle = (replaying() ? std::string("Recorded  |  ") : std::string()) +
-               (v.route >= 8 ? "Railinfo rail estimate" : "Stagecoach GPS  |  " + v.label);
+    auto key = v.id + "/" + v.departure + "/" + v.terminus;
+    if (key != journeyKey) { expanded = -1; scrollY = 0; journeyKey = key; }
+    badge = routes[v.route].name;
+    accent = color(routes[v.route].rgb);
+    bool stale = clockMs(now) - v.time >= 120000 || (!replaying() && liveFailed) ||
+                 !(v.route >= 8 ? active().railOk : active().busOk);
+    subtitle = v.route >= 8 ? "Northern" : "Stagecoach";
+    if (v.route < 8 && v.label.rfind("Vehicle ", 0) == 0) subtitle += " " + v.label.substr(8);
+    subtitle += replaying() ? "  /  Replay" : stale ? "  /  Stale fix" : "  /  Live";
+    title = v.destination.empty() ? v.label : "To " + v.destination;
     if (v.route >= 8) {
-        details = {"Last   " + v.last + "   " + v.lastTime, "Next   " + v.next + "   " + v.nextTime};
+        section = "Rail position estimate";
+        details = {{v.last, v.lastTime, "Last reported"}, {v.next, v.nextTime, "Next station"}};
         return;
     }
     const auto *t = match(v);
     if (!t) {
-        details.push_back("No unique match in the published bus timetable.");
+        details.push_back({"No matching published timetable.", {}, {}});
         return;
     }
     const auto &p = patterns[t->pattern];
-    int next = -1;
+    std::vector<detail::Stop> journey;
+    for (unsigned i = 0; i < p.count; ++i) {
+        const auto &c = calls[p.offset + i];
+        if (!c.pickup && !c.dropoff) continue;
+        const auto &stop = stops[c.stop];
+        const auto &g = groups[stop.group];
+        journey.push_back({stop.name ? stop.name : g.name, g.town, t->start + (c.pickup ? c.departure : c.arrival),
+                           __builtin_popcount(g.mask), c.exact});
+    }
+    if (journey.empty()) { details.push_back({"No scheduled passenger calls.", {}, {}}); return; }
     const int day = v.serviceDate.empty() ? departure(v.departure).day : dayNumber(v.serviceDate);
-    for (unsigned i = 0; i < p.count; i++) {
-        const auto &call = calls[p.offset + i];
-        int at = t->start + call.arrival;
-        if (next < 0 && at >= clock.second + (clock.day - day) * 86400)
-            next = i;
-        details.push_back(hhmm(at) + (call.exact ? "   " : " ~ ") + groups[stops[call.stop].group].name);
-    }
-    if (next >= 0)
-        page = next / 5;
-}
-void card() {
-    if (stopSelection < 0 && selection.empty())
-        return;
-    int y = bottom - 246, margin = 10;
-    rect(margin, y, W - 2 * margin, 240, edge);
-    rect(margin + 2, y + 2, W - 2 * margin - 4, 236, paper);
-    // Consume taps on the card so the map underneath stays put.
-    hits.push_back({{margin, y, W - 2 * margin, 240}, Close, -2});
-    text(22, y + 8, title, ink, W - 102);
-    text(22, y + 32, subtitle, muted, W - 55);
-    tag({W - 77, y + 6, 54, 34}, "Close", paper, ink, Close);
-    for (int i = 0; i < 5; i++) {
-        unsigned row = page * 5 + i;
-        if (row >= details.size())
-            break;
-        text(22, y + 62 + i * 25, details[row], ink, W - 45);
-    }
-    if (details.size() > 5) {
-        tag({22, y + 194, 76, 38}, "Prev", paper, ink, Back);
-        text(110, y + 203, std::to_string(page + 1) + " / " + std::to_string((details.size() + 4) / 5),
-             muted);
-        tag({W - 102, y + 194, 80, 38}, "Next", paper, ink, More);
+    int seconds = clock.second + (clock.day - day) * 86400;
+    auto kept = detail::summary(journey, seconds);
+    bool finished = seconds > journey.back().at;
+    if (!journey.back().town.empty()) title = "To " + journey.back().town;
+    section = finished ? "Scheduled journey ended" : "Scheduled stops";
+    std::string lastTown;
+    for (size_t j = 0; j < kept.size(); ++j) {
+        int i = kept[j], hidden = j + 1 < kept.size() ? kept[j + 1] - i - 1 : 0;
+        auto add = [&](int n, bool intermediate) {
+            const auto &s = journey[n];
+            bool final = n == int(journey.size()) - 1;
+            std::string note;
+            if (final) note = !finished && j == 0 && !intermediate ? "Next stop / Terminus" : "Terminus";
+            else if (!j && !intermediate) note = "Next scheduled stop";
+            if (!s.town.empty() && lastTown != s.town && s.name.find(s.town) == std::string::npos && !final)
+                note += (note.empty() ? "" : "  /  ") + s.town;
+            lastTown = s.town;
+            details.push_back({s.name, (s.exact ? "" : "~") + hhmm(s.at), note,
+                               intermediate || !hidden ? -1 : i, intermediate ? 0 : hidden, intermediate});
+        };
+        add(i, false);
+        if (expanded == i) for (int n = i + 1; n <= i + hidden; ++n) add(n, true);
     }
 }
+#include "map_card.inc"
 void toolbar(uint32_t now) {
     rect(0, 0, W, top, paper);
     auto clock = london(clockMs(now));
@@ -678,6 +706,19 @@ bool mountPackage(){
 struct MapSettings {float zoom,x,y;uint32_t mask,portrait,dark;};
 void saveView(){ transport::saveView("lakes_view",MapSettings{zoom,cx,cy,mask,portrait,dark}); }
 bool portraitView(){return portrait;}
+void dismissDetails(uint32_t now) {
+    if (selection.empty() && stopSelection < 0) return;
+    closeDetail();
+    replayAt = now;
+    dirty = true;
+}
+bool scrollDetails(int startX, int startY, int dy) {
+    if (!cardBox.w || !maxScroll || !overlaps(cardBox, {startX, startY, 1, 1})) return false;
+    int next = std::clamp(scrollY - dy, 0, maxScroll);
+    dirty |= next != scrollY;
+    scrollY = next;
+    return true;
+}
 void toggleTheme() {
     dark = !dark;
     dirty = true;
@@ -701,9 +742,7 @@ void drawOptions(lv_obj_t *parent) {
     auto choose = [](lv_event_t *e) {
         auto id = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
         if (id == Live || id == Replay || id == Step || id >= AllRoutes) {
-            selection.clear();
-            stopSelection = -1;
-            page = 0;
+            closeDetail();
         }
         if (id <= Step) {
             if (id == Step) {
@@ -769,16 +808,14 @@ void receive(Snapshot data, uint32_t now) {
     locateBuses(data);
     haveLive = true;
     latest = std::move(data);
+    detailDirty = true;
     updated = now;
     liveFailed = false;
     dirty = true;
-    if (!manualReplay && (!selection.empty() || stopSelection >= 0)) {
-        int previous = page;
-        fillDetails(now);
-        page = std::min(previous, std::max(0, (int(details.size()) - 1) / 5));
-    }
+
 }
 void failed() {
+    detailDirty = true;
     liveFailed = true;
     dirty = true;
 }
@@ -805,11 +842,23 @@ void render(uint16_t *target, uint32_t now) {
     edge = color(dark ? 0x618477 : 0xb9c6b6);
     muted = color(dark ? 0xb9d0c4 : 0x456558);
     hits.clear();
+    anchor = {};
+    if (stopSelection >= 0) {
+        auto p = groups[stopSelection].point;
+        anchor = {sx(p.x / 8.f) - 4, sy(p.y / 8.f) - 4, 8, 8};
+    }
     baseMap();
     network();
     geography();
     vehicles(now);
-    card();
+    if (!selection.empty() || stopSelection >= 0) {
+        if (!anchor.w || !overlaps(anchor, {0, top, W, bottom-top})) closeDetail();
+        else {
+            int64_t minute = clockMs(now) / 60000;
+            if (detailDirty || minute != detailMinute) { fillDetails(now); detailMinute = minute; detailDirty = false; }
+            card();
+        }
+    }
     toolbar(now);
     lastDraw = now;
     dirty = false;
@@ -818,7 +867,10 @@ int visibleCount() { return count; }
 void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
     int x = portrait ? py : px, y = portrait ? panelWidth - 1 - px : py;
     int dx = portrait ? pdy : pdx, dy = portrait ? -pdx : pdy;
+    auto inside = [](Rect r, int x, int y) { return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h; };
+    const bool opened = !selection.empty() || stopSelection >= 0;
     if (abs(dx) + abs(dy) > 14) {
+        if (opened && scrollDetails(x - dx, y - dy, dy)) return;
         if (y - dy >= top && y >= top && y < bottom && selection.empty() && stopSelection < 0) {
             cx = std::clamp(cx - dx / scale, 0.f, float(mapW));
             cy = std::clamp(cy - dy / scale, 0.f, float(mapH));
@@ -826,6 +878,9 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             saveView();
         }
         return;
+    }
+    if (opened && !inside(cardBox, x, y)) {
+        closeDetail(); replayAt = now; dirty = true; return;
     }
     for (auto it = hits.rbegin(); it != hits.rend(); it++) {
         auto b = it->box;
@@ -835,29 +890,21 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
         Action a = it->action;
         switch (a) {
         case Marker:
-            if (unsigned(i) < active().vehicles.size()) {
-                selection = active().vehicles[i].id;
-                stopSelection = -1;
-                fillDetails(now);
-            }
+            if (unsigned(i) < active().vehicles.size()) { closeDetail(); selection = active().vehicles[i].id; }
             break;
         case BusStop:
+            closeDetail();
             stopSelection = i;
-            selection.clear();
-            fillDetails(now);
             break;
-        case Back:
-            page = std::max(0, page - 1);
+        case ToggleStops:
+            expanded = expanded == i ? -1 : i;
+            detailDirty = true;
             break;
-        case More:
-            page = std::min(page + 1, std::max(0, (int(details.size()) - 1) / 5));
-            break;
+        case CardBody:
+            return;
         case Close:
-            if (i != -2) {
-                selection.clear();
-                stopSelection = -1;
-                replayAt = now;
-            }
+            closeDetail();
+            replayAt = now;
             break;
         }
 
