@@ -24,6 +24,28 @@ def distance(a, b):
     return math.hypot((a[0] - b[0]) * 65000, (a[1] - b[1]) * 111200)
 
 
+def simplify_trace(trace, metres=12):
+    """Keep bends in the directed road trace to within the map's drawing tolerance."""
+    keep = {0, len(trace) - 1}
+    pending = [(0, len(trace) - 1)]
+    while pending:
+        start, end = pending.pop()
+        a, b = trace[start], trace[end]
+        dx, dy = (b[0]-a[0])*65000, (b[1]-a[1])*111200
+        length2 = dx*dx + dy*dy
+        farthest, cut = metres**2, None
+        for i in range(start + 1, end):
+            x, y = (trace[i][0]-a[0])*65000, (trace[i][1]-a[1])*111200
+            t = max(0, min(1, (x*dx + y*dy) / length2)) if length2 else 0
+            error = (x-t*dx)**2 + (y-t*dy)**2
+            if error > farthest:
+                farthest, cut = error, i
+        if cut is not None:
+            keep.add(cut)
+            pending.extend(((start, cut), (cut, end)))
+    return [trace[i] for i in sorted(keep)]
+
+
 def pair_opposite_stops(groups, stops, official, routes_at):
     # Some opposing poles have different names. Require a shared route, locality and street,
     # opposing pole bearings and a mutually nearest neighbour within 120 metres.
@@ -130,10 +152,16 @@ def extract(archive, naptan, winter_end, cache):
             if row[key] in shape_lines:
                 points[row[key]].append((int(row[seq]), round(float(row[lon]), 6), round(float(row[lat]), 6)))
     shapes = {line: [] for line in sorted(LINES)}
+    paths, unique_paths, path_ids = [], {}, {}
     for shape_id, lines in shape_lines.items():
         if len(points[shape_id]) < 2:
             raise ValueError('Missing road trace ' + shape_id)
         trace = [(lon, lat) for _, lon, lat in sorted(points[shape_id])]
+        key = tuple(trace)
+        if key not in unique_paths:
+            unique_paths[key] = len(paths)
+            paths.append(simplify_trace(trace))
+        path_ids[shape_id] = unique_paths[key]
         for line in lines:
             shapes[line].append(trace)
     cache.mkdir(parents=True, exist_ok=True)
@@ -186,10 +214,10 @@ def extract(archive, naptan, winter_end, cache):
             indexes[pattern] = len(patterns)
             patterns.append(pattern)
         journeys.append(dict(route=routes[t['route_id']], service=t['service_id'], start=departure,
-                             pattern=indexes[pattern], destination=t['trip_headsign']))
+                             pattern=indexes[pattern], path=path_ids[t['shape_id']], destination=t['trip_headsign']))
     pair_opposite_stops(groups, stops, official, routes_at)
     return dict(start=start.isoformat(), end=end.isoformat(), version=feed['feed_version'],
-                calendars=calendars, trips=journeys, patterns=patterns, stops=stops, groups=groups)
+                calendars=calendars, trips=journeys, patterns=patterns, stops=stops, groups=groups, paths=paths)
 
 
 if __name__ == '__main__':

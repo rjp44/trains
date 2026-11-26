@@ -8,7 +8,7 @@ npm ci --prefix lakes
 node --test
 ```
 
-The suites cover the Hemel rail and live-feed reducers, Lakes vehicle and timetable matching, the bundled feed VM, package validation, release signing, numeric version ordering and repeatable browser offline builds. Release tests use temporary keys and outputs.
+The suites cover the Hemel rail and live-feed reducers, Lakes timetable matching, bus headings and marker spacing across the recorded journeys, the bundled feed VM, package validation, release signing, numeric version ordering and repeatable browser offline builds. Release tests use temporary keys and outputs.
 
 For the native tests and desktop renderer, install a C++17 compiler, CMake 3.24+, Ninja and SDL2 development files. The first configuration fetches LVGL 9.3.0.
 

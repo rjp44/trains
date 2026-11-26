@@ -12,6 +12,8 @@ std::vector<Stop> stops;
 std::vector<Call> calls;
 std::vector<Pattern> patterns;
 std::vector<Trip> trips;
+std::vector<bus::Path> busPaths;
+std::vector<Variant> busVariants;
 std::vector<const char *> calendar, recordings;
 bool loadLakes() {
     using namespace transport;
@@ -56,7 +58,8 @@ bool loadLakes() {
               }) ||
         !load("calendar", calendar, str) || !load("recordings", recordings, str, 100) ||
         !load("trips", trips, [](auto p, Trip &a) {
-            return row(p, a.route, a.service, a.start, a.pattern, a.dest) &&
+            return (row(p, a.route, a.service, a.start, a.pattern, a.dest, a.path) ||
+                    row(p, a.route, a.service, a.start, a.pattern, a.dest)) &&
                    unsigned(a.route) < routes.size() && unsigned(a.service) < calendar.size() &&
                    unsigned(a.pattern) < patterns.size();
         }))
@@ -72,9 +75,39 @@ bool loadLakes() {
     memcpy(&rasterScale, p + 16, 4);
     unsigned colors = little(p + 20);
     if (!colors || colors > 256 || rasterW <= 0 || rasterH <= 0 || rasterW > 4096 || rasterH > 4096 ||
-        size_t(rasterW) * rasterH > 5 * 1024 * 1024 || !std::isfinite(rasterScale) || rasterScale <= 0 ||
-        atlas.size != 24 + 4 * colors + 95 * (1 + 19 * 23) + 7 * 48 * 48 * 2)
+        size_t(rasterW) * rasterH > 5 * 1024 * 1024 || !std::isfinite(rasterScale) || rasterScale <= 0)
         return false;
+    const size_t artHeader = 24 + 4 * colors + 95 * (1 + 19 * 23);
+    const size_t spriteBytes = 48 * 48 * 2;
+    if (atlas.size == artHeader + 10 * spriteBytes) {
+        auto raw = unpack("native/bus-paths.bin");
+        if (raw.size < 4) return false;
+        unsigned pathCount = little(raw.data);
+        if (!pathCount || pathCount > 4096) return false;
+        size_t offset = 4;
+        for (unsigned i = 0; i < pathCount; ++i) {
+            if (raw.size - offset < 4) return false;
+            unsigned n = little(raw.data + offset);
+            offset += 4;
+            if (n < 2 || n > (raw.size - offset) / sizeof(bus::Vertex)) return false;
+            auto points = reinterpret_cast<const bus::Vertex *>(raw.data + offset);
+            if (points[0].distance != 0) return false;
+            for (unsigned j = 1; j < n; ++j)
+                if (!std::isfinite(points[j].distance) || points[j].distance <= points[j-1].distance ||
+                    (points[j].x == points[j-1].x && points[j].y == points[j-1].y)) return false;
+            busPaths.push_back({points, n});
+            offset += n * sizeof(bus::Vertex);
+        }
+        if (offset != raw.size) return false;
+        for (const auto &t : trips) {
+            if (unsigned(t.path) >= pathCount) return false;
+            auto pattern = patterns[t.pattern];
+            Variant v{t.route, t.path, calls[pattern.offset].stop, calls[pattern.offset + pattern.count - 1].stop};
+            if (std::none_of(busVariants.begin(), busVariants.end(), [&](auto &other) {
+                return other.route == v.route && other.path == v.path && other.origin == v.origin && other.terminus == v.terminus;
+            })) busVariants.push_back(v);
+        }
+    } else if (atlas.size != artHeader + 7 * spriteBytes) return false;
     dayPalette = (uint16_t *)(p + 24);
     nightPalette = dayPalette + colors;
     advances = (uint8_t *)(nightPalette + colors);

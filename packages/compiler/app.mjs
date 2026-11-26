@@ -66,6 +66,7 @@ export function buildApp(id) {
       const tiles = join(temp, 'terrain.tiles');
       execFileSync('python3', ['lakes/esp32/terrain-tiles.py', '--assets', temp, '--output', tiles], { cwd: root });
       parts.set('native/atlas.bin', fs.readFileSync(join(temp, 'atlas.bin')));
+      parts.set('native/bus-paths.bin', fs.readFileSync(join(temp, 'bus-paths.bin')));
       parts.set('native/terrain.tiles', fs.readFileSync(tiles));
     }
     parts.set('native/tables.json', fs.readFileSync(table));

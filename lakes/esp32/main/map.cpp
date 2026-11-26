@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include "preferences.h"
 #include "rail_events.h"
+#include "bus_layout.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -61,7 +62,9 @@ struct Pattern {
 struct Trip {
     int route, service, start, pattern;
     const char *dest;
+    int path = -1;
 };
+struct Variant { int route, path; unsigned origin, terminus; };
 #include "lakes-runtime.inc"
 
 uint16_t *pixels;
@@ -351,7 +354,8 @@ double railAngle(const Vehicle &v) {
 void vehicles(uint32_t now) {
     const auto &data = active();
     count = 0;
-    float size = std::min(2.4f, 1.f + .35f * log2f(zoom));
+    float fullSize = std::min(2.4f, 1.f + .35f * log2f(zoom));
+    std::vector<bus::Marker> markers;
     for (unsigned i = 0; i < data.vehicles.size(); i++) {
         const auto &v = data.vehicles[i];
         int k = v.route;
@@ -362,15 +366,51 @@ void vehicles(uint32_t now) {
         int x = sx(v.x), y = sy(v.y);
         if (x < -20 || x > W + 20 || y < top - 10 || y > bottom + 10)
             continue;
-        double direction = k >= 8 ? railAngle(v) : v.bearing;
+        float direction = k >= 8 ? railAngle(v) : v.path >= 0 ? bus::bearing(busPaths[v.path], v.along) : v.bearing;
+        markers.push_back({i, {float(v.x), float(v.y)}, direction, v.path, v.along});
+    }
+    std::sort(markers.begin(), markers.end(), [&](const auto &a, const auto &b) {
+        return std::tie(a.path, a.distance, data.vehicles[a.index].id) < std::tie(b.path, b.distance, data.vehicles[b.index].id);
+    });
+    const float unit = fullSize * (48.f / 44) / scale;
+    std::vector<bus::Box> footprints;
+    auto inside = [&](bus::Point p) { return sx(p.x) >= 0 && sx(p.x) < W && sy(p.y) >= top && sy(p.y) < bottom; };
+    const auto anchors = markers;
+    float busSize = 1;
+    for (float factor : {1.f, .82f, .66f, .52f, .4f}) {
+        busSize = factor;
+        markers = anchors;
+        footprints.clear();
+        bool crowded = false;
+        for (auto &m : markers) {
+            if (!bus::place(m, busPaths, footprints, unit * (m.path < 0 ? 1 : factor), inside)) crowded = true;
+            footprints.push_back(m.box);
+        }
+        if (!crowded) break;
+    }
+    for (const auto box : footprints) {
+        int left = sx(box.x), up = sy(box.y);
+        occupied.push_back({left, up, sx(box.x + box.w) - left + 1, sy(box.y + box.h) - up + 1});
+    }
+    bus::restoreOrder(markers);
+    // In exceptional crowds the fixed train also gets the final draw and hit-test priority.
+    for (auto it = markers.rbegin(); it != markers.rend(); ++it) {
+        const auto &m = *it;
+        unsigned i = m.index;
+        const auto &v = data.vehicles[i];
+        float size = fullSize * (m.path < 0 ? 1 : busSize);
+        int k = v.route, x = sx(m.point.x), y = sy(m.point.y);
+        double direction = m.bearing;
+        int64_t age = clockMs(now) - v.time;
         int asset = k >= 8                                     ? 3
                     : !strcmp(routes[k].icon, "open-decker")   ? 2
                     : !strcmp(routes[k].icon, "closed-decker") ? 1
                                                                : 0;
-        if (direction < 0 && asset < 3)
-            asset += 4;
+        bool roof = m.path >= 0 && bus::roofView(direction);
+        if (roof) asset += 7;
+        else if (direction < 0 && asset < 3) asset += 4;
         double angle = direction < 0 ? 0 : (direction - 90) * M_PI / 180;
-        float c = cos(angle) / size, s = sin(angle) / size, flip = direction > 180 ? -1 : 1;
+        float c = cos(angle) / size, s = sin(angle) / size, flip = !roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);
         int radius = int(24 * size);
         const auto *sprite = sprites + 48 * 48 * asset;
@@ -384,7 +424,8 @@ void vehicles(uint32_t now) {
             }
         std::string badge = routes[k].name;
         int width = textWidth(badge) + 7;
-        Rect hit{x - radius, y - radius, radius * 2, radius * 2};
+        int left = sx(m.box.x), up = sy(m.box.y);
+        Rect hit{left, up, sx(m.box.x + m.box.w) - left + 1, sy(m.box.y + m.box.h) - up + 1};
         for (int d : {-1, 1}) {
             Rect b{std::clamp(x + 9, 0, W - width), y + (d < 0 ? -radius - 16 : radius - 3), width, 20};
             if (b.y < top || b.y + 20 > bottom ||
@@ -456,6 +497,41 @@ const Trip *match(const Vehicle &v) {
         found = &t;
     }
     return found;
+}
+void locateBuses(Snapshot &snapshot) {
+    if (busPaths.empty()) return;
+    for (auto &v : snapshot.vehicles) {
+        if (v.route >= 8) continue;
+        const bus::Point fix{float(v.x), float(v.y)};
+        if (const auto *trip = match(v)) {
+            const auto &pattern = patterns[trip->pattern];
+            int duration = calls[pattern.offset + pattern.count - 1].arrival;
+            auto start = departure(v.departure);
+            auto elapsed = london(v.time);
+            float expected = duration > 0 ? std::clamp(float((elapsed.day - start.day)*86400 +
+                elapsed.second - start.second) / duration, 0.f, 1.f) : -1.f;
+            v.path = trip->path;
+            v.along = bus::nearest(busPaths[v.path], fix, expected).distance;
+            continue;
+        }
+        int bestRank = -1;
+        float bestError = INFINITY;
+        for (const auto &variant : busVariants) {
+            if (variant.route != v.route) continue;
+            int rank = int(v.origin == stops[variant.origin].ref) + int(v.terminus == stops[variant.terminus].ref);
+            if (rank < bestRank) continue;
+            auto path = busPaths[variant.path];
+            auto candidate = bus::nearest(path, fix, -1);
+            if (!rank && v.bearing >= 0)
+                candidate.error += .6f * (1 - std::cos((bus::bearing(path, candidate.distance) - v.bearing) * bus::radians));
+            if (rank > bestRank || candidate.error < bestError) {
+                bestRank = rank;
+                bestError = candidate.error;
+                v.path = variant.path;
+                v.along = candidate.distance;
+            }
+        }
+    }
 }
 std::vector<std::string> details;
 std::string title, subtitle;
@@ -593,7 +669,7 @@ void project(double lon, double lat, double &x, double &y) {
     x = (lon - west) * units * aspect;
     y = (north - lat) * units;
 }
-void replayInput(const char *json) { decode(json, recorded); }
+void replayInput(const char *json) { if (decode(json, recorded)) locateBuses(recorded); }
 bool mountPackage(){
     if(!loadLakes()) return false;
     for(auto json:recordings){Snapshot test;if(!decode(json,test))return false;}
@@ -690,6 +766,7 @@ void receive(Snapshot data, uint32_t now) {
             if (visible(v.route) && newRailReport(latest, data, v, wall))
                 panel::trainHorn(v.direction > 0, v.lastStop == 1);
     }
+    locateBuses(data);
     haveLive = true;
     latest = std::move(data);
     updated = now;

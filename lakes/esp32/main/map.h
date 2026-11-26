@@ -11,6 +11,8 @@ struct Vehicle {
     int lastStop = -1; // Unknown on older feed responses.
     int route = -1, direction = 0;
     double x = 0, y = 0, bearing = -1;
+    int path = -1;
+    float along = 0;
     int64_t time = 0;
 };
 struct Snapshot {

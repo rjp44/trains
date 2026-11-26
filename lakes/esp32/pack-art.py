@@ -58,6 +58,7 @@ for i in range(32,127):
 data+=arr('uint8_t','advances',glyphs)+arr('uint8_t','fontMask',coverage)
 defs=re.search(r'<defs>.*?</defs>',(public/'index.html').read_text(),re.S)[0]
 ids=['single-side','closed-decker-side','open-decker-side','northern-carriage','single-front','closed-decker-front','open-decker-front']
+ids += ['single-roof', 'closed-decker-roof', 'open-decker-roof']
 sprites=[]
 for icon in ids:
     svg=f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="48" height="48" viewBox="-22 -22 44 44">{defs}<use xlink:href="#{icon}" color="#25434c"/></svg>'

@@ -1,6 +1,8 @@
 // Export the same geometry, line identities and timetable used by the PWA.
 import fs from 'node:fs';
+import path from 'node:path';
 import { order, routes, project } from '../public/model.mjs';
+import { makePath } from '../public/bus-layout.mjs';
 const root = new URL('../public/data/', import.meta.url);
 const load = (file) => JSON.parse(fs.readFileSync(new URL(file + '.json', root)));
 const map = load('map'),
@@ -119,14 +121,31 @@ h += rows(
   'trips',
   'Trip',
   tt.trips.map((t) =>
-    agg(order.indexOf(t.route), svc.indexOf(t.service), t.start, t.pattern, q(t.destination)),
+    agg(order.indexOf(t.route), svc.indexOf(t.service), t.start, t.pattern, q(t.destination), t.path),
   ),
 );
 if (!process.argv[2]) fs.writeFileSync(new URL('network.inc', out), h);
 const replay = load('replay');
 tables.firstDay = Math.floor(Date.parse(tt.start) / 86400000);
 tables.recordings = replay.frames.map(f => JSON.stringify(f));
-if (process.argv[2]) fs.writeFileSync(process.argv[2], JSON.stringify(tables));
+if (process.argv[2]) {
+  fs.writeFileSync(process.argv[2], JSON.stringify(tables));
+  // Directed trip shapes use packed map coordinates and cumulative lengths for fast walks on the tablet.
+  const u32 = n => { const out = Buffer.alloc(4); out.writeUInt32LE(n); return out; };
+  const chunks = [u32(tt.paths.length)];
+  for (const trace of tt.paths) {
+    const points = makePath(trace.map(p => pos(project(p, map.frame)).map(n => n / 8)));
+    if (points.length < 2) throw Error('Empty directed bus path');
+    const bytes = Buffer.alloc(points.length * 8);
+    points.forEach(({ x, y, distance }, i) => {
+      bytes.writeInt16LE(x * 8, i * 8);
+      bytes.writeInt16LE(y * 8, i * 8 + 2);
+      bytes.writeFloatLE(distance, i * 8 + 4);
+    });
+    chunks.push(u32(points.length), bytes);
+  }
+  fs.writeFileSync(path.join(path.dirname(process.argv[2]), 'bus-paths.bin'), Buffer.concat(chunks));
+}
 else fs.writeFileSync(
   new URL('replay.inc', out),
   'static const char *const recordings[] = {\n' +

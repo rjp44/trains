@@ -9,6 +9,7 @@ import {
   freshMs,
 } from './model.mjs';
 import { Timetable, hhmm, stopTitle, serviceSeconds } from './timetable.mjs';
+import { BusPaths, placeVehicles, roofView } from './bus-layout.mjs';
 
 const $ = (id) => document.getElementById(id);
 const svg = $('map'),
@@ -39,6 +40,8 @@ const [data, { lines: railways }, schedule] = await Promise.all([
 ]);
 const timetable = schedule && new Timetable(schedule);
 const { frame } = data;
+const busPaths = new BusPaths(timetable, point => project(point, frame));
+const routeMatches = new WeakMap();
 const [W, H] = [frame.width, frame.height];
 const positions = [
   ['Penrith', -2.757, 54.663, 0, -9, 1],
@@ -632,7 +635,7 @@ function detail() {
           'div',
           v.label +
             ' · ' +
-            (Number.isFinite(v.bearing) ? 'Heading ' + v.bearing + '°' : 'Heading unavailable'),
+            (Number.isFinite(v.bearing) ? 'GPS heading ' + v.bearing + '°' : 'GPS heading unavailable'),
         ),
       );
     body.append(
@@ -680,16 +683,23 @@ function drawMarkers() {
   markers.replaceChildren();
   const unit = 1 / (svg.getScreenCTM()?.a || 1);
   const iconUnit = unit * Math.min(2.4, 1 + 0.35 * Math.log2(zoom));
-  const occupied = [...labelBoxes];
-  for (const vehicle of fixes) {
-    const [x, y] = project(vehicle.point, frame);
-    const radius = (railways[vehicle.route] ? 18 : 16) * iconUnit;
-    occupied.push([x - radius, y - radius, 2 * radius, 2 * radius]);
-  }
-  for (const v of fixes) {
-    const [x, y] = project(v.point, frame),
-      rail = railways[v.route],
-      fill = routes[v.route].colour;
+  const positions = fixes.map(v => {
+    const [x, y] = project(v.point, frame), rail = railways[v.route];
+    if (rail) return { v, id: v.id, x, y, bearing: railBearing(v, [x, y], rail.track, rail.stations) };
+    if (!routeMatches.has(v)) {
+      const trip = timetable?.match(v);
+      const duration = trip && timetable.patterns[trip.pattern].at(-1)[1];
+      const progress = duration > 0 ? Math.max(0, Math.min(1, (v.time - Date.parse(v.departure)) / (1000 * duration))) : null;
+      routeMatches.set(v, busPaths.locate(v, x, y, trip, progress));
+    }
+    return { v, id: v.id, x, y, bearing: null, ...routeMatches.get(v) };
+  });
+  placeVehicles(positions, iconUnit, (x, y) =>
+    Math.abs(x - cx) <= svg.clientWidth * unit / 2 && Math.abs(y - cy) <= svg.clientHeight * unit / 2);
+  const occupied = [...labelBoxes, ...positions.map(m => m.box)];
+  for (const { v, x, y, bearing, size } of positions) {
+    const drawUnit = iconUnit * size;
+    const rail = railways[v.route], fill = routes[v.route].colour;
     const g = shape(
       'g',
       {
@@ -768,11 +778,11 @@ function drawMarkers() {
         g,
       );
     }
-    const bearing = rail ? railBearing(v, [x, y], rail.track, rail.stations) : v.bearing;
     const known = Number.isFinite(bearing);
     const angle = known ? bearing - 90 : 0;
-    const flip = known && bearing > 180 ? -1 : 1;
-    const icon = rail ? '#northern-carriage' : '#' + routes[v.route].icon + (known ? '-side' : '-front');
+    const roof = !rail && roofView(bearing);
+    const flip = known && !roof && bearing > 180 ? -1 : 1;
+    const icon = rail ? '#northern-carriage' : '#' + routes[v.route].icon + (roof ? '-roof' : known ? '-side' : '-front');
     shape(
       'use',
       {
@@ -784,7 +794,7 @@ function drawMarkers() {
           ' ' +
           y +
           ') scale(' +
-          iconUnit +
+          drawUnit +
           ') rotate(' +
           angle +
           ') scale(1 ' +
@@ -793,7 +803,7 @@ function drawMarkers() {
       },
       g,
     );
-    shape('circle', { cx: x, cy: y, r: 17 * iconUnit, fill: 'transparent' }, g);
+    shape('circle', { cx: x, cy: y, r: 17 * drawUnit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
     g.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
