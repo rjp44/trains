@@ -293,7 +293,7 @@ export function panelSettings({
   credit.textContent = globalThis.transportApp?.manifest?.credits || credits;
   const made = document.createElement('a');
   made.href = 'https://github.com/rjp44/trains';
-  made.textContent = 'Made for Jack with love from @rjp44';
+  made.textContent = 'created by rjp44';
   const solar = document.createElement('a');
   solar.href = 'https://open-meteo.com/';
   solar.textContent = 'Sunrise and sunset from Open-Meteo';

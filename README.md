@@ -1,6 +1,8 @@
 # Transport Display
 
-Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The tablet core runs two independently installable apps, Hemel and Lakes. The signed directory lists the versions available for download. Made for Jack with love from @rjp44.
+Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The tablet core runs two independently installable apps, Hemel and Lakes. The signed directory lists the versions available for download.
+
+[created by rjp44](https://github.com/rjp44/trains)
 
 | App | What it shows |
 | --- | --- |

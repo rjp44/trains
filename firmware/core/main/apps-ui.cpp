@@ -212,7 +212,7 @@ void pollApps() {
 }
 void aboutPage(lv_obj_t *parent) {
     label(parent, installedVersions());
-    label(parent, "Made for Jack with love from @rjp44");
+    label(parent, "created by rjp44");
     constexpr char link[] = "https://github.com/rjp44/trains";
     label(parent, link);
     auto qr = lv_qrcode_create(parent);
