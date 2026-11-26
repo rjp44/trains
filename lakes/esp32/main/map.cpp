@@ -384,7 +384,7 @@ void vehicles(uint32_t now) {
         footprints.clear();
         bool crowded = false;
         for (auto &m : markers) {
-            if (!bus::place(m, busPaths, footprints, unit * (m.path < 0 ? 1 : factor), inside)) crowded = true;
+            if (!bus::place(m, busPaths, footprints, unit * (m.path < 0 ? 1 : factor), inside, spriteCount)) crowded = true;
             footprints.push_back(m.box);
         }
         if (!crowded) break;
@@ -407,11 +407,10 @@ void vehicles(uint32_t now) {
                     : !strcmp(routes[k].icon, "open-decker")   ? 2
                     : !strcmp(routes[k].icon, "closed-decker") ? 1
                                                                : 0;
-        bool roof = m.path >= 0 && bus::roofView(direction);
-        if (roof) asset += 7;
-        else if (direction < 0 && asset < 3) asset += 4;
-        double angle = direction < 0 ? 0 : (direction - 90) * M_PI / 180;
-        float c = cos(angle) / size, s = sin(angle) / size, flip = !roof && direction > 180 ? -1 : 1;
+        auto view = asset == 3 ? bus::View::Side : bus::busView(direction, m.path >= 0 ? spriteCount : 7);
+        asset += static_cast<int>(view);
+        double angle = view == bus::View::Front ? 0 : (direction - 90) * M_PI / 180;
+        float c = cos(angle) / size, s = sin(angle) / size, flip = view != bus::View::Roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);
         int radius = int(24 * size);
         if (v.id == selection) anchor = {x - radius, y - radius, 2 * radius, 2 * radius};

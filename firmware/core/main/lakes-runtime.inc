@@ -3,6 +3,7 @@ float rasterScale;
 double west, north, units, aspect;
 uint8_t *terrain, *advances, *fontMask;
 uint16_t *dayPalette, *nightPalette, *sprites;
+unsigned spriteCount;
 std::vector<Route> routes;
 std::vector<XY> vertices;
 std::vector<Segment> segments;
@@ -80,7 +81,9 @@ bool loadLakes() {
         return false;
     const size_t artHeader = 24 + 4 * colors + 95 * (1 + 19 * 23);
     const size_t spriteBytes = 48 * 48 * 2;
-    if (atlas.size == artHeader + 10 * spriteBytes) {
+    if (atlas.size < artHeader || (atlas.size - artHeader) % spriteBytes) return false;
+    spriteCount = (atlas.size - artHeader) / spriteBytes;
+    if (spriteCount == 10 || spriteCount == 13) {
         auto raw = unpack("native/bus-paths.bin");
         if (raw.size < 4) return false;
         unsigned pathCount = little(raw.data);
@@ -108,7 +111,7 @@ bool loadLakes() {
                 return other.route == v.route && other.path == v.path && other.origin == v.origin && other.terminus == v.terminus;
             })) busVariants.push_back(v);
         }
-    } else if (atlas.size != artHeader + 7 * spriteBytes) return false;
+    } else if (spriteCount != 7) return false;
     dayPalette = (uint16_t *)(p + 24);
     nightPalette = dayPalette + colors;
     advances = (uint8_t *)(nightPalette + colors);

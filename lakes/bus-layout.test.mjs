@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BusPaths, makePath, placeVehicles, roofView, routeBearing } from './public/bus-layout.mjs';
+import { BusPaths, busView, makePath, placeVehicles, routeBearing } from './public/bus-layout.mjs';
 import { project, railBearing, visibleFixes } from './public/model.mjs';
 import { Timetable } from './public/timetable.mjs';
 
@@ -51,19 +51,16 @@ test('journey direction survives a local zigzag and conflicting or absent GPS re
     }
     assert.equal(routes.locate({ ...v, origin: 'B', terminus: 'A' }, 1, 0.5, null, null).bearing, 180);
   }
-  for (const [angle, roof] of [
-    [314.99, false],
-    [315, true],
-    [0, true],
-    [45, true],
-    [45.01, false],
-    [134.99, false],
-    [135, true],
-    [205, true],
-    [205.01, false],
-    [null, false],
-  ])
-    assert.equal(roofView(angle), roof);
+});
+
+test('bus elevations agree in all four quadrants with a three-quarter view on each diagonal', () => {
+  for (const northSouth of [0, 180])
+    for (const sign of [-1, 1])
+      for (const [offset, view] of [[0, 'roof'], [22.5, 'roof'], [22.51, 'oblique'], [45, 'oblique'],
+        [67.49, 'oblique'], [67.5, 'side'], [90, 'side']])
+        assert.equal(busView((360 + northSouth + sign * offset) % 360), view);
+  assert.equal(busView(360), 'roof');
+  for (const unknown of [null, undefined, NaN, Infinity, -1, 361]) assert.equal(busView(unknown), 'front');
 });
 
 test('buses line up on their own paths at a rail crossing and keep trip order and IDs', () => {

@@ -8,8 +8,19 @@ int main() {
     const Vertex north[] = {{1080, 2000, 0}, {1080, 0, 250}};
     std::vector<Path> paths{{east, 2}, {north, 2}};
     assert(bearing(paths[0], 0) == 90 && bearing(paths[1], 250) == 0);
-    assert(roofView(315) && roofView(45) && roofView(135) && roofView(205));
-    assert(!roofView(314.9f) && !roofView(45.1f) && !roofView(205.1f) && !roofView(-1));
+    for (float axis : {0.f, 180.f})
+        for (float sign : {-1.f, 1.f}) {
+            auto view = [&](float offset) { return busView(std::fmod(360 + axis + sign * offset, 360.f)); };
+            assert(view(0) == View::Roof && view(22.5f) == View::Roof);
+            assert(view(22.51f) == View::Oblique && view(45) == View::Oblique && view(67.49f) == View::Oblique);
+            assert(view(67.5f) == View::Side && view(90) == View::Side);
+        }
+    assert(busView(360) == View::Roof && busView(-1) == View::Front && busView(NAN) == View::Front);
+    for (int heading = 0; heading <= 360; ++heading) {
+        assert(busView(heading, 7) == View::Side);
+        bool oldRoof = heading >= 315 || heading <= 45 || (heading >= 135 && heading <= 205);
+        assert(busView(heading, 10) == (oldRoof ? View::Roof : View::Side));
+    }
 
     const Vertex zigzag[] = {{0, 96, 0}, {0, 8, 11}, {8, 8, 12}, {8, 0, 13}, {0, 0, 14}, {0, -96, 26}};
     const Path path{zigzag, 6};

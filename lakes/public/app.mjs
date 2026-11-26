@@ -8,7 +8,7 @@ import {
   freshMs,
 } from './model.mjs';
 import { Timetable, hhmm, stopTitle, serviceSeconds, journeySummary } from './timetable.mjs';
-import { BusPaths, placeVehicles, roofView } from './bus-layout.mjs';
+import { BusPaths, busView, placeVehicles } from './bus-layout.mjs';
 
 const $ = (id) => document.getElementById(id);
 const svg = $('map'),
@@ -897,11 +897,11 @@ function drawMarkers() {
         g,
       );
     }
-    const known = Number.isFinite(bearing);
+    const view = rail ? 'side' : busView(bearing);
+    const known = Number.isFinite(bearing) && view !== 'front';
     const angle = known ? bearing - 90 : 0;
-    const roof = !rail && roofView(bearing);
-    const flip = known && !roof && bearing > 180 ? -1 : 1;
-    const icon = rail ? '#northern-carriage' : '#' + routes[v.route].icon + (roof ? '-roof' : known ? '-side' : '-front');
+    const flip = known && view !== 'roof' && bearing > 180 ? -1 : 1;
+    const icon = rail ? '#northern-carriage' : '#' + routes[v.route].icon + '-' + view;
     shape(
       'use',
       {

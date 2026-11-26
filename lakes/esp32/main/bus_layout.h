@@ -53,17 +53,29 @@ inline Match nearest(Path path, Point fix, float expected) {
     }
     return best;
 }
-inline bool roofView(float heading) {
-    return heading >= 0 && heading <= 360 &&
-           (heading >= 315 || heading <= 45 || (heading >= 135 && heading <= 205));
+// Each offset selects the single, closed double or open double in the packed atlas.
+enum class View { Side = 0, Front = 4, Roof = 7, Oblique = 10 };
+inline View busView(float heading, unsigned spriteCount = 13) {
+    if (!(heading >= 0 && heading <= 360))
+        return View::Front;
+    if (spriteCount == 7)
+        return View::Side;
+    if (spriteCount == 10) {
+        // Earlier packages carry two elevations with the original roof sectors.
+        return heading >= 315 || heading <= 45 || (heading >= 135 && heading <= 205) ? View::Roof : View::Side;
+    }
+    float tilt = std::abs(std::fmod(heading, 180.f) - 90);
+    if (tilt <= 22.5f) return View::Side;
+    if (tilt >= 67.5f) return View::Roof;
+    return View::Oblique;
 }
 struct Box {
     float x, y, w, h;
 };
-inline Box footprint(Point p, float heading, float unit, bool bus) {
+inline Box footprint(Point p, float heading, float unit, bool bus, unsigned spriteCount = 13) {
     float a = (heading < 0 ? 90 : heading) * radians;
     float s = std::abs(std::sin(a)), c = std::abs(std::cos(a));
-    float halfHeight = bus && roofView(heading) ? 7.3f : 10.5f;
+    float halfHeight = bus && busView(heading, spriteCount) == View::Roof ? 7.3f : 10.5f;
     float halfLength = bus ? 18.3f : 18.f;
     if (bus) {
         p.x += 2.5f * std::sin(a) * unit;
@@ -87,14 +99,14 @@ struct Marker {
 };
 template <class Inside>
 bool place(Marker &m, const std::vector<Path> &paths, const std::vector<Box> &occupied, float unit,
-           Inside inside) {
+           Inside inside, unsigned spriteCount = 13) {
     auto cost = [&](Box b) {
         float sum = 0;
         for (const auto other : occupied)
             sum += overlap(b, other);
         return sum;
     };
-    m.box = footprint(m.point, m.bearing, unit, m.path >= 0);
+    m.box = footprint(m.point, m.bearing, unit, m.path >= 0, spriteCount);
     m.drawDistance = m.distance;
     float best = cost(m.box);
     if (best == 0 || m.path < 0)
@@ -115,7 +127,7 @@ bool place(Marker &m, const std::vector<Path> &paths, const std::vector<Box> &oc
             if (keepVisible && !inside(p))
                 continue;
             float direction = bearing(path, d);
-            Box candidate = footprint(p, direction, unit, true);
+            Box candidate = footprint(p, direction, unit, true, spriteCount);
             float score = cost(candidate);
             if (score >= best)
                 continue;

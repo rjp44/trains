@@ -108,13 +108,13 @@ export class BusPaths {
   }
 }
 
-export function roofView(bearing) {
-  return (
-    Number.isFinite(bearing) &&
-    bearing >= 0 &&
-    bearing <= 360 &&
-    (bearing >= 315 || bearing <= 45 || (bearing >= 135 && bearing <= 205))
-  );
+export function busView(bearing) {
+  if (!Number.isFinite(bearing) || bearing < 0 || bearing > 360) return 'front';
+  // Measured from east/west, this angle repeats every half turn.
+  const tilt = Math.abs((bearing % 180) - 90);
+  if (tilt <= 22.5) return 'side';
+  if (tilt >= 67.5) return 'roof';
+  return 'oblique';
 }
 
 // Include the white outline and nose chevron of the rotated sprite in its footprint.
@@ -122,7 +122,7 @@ function footprint(x, y, bearing, unit, bus) {
   const a = ((bearing ?? 90) * Math.PI) / 180;
   const s = Math.abs(Math.sin(a)),
     c = Math.abs(Math.cos(a));
-  const halfHeight = bus && roofView(bearing) ? 7.3 : 10.5;
+  const halfHeight = bus && busView(bearing) === 'roof' ? 7.3 : 10.5;
   const halfLength = bus ? 18.3 : 18;
   if (bus) {
     x += 2.5 * Math.sin(a) * unit;
