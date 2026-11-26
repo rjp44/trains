@@ -34,17 +34,17 @@ export function archive(parts) {
   return bytes;
 }
 export function buildApp(id) {
-  if (!['hemel', 'lakes'].includes(id)) throw Error('Unknown transport app');
+  if (!/^[a-z][a-z0-9-]{0,39}$/.test(id) || id === 'core') throw Error('Unknown transport app');
   const manifest = JSON.parse(fs.readFileSync(join(root, 'apps', id, 'app.json')));
   if (
     manifest.id !== id ||
     !Number.isInteger(manifest.version) ||
     manifest.version < 1 ||
-    manifest.adapter !== { hemel: 'hemel-corridor/1', lakes: 'lakes-map/1' }[id]
+    !['hemel-corridor/1', 'lakes-map/1'].includes(manifest.adapter)
   )
     throw Error('Invalid app definition');
   const parts = new Map([['manifest.json', Buffer.from(JSON.stringify(manifest))]]);
-  const inputs = join(root, id === 'hemel' ? 'public/data' : 'lakes/public/data');
+  const inputs = join(root, manifest.adapter === 'hemel-corridor/1' ? 'public/data' : 'lakes/public/data');
   for (const name of manifest.data) {
     if (!/^[a-zA-Z0-9-]+\.(json|txt|webp)$/.test(name)) throw Error('Invalid data asset');
     parts.set('data/' + name.toLowerCase(), fs.readFileSync(join(inputs, name)));
@@ -53,7 +53,7 @@ export function buildApp(id) {
   const temp = fs.mkdtempSync(join(tmpdir(), 'transport-tables-')),
     table = join(temp, 'tables.json');
   try {
-    if (id === 'hemel')
+    if (manifest.adapter === 'hemel-corridor/1')
       execFileSync(process.execPath, ['esp32/pack.mjs', '1024', '600', table, '--tables'], { cwd: root });
     else {
       execFileSync(process.execPath, ['lakes/esp32/pack.mjs', table], { cwd: root });

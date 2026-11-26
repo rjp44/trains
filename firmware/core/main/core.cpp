@@ -146,14 +146,15 @@ extern "C" void app_main() {
     cJSON_InitHooks(&hooks);
     transport::storageInit();
     const bool mounted = transport::mount();
-    isHemel = mounted && !strcmp(transport::activeApp(), "hemel");
-    isLakes = mounted && !strcmp(transport::activeApp(), "lakes");
+    isHemel = mounted && !strcmp(transport::activeAdapter(), "hemel-corridor/1");
+    isLakes = mounted && !strcmp(transport::activeAdapter(), "lakes-map/1");
     auto display = lakes::coreDisplay(!isLakes);
     if (!display) {
         transport::failedBoot();
         esp_restart();
     }
     panel::setAppsPage(transport::appsPage);
+    panel::setAboutPage(transport::aboutPage);
     if (isLakes) {
         lakes::init();
         lakes::initFeedQueue();
@@ -179,7 +180,7 @@ extern "C" void app_main() {
             });
         } else {
             auto l = lv_label_create(lv_screen_active());
-            lv_label_set_text(l, "Transport Display\nOpen Settings > Apps to install Hemel or Lakes.");
+            lv_label_set_text(l, "Transport Display\nOpen Settings > Apps to download an app.");
             lv_obj_center(l);
         }
         auto b = lv_button_create(lv_screen_active());

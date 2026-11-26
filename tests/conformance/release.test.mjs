@@ -13,7 +13,10 @@ function app(id, version, note = 'fixture') {
   const adapter = id === 'hemel' ? 'hemel-corridor/1' : 'lakes-map/1';
   return archive(
     new Map([
-      ['manifest.json', Buffer.from(JSON.stringify({ id, version, adapter }))],
+      [
+        'manifest.json',
+        Buffer.from(JSON.stringify({ id, name: id, description: 'Test recording', version, adapter })),
+      ],
       ['data/replay.json', Buffer.from(JSON.stringify({ note, frames: Array(80).fill([1, 2, 3]) }))],
     ]),
   );
@@ -86,4 +89,47 @@ test('a release preserves the other app, rejects a mismatched image and verifies
   assert.notEqual(readlinkSync(current), first);
   writeFileSync(h, app('hemel', 1));
   assert.notEqual(publish().status, 0);
+});
+
+test('publishing a third app retains existing packages and public exports contain only release data', async (t) => {
+  const { exportRelease, buildPublicSite } = await import('../../tools/release/public.mjs');
+  const d = mkdtempSync(join(tmpdir(), 'transport-directory-'));
+  t.after(() => rmSync(d, { recursive: true, force: true }));
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  writeFileSync(join(d, 'signing.key'), privateKey.export({ type: 'pkcs8', format: 'pem' }));
+  writeFileSync(join(d, 'signing.pem'), publicKey.export({ type: 'spki', format: 'pem' }));
+  writeFileSync(join(d, 'ca.pem'), 'private rollout CA');
+  const out = join(d, 'local'),
+    root = join(d, 'release'),
+    dest = join(d, 'site');
+  function publish(ids) {
+    const files = ids.map((id) => {
+      let f = join(d, id + '.tda');
+      writeFileSync(f, app(id, 1));
+      return f;
+    });
+    const p = spawnSync(process.execPath, ['tools/release/publish.mjs', d, out, ...files], {
+      encoding: 'utf8',
+    });
+    assert.equal(p.status, 0, p.stderr);
+  }
+  publish(['hemel', 'lakes']);
+  publish(['lakes-winter']);
+  exportRelease(out, join(d, 'signing.pem'), root);
+  buildPublicSite(root, dest);
+  const data = JSON.parse(readFileSync(join(dest, 'directory.json')));
+  assert.deepEqual(
+    data.applications.map((e) => e.id),
+    ['hemel', 'lakes', 'lakes-winter'],
+  );
+  for (const a of data.applications) {
+    assert.equal(a.description, 'Test recording');
+    assert.equal(a.storageBytes, 4096);
+    assert.equal(JSON.parse(readFileSync(join(dest, a.app, 'manifest.webmanifest'))).scope, a.app);
+  }
+  assert.throws(() => readFileSync(join(dest, 'signing.key')));
+  assert.throws(() => readFileSync(join(dest, 'local-ca.pem')));
+  const record = data.applications[2];
+  writeFileSync(join(root, record.download), 'corrupt');
+  assert.throws(() => buildPublicSite(root, dest), /checksum/);
 });

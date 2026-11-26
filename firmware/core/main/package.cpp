@@ -28,7 +28,7 @@ bool inflate(const uint8_t *source, size_t size, uint8_t *dest, size_t length) {
     free(decoder);
     return rc == TINFL_STATUS_DONE && read == size && written == length;
 }
-Bytes unpack(const char *name) {
+static Bytes readSection(const uint8_t *blob, unsigned count, const char *name) {
     for (unsigned i = 0; i < count; i++) {
         auto e = blob + 8 + 96 * i;
         if (strcmp(reinterpret_cast<const char *>(e), name))
@@ -50,39 +50,73 @@ Bytes unpack(const char *name) {
     }
     return {};
 }
-bool openPackage(const esp_partition_t *part, const char *id, unsigned version) {
-    if (!part ||
-        esp_partition_mmap(part, 0, part->size, ESP_PARTITION_MMAP_DATA, (const void **)&blob, &mapping) !=
-            ESP_OK ||
-        memcmp(blob, "TDA2", 4))
+Bytes unpack(const char *name) { return readSection(blob, count, name); }
+bool inspectPackage(const uint8_t *blob, size_t limit, AppInfo &info, bool verifyContents) {
+    if (limit < 8 || memcmp(blob, "TDA2", 4))
         return false;
-    count = little(blob + 4);
-    if (!count || count > 32)
+    unsigned count = little(blob + 4);
+
+    if (!count || count > 32 || 8 + count * 96 > limit)
         return false;
     unsigned end = 8 + count * 96;
     for (unsigned i = 0; i < count; i++) {
         auto e = blob + 8 + 96 * i;
         auto size = little(e + 52), raw = little(e + 56), codec = little(e + 60);
-        if (!e[0] || !memchr(e, 0, 48) || little(e + 48) != end || !size || size > part->size - end ||
-            !raw || raw > 5 * 1024 * 1024 || codec > 1 || (!codec && size != raw))
+        if (!e[0] || !memchr(e, 0, 48) || little(e + 48) != end || !size || size > limit - end || !raw ||
+            raw > 5 * 1024 * 1024 || codec > 1 || (!codec && size != raw))
             return false;
         for (unsigned j = 0; j < i; j++)
             if (!strncmp((const char *)e, (const char *)blob + 8 + 96 * j, 48))
                 return false;
         uint8_t hash[32];
-        if (mbedtls_sha256(blob + end, size, hash, 0) || memcmp(hash, e + 64, 32))
+        if ((verifyContents || !strcmp((const char *)e, "manifest.json")) &&
+            (mbedtls_sha256(blob + end, size, hash, 0) || memcmp(hash, e + 64, 32)))
             return false;
         end += size;
     }
+    auto manifest = readSection(blob, count, "manifest.json");
+    cJSON *m = manifest.data ? cJSON_Parse((char *)manifest.data) : nullptr;
+    free(manifest.data);
+    auto text = [&](const char *key) -> std::string {
+        auto s = cJSON_GetStringValue(cJSON_GetObjectItem(m, key));
+        return s ? s : "";
+    };
+    auto v = cJSON_GetObjectItem(m, "version");
+    info = {text("id"), text("name"), text("description"), text("adapter"), text("credits"), 0, end};
+    bool ok = cJSON_IsNumber(v) && v->valueint > 0 && v->valueint == v->valuedouble && !info.id.empty() &&
+              info.id.size() <= 40 && !info.name.empty() && info.name.size() <= 96 &&
+              info.credits.size() <= 4096;
+    if (ok)
+        info.version = v->valueint;
+    cJSON_Delete(m);
+    return ok;
+}
+bool inspectStored(const esp_partition_t *p, unsigned off, unsigned limit, AppInfo &info) {
+    if (!p || off >= p->size || limit > p->size - off)
+        return false;
+    const void *mapped;
+    esp_partition_mmap_handle_t h;
+    if (esp_partition_mmap(p, off, limit, ESP_PARTITION_MMAP_DATA, &mapped, &h) != ESP_OK)
+        return false;
+    bool ok = inspectPackage(static_cast<const uint8_t *>(mapped), limit, info, false);
+    esp_partition_munmap(h);
+    return ok;
+}
+bool openPackage(const esp_partition_t *part, unsigned offset, unsigned length, const AppInfo &info) {
+    if (!part || esp_partition_mmap(part, offset, length, ESP_PARTITION_MMAP_DATA, (const void **)&blob,
+                                    &mapping) != ESP_OK)
+        return false;
+    AppInfo checked;
+    if (!inspectPackage(blob, length, checked, true) || checked.id != info.id ||
+        checked.version != info.version ||
+        (checked.adapter != "hemel-corridor/1" && checked.adapter != "lakes-map/1"))
+        return false;
+    count = little(blob + 4);
     auto manifest = unpack("manifest.json");
     cJSON *m = manifest.data ? cJSON_Parse((char *)manifest.data) : nullptr;
     free(manifest.data);
-    auto app = cJSON_GetStringValue(cJSON_GetObjectItem(m, "id")),
-         adapter = cJSON_GetStringValue(cJSON_GetObjectItem(m, "adapter"));
-    bool ok = app && adapter && !strcmp(id, app) &&
-              !strcmp(adapter, !strcmp(id, "hemel") ? "hemel-corridor/1" : "lakes-map/1") &&
-              cJSON_GetNumberValue(cJSON_GetObjectItem(m, "version")) == version;
-    if (ok && !strcmp(id, "hemel")) {
+    bool ok = m;
+    if (ok && checked.adapter == "hemel-corridor/1") {
         auto scene = [&](const char *key, unsigned &out) {
             const char *name = cJSON_GetStringValue(cJSON_GetObjectItem(m, key));
             const char *views[] = {"sector", "hemel", "watford"};
@@ -108,7 +142,7 @@ bool openPackage(const esp_partition_t *part, const char *id, unsigned version) 
     free(bytes.data);
     if (!tables)
         return false;
-    if (!strcmp(id, "hemel")) {
+    if (checked.adapter == "hemel-corridor/1") {
         corridor = unpack("data/corridor.json");
         return corridor.data && hemel::mountPackage();
     }

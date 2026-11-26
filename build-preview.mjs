@@ -7,3 +7,7 @@ for (const name of ['rail.mjs', 'live.mjs', 'abbey.mjs'])
 const index = new URL('index.html', dist);
 const html = await readFile(index, 'utf8');
 await writeFile(index, html.replace('<html ', '<html class="diagram-only" '));
+
+const { buildPublicSite } = await import('./tools/release/public.mjs');
+const { fileURLToPath } = await import('node:url');
+buildPublicSite(fileURLToPath(new URL('./releases/', import.meta.url)), fileURLToPath(dist));

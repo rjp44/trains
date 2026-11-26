@@ -60,4 +60,4 @@ Abbey calling-point reports come from railinfo's public service lookup. The live
 
 Contains public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
 
-The shared Transport Display firmware runs Hemel and Lakes from downloadable packages. Build and serve the two installable web apps, commission a tablet, or publish an OTA release with the [CrowPanel release guide](firmware/core/README.md).
+The shared Transport Display firmware runs Hemel and Lakes from downloadable packages. Browse the public app directory, download firmware, or install apps from Settings on the tablet. [App directory](https://transport.pickering.org/apps/) · [CrowPanel release guide](firmware/core/README.md)

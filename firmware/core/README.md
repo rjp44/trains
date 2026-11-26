@@ -1,28 +1,32 @@
 # Transport Display on the CrowPanel
 
-The 10.1-inch CrowPanel Advanced V1.2 with a revision 1.x ESP32-P4 runs both Hemel and Lakes on the same firmware. Open **Settings → Apps → Check for updates** to see installed and available versions and download sizes. **Install Hemel** and **Install Lakes** download an app over Wi-Fi, check it, reboot and open it. **Open Hemel** and **Open Lakes** use their installed copies offline. **Update core** installs the newer firmware in the other boot slot.
+The 10.1-inch CrowPanel Advanced V1.2 with a revision 1.x ESP32-P4 uses one firmware for downloadable transport apps. The public directory offers a searchable list, package downloads and the current firmware image. The original Hemel page is also served on the Trains Panel Netlify site. [App directory](https://transport.pickering.org/apps/) · [Machine-readable manifest](https://transport.pickering.org/directory.json)
 
-The panel first draws a recorded frame, then connects to live transport feeds. Hemel provides the sector, Hemel and Watford views plus their recordings. Lakes includes the map, route filters, stop boards, timetable, rail and bus replay, portrait and landscape. The two apps save their display choices separately. Wi-Fi, brightness, volume and horn mode use the existing panel preferences.
+In **Settings → Apps**, **Installed** lists the apps on this tablet. **Directory** fetches the signed catalogue over Wi-Fi. Search by name, ID or description and use the page controls to browse longer lists. Each entry shows the download size and the flash allocation rounded to 4 KiB sectors. The header reports free and total app storage. **Download** installs the selected package. **Open** is available for installed apps offline. Updating the running app reboots into its new version. Downloading another app leaves the current display running.
 
-## Local releases
+**Delete** asks for confirmation and releases the app’s stored versions. Deleting the running app returns to the built-in launcher. Wi-Fi credentials, display settings and horn preferences are independent of the app files. **Settings → About** shows the running app’s data credits, the dedication and a scannable GitHub repository link.
 
-Use Node 22 or newer, the dependencies installed by `npm ci --prefix esp32`, Python with Pillow, and `rsvg-convert`. The tablet build uses ESP-IDF v5.5.3 with its ESP32-P4 toolchain. Run these examples from the repository root. Choose a LAN address reachable **from the panel** and keep it stable for this core. On the commissioning Mac the working wired address is `192.168.178.62`.
+## Publishing a release
+
+The production Netlify site is `trains-panel` (site ID `c361ed45-7f40-4db4-be97-118f7594b033`). Its Git build runs `node build-preview.mjs` from `main`. Core v5 checks the custom HTTPS origin first and can also use the site's Netlify hostname. Both paths use public TLS certificate validation and verify the catalogue using the embedded release signing public key.
+
+Use Node 22 or newer, the dependencies installed by `npm ci --prefix esp32`, Python with Pillow and `rsvg-convert`. Firmware requires ESP-IDF v5.5.3 with the ESP32-P4 toolchain. Signing takes place on the commissioning machine with the existing `.transport-private/signing.key`. Keep this key backed up privately. The firmware builder and Netlify site need only the public key. The examples show this release’s version numbers. Use a new version when changing the corresponding artifact.
 
 ```sh
-tools/release/identity.sh 192.168.178.62 .transport-private
 node packages/compiler/app.mjs hemel .transport-private/hemel.tda
 ART_PYTHON=python3 node packages/compiler/app.mjs lakes .transport-private/lakes.tda
-tools/release/build-core.sh https://192.168.178.62:8443 .transport-private 4
+tools/release/build-core.sh https://transport.pickering.org releases 5
 node tools/release/publish.mjs .transport-private .transport-release \
-    .transport-private/hemel.tda .transport-private/lakes.tda firmware/core/build/transport_display.bin 4
-node tools/release/serve.mjs .transport-private .transport-release 8443
+    .transport-private/hemel.tda .transport-private/lakes.tda firmware/core/build/transport_display.bin 5
+node tools/release/public.mjs .transport-release releases/signing.pem releases
+node build-preview.mjs
 ```
 
-Keep the private directory on the commissioning machine. The identity script reuses the release signing key and local CA and issues a server certificate for the given LAN IP. A builder needs only the public files `ca.pem` and `signing.pem`. The server serves the current edition and content-addressed artifacts. It reads the TLS key and certificate at startup. It picks up newly published editions without restarting.
+The publisher reads IDs, adapters, names, descriptions and versions from the supplied packages. Include any number of package paths. An existing release directory retains omitted apps and firmware. On a fresh commissioning machine, supply every current package and firmware image when recreating the signing workspace. A new app ID can use an existing reader such as `hemel-corridor/1` or `lakes-map/1`. A new reader requires a firmware release. The tablet displays incompatible entries with their requirements.
 
-Open `/apps/hemel/` or `/apps/lakes/` on the local HTTPS host. Each has its own manifest, start URL, icon and offline cache. Phones need to trust the commissioning CA to install a service worker. Transfer the public `ca.pem` directly from the commissioning machine and compare its SHA-256 fingerprint. The private CA key stays on that machine.
+Commit the exported `releases/` records and immutable images alongside the source change. The Netlify build verifies the signature and content hashes, generates the two scoped PWAs and builds the public directory. Older public artifact URLs remain available. The build has no access to the private signing key, USB backup or Wi-Fi settings.
 
-For an overlay update, change the app definition or source data, increment the version in its `apps/<id>/app.json`, and rebuild that package. Pass both package paths to `publish.mjs`. Omitting the core arguments retains the existing core release. An existing version cannot be reused for changed bytes. A core update uses a higher numeric version for both the IDF build and publication. Publish a compatible core first if an app requires a newer reader. Test the old app on the new core before updating its package.
+The first transition from the LAN-only v4 firmware can use the original trusted HTTPS server to deliver v5. Once v5 starts, its directory and downloads come from the public site.
 
 ## Flash layout and recovery
 
@@ -31,8 +35,10 @@ For an overlay update, change the app definition or source data, increment the v
 | Existing NVS and PHY | 0x9000 and 0xF000 | 24 KiB and 4 KiB |
 | Core slots | 0x10000 and 0x310000 | 3 MiB each |
 | OTA metadata | 0x610000 | 8 KiB |
-| Hemel banks | 0x620000 and 0x890000 | 2,555,904 bytes each |
-| Lakes banks | 0xB00000 and 0xD70000 | 2,555,904 bytes each |
+| App extents (original Hemel partitions) | 0x620000 and 0x890000 | 2,555,904 bytes each |
+| App extents (original Lakes partitions) | 0xB00000 and 0xD70000 | 2,555,904 bytes each |
+
+The four app partitions form a 9.75 MiB pool. Each package occupies a contiguous run of 4 KiB sectors in any one partition. Updates stage a separate extent, retaining the last confirmed copy until the new version boots successfully. The library and selected app are committed together in NVS. The first v5 boot imports the installed v4 packages in place.
 
 For a panel with the original factory-only partition layout, make and verify a private USB backup first. The first 64 KiB contain boot metadata and the saved credentials. Compare the installed app with its known binary using `esptool verify-flash`, or read and verify the installed app if its contents are unknown. The commissioning backup includes `boot-table-settings.bin` at 0 and `lakes-app.bin` at 0x10000.
 
@@ -61,7 +67,7 @@ esptool --chip esp32p4 --port "$PORT" verify-flash \
     0x10000 .transport-private/lakes-app.bin
 ```
 
-For diagnostics, the USB console uses 115200 baud. `STATUS` reports the running slot, current app, versions, orientation, saved levels and refresh counter. `SHOT` captures the displayed framebuffer. `HOLD` copies the displayed frame to both buffers and prints their CRCs, then resumes after ten seconds or `RUN`. `APP check`, `APP install hemel`, `APP install lakes`, `APP install core` and `APP open lakes` invoke the same library actions as Settings.
+For diagnostics, the USB console uses 115200 baud. `STATUS` reports the running slot, current app, versions, orientation, saved levels and refresh counter. `SHOT` captures the displayed framebuffer. `HOLD` copies the displayed frame to both buffers and prints their CRCs, then resumes after ten seconds or `RUN`. `APP check`, `APP install hemel`, `APP install lakes`, `APP install core` and `APP open lakes` and `APP delete hemel` invoke the same library actions as Settings.
 
 ## Commissioning results, 26 November 2026
 
@@ -70,3 +76,7 @@ The local panel loaded both apps over HTTPS and switched between them without US
 Core v4 was 2,329,904 bytes. Hemel v2 was 42,497 bytes and took 490 ms to program after download. Lakes v2 was 1,067,817 bytes and took 6,579 ms to program. The panel gated the backlight for both writes and restored the current brightness on boot. With Lakes running, the static-frame check returned matching CRCs of `8c76979a` for the two display buffers.
 
 In mobile-sized Chrome, Hemel updated from v1 to v2 with Lakes v1 still open. Both reopened offline. The final v2 packages also passed the Hemel 90-second booked-call check and the Lakes route 505 stop-board check offline. Physical Android and iOS installation remains unverified.
+
+## Public directory rollout
+
+Core v5 migrated the connected panel from v4 by OTA using its original local release server. The two installed v2 packages and the selected Lakes display survived migration. USB status reported 9,109,504 free bytes. Removing the inactive Hemel package increased free space by 45,056 bytes. Open was rejected until its public v3 download completed. Both v3 packages subsequently installed from the public site. The public manifest, firmware and package hashes were verified over HTTPS at both the custom domain and the Netlify hostname.

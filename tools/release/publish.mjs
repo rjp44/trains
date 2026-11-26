@@ -1,11 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, createPublicKey, sign } from 'node:crypto';
-import { root } from '../../packages/compiler/app.mjs';
+import { writeAppShell } from './shell.mjs';
 import { directory, openArchive } from '../../packages/app-format/archive.mjs';
-const [privateDir, output, hemel, lakes, core, ver] = process.argv.slice(2);
-if (!privateDir || !output || !hemel || !lakes || (core && !/^[1-9]\d*$/.test(ver)))
-  throw Error('Usage: publish.mjs PRIVATE OUTPUT HEMEL.tda LAKES.tda [CORE.bin VERSION]');
+const [privateDir, output, ...args] = process.argv.slice(2);
+if (!privateDir || !output || !args.length)
+  throw Error('Usage: publish.mjs PRIVATE OUTPUT APP.tda ... [CORE.bin VERSION]');
+const coreIndex = args.findIndex((f) => f.endsWith('.bin'));
+if (coreIndex >= 0 && (coreIndex !== args.length - 2 || !/^[1-9]\d*$/.test(args.at(-1))))
+  throw Error('Expected CORE.bin VERSION after app packages');
+const ver = coreIndex < 0 ? null : args.at(-1);
+const files = coreIndex < 0 ? args : args.slice(0, -1);
 const out = path.resolve(output);
 fs.mkdirSync(path.join(out, 'editions'), { recursive: true });
 const lock = path.join(out, '.publishing');
@@ -30,9 +35,15 @@ const oldEntries = fs.existsSync(current)
   ? JSON.parse(Buffer.from(JSON.parse(fs.readFileSync(path.join(current, 'catalog.json'))).payload, 'base64'))
       .artifacts
   : {};
-for (const [id, file] of Object.entries({ hemel, lakes, ...(core ? { core } : {}) })) {
-  const b = fs.readFileSync(file),
-    sha256 = digest(b),
+for (const file of files) {
+  const firmware = file.endsWith('.bin');
+  const b = fs.readFileSync(file);
+  const app = firmware ? null : await openArchive(b);
+  const id = firmware ? 'core' : app.manifest.id;
+  if (!firmware && (!/^[a-z][a-z0-9-]{0,39}$/.test(id) || id === 'core'))
+    throw Error('Invalid application ID');
+  if (Object.hasOwn(entries, id)) throw Error('Duplicate release entry ' + id);
+  const sha256 = digest(b),
     ext = id === 'core' ? '.bin' : '.tda';
   let version = Number(ver),
     minCore = 1;
@@ -48,13 +59,12 @@ for (const [id, file] of Object.entries({ hemel, lakes, ...(core ? { core } : {}
     )
       throw Error('Incompatible board image, project or core version');
   } else {
-    const app = await openArchive(b);
     const m = app.manifest;
     version = m.version;
     minCore = m.minCore ?? 1;
     if (
       m.id !== id ||
-      m.adapter !== { hemel: 'hemel-corridor/1', lakes: 'lakes-map/1' }[id] ||
+      !['hemel-corridor/1', 'lakes-map/1'].includes(m.adapter) ||
       !Number.isSafeInteger(version) ||
       version < 1 ||
       version > 0x7ffffffe ||
@@ -72,6 +82,19 @@ for (const [id, file] of Object.entries({ hemel, lakes, ...(core ? { core } : {}
   )
     throw Error('Version already assigned: ' + id);
   entries[id] = { version, minCore, bytes: b.length, sha256 };
+  if (app) {
+    const { name, description, adapter } = app.manifest;
+    if (
+      typeof name !== 'string' ||
+      !name.trim() ||
+      Buffer.byteLength(name) > 96 ||
+      typeof description !== 'string' ||
+      !description.trim() ||
+      Buffer.byteLength(description) > 512
+    )
+      throw Error('Missing or oversized app name or description: ' + id);
+    Object.assign(entries[id], { name, description, adapter });
+  }
   const dest = path.join(artifactDir, sha256 + ext);
   if (!fs.existsSync(dest)) {
     const tmp = dest + '.' + process.pid;
@@ -79,73 +102,29 @@ for (const [id, file] of Object.entries({ hemel, lakes, ...(core ? { core } : {}
     fs.renameSync(tmp, dest);
   }
   if (id === 'core') continue;
-  const appDir = path.join(dir, 'apps', id),
-    src = path.join(root, id === 'hemel' ? 'public' : 'lakes/public');
-  fs.mkdirSync(appDir, { recursive: true });
-  for (const name of fs.readdirSync(src)) {
-    if (name === 'data' || name.startsWith('_')) continue;
-    fs.cpSync(path.join(src, name), path.join(appDir, name), { recursive: true });
-  }
-  const write = (file, data) => fs.writeFileSync(path.join(appDir, file), data);
-  const read = (name) => fs.readFileSync(path.join(appDir, name), 'utf8');
-  if (id === 'hemel') {
-    for (const n of ['rail.mjs', 'live.mjs', 'abbey.mjs'])
-      fs.copyFileSync(path.join(root, n), path.join(appDir, n));
-    write('app.js', read('app.js').replaceAll("from '/", "from './"));
-  } else
-    write(
-      'install.mjs',
-      read('install.mjs').replace(
-        "if ('serviceWorker' in navigator)",
-        "if (!globalThis.transportApp && 'serviceWorker' in navigator)",
-      ),
-    );
-  const manifest = JSON.parse(read('manifest.webmanifest'));
-  manifest.id = manifest.scope = manifest.start_url = '/apps/' + id + '/';
-  for (const icon of manifest.icons) icon.src = '.' + icon.src;
-  write('manifest.webmanifest', JSON.stringify(manifest));
-  const html = read('index.html')
-    .replaceAll('href="/icons/', 'href="./icons/')
-    .replace('href="/style.css"', 'href="./style.css"')
-    .replace('href="/manifest.webmanifest"', 'href="./manifest.webmanifest"')
-    .replace(/<script type="module" src="\/(?:app\.js|app\.mjs|install\.mjs)"><\/script>/g, '')
-    .replace('</body>', '<script type="module" src="./boot.mjs"></script></body>');
-  write('index.html', html);
-  for (const name of ['boot.mjs', 'verify.mjs', 'worker.mjs'])
-    fs.copyFileSync(path.join(root, 'web/player/release', name), path.join(appDir, name));
-  fs.copyFileSync(path.join(root, 'packages/app-format/archive.mjs'), path.join(appDir, 'archive.mjs'));
-  write('trust.mjs', 'export const publicKey=' + JSON.stringify(publicKey) + ';\n');
-  // Reuse the previous signature for an unchanged app so updating its neighbour does not replace its worker.
   const oldApp = path.join(current, 'apps', id, 'release.json');
-  write(
-    'release.json',
-    oldEntries[id]?.sha256 === sha256 && fs.existsSync(oldApp)
-      ? fs.readFileSync(oldApp)
-      : signCatalog({ [id]: entries[id] }),
+  const unchanged = JSON.stringify(oldEntries[id]) === JSON.stringify(entries[id]) && fs.existsSync(oldApp);
+  writeAppShell(
+    dir,
+    id,
+    entries[id],
+    unchanged ? fs.readFileSync(oldApp, 'utf8') : signCatalog({ [id]: entries[id] }),
+    publicKey,
   );
-  const files = fs
-    .readdirSync(appDir, { recursive: true })
-    .filter((n) => fs.statSync(path.join(appDir, n)).isFile())
-    .sort();
-  const revision = digest(
-    Buffer.concat(
-      files.map((n) => Buffer.concat([Buffer.from(n + '\0'), fs.readFileSync(path.join(appDir, n))])),
-    ),
-  );
-  const checksums = Object.fromEntries(
-    files.map((name) => [name, digest(fs.readFileSync(path.join(appDir, name)))]),
-  );
-  write(
-    'offline.mjs',
-    'export const ' +
-      Object.entries({ id, revision, files, checksums, artifact: '/artifacts/' + sha256 + ext })
-        .map(([k, v]) => k + '=' + JSON.stringify(v))
-        .join(',') +
-      ';\n',
-  );
-  write('sw.js', '// ' + revision + '\nimport "./worker.mjs";\n');
 }
-if (!entries.core && oldEntries.core) entries.core = oldEntries.core;
+// Publishing a subset updates only those entries. Previously published apps stay discoverable.
+for (const [id, entry] of Object.entries(oldEntries)) {
+  if (Object.hasOwn(entries, id)) continue;
+  if (id !== 'core') {
+    if (!entry.name || !entry.description || !entry.adapter)
+      throw Error('Resupply legacy package ' + id + ' to add directory metadata');
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(id)) throw Error('Invalid prior app ID');
+    const record = fs.readFileSync(path.join(current, 'apps', id, 'release.json'), 'utf8');
+    writeAppShell(dir, id, entry, record, publicKey);
+  }
+  entries[id] = entry;
+}
+
 fs.copyFileSync(path.join(privateDir, 'ca.pem'), path.join(dir, 'local-ca.pem'));
 fs.writeFileSync(path.join(dir, 'catalog.json'), signCatalog(entries));
 fs.writeFileSync(

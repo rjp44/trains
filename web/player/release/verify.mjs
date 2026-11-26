@@ -62,7 +62,8 @@ export async function verifyApp(bytes, entry, id) {
   if (
     app.manifest.id !== id ||
     app.manifest.version !== entry.version ||
-    app.manifest.adapter !== { hemel: 'hemel-corridor/1', lakes: 'lakes-map/1' }[id]
+    !['hemel-corridor/1', 'lakes-map/1'].includes(app.manifest.adapter) ||
+    (entry.adapter && entry.adapter !== app.manifest.adapter)
   )
     throw Error('Incompatible app package');
   return app;

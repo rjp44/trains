@@ -3,6 +3,11 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "package.h"
+#include "library.h"
+#include "directory.h"
+#include "esp_crt_bundle.h"
+#include <map>
+#include <set>
 #include "esp_app_desc.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -23,40 +28,51 @@
 
 namespace transport {
 namespace {
-extern "C" const char ca[] asm("_binary_ca_pem_start"), pub[] asm("_binary_signing_pem_start");
+extern "C" const char pub[] asm("_binary_signing_pem_start");
 constexpr char board[] = "crowpanel-p4-v1.2-rev1";
-constexpr const char *names[] = {"hemel", "lakes", "core"};
-struct Library {
-    uint32_t format = 1, versions[2][2]{};
-    uint8_t banks[2]{}, selected = 1, pending = 2, trialBank = 0, attempting = 0;
-};
+constexpr const char *bankNames[] = {"hemel0", "hemel1", "lakes0", "lakes1"};
 Library state;
 nvs_handle_t handle;
-bool usable, trial;
-unsigned running = 2;
-struct Release {
-    unsigned version{}, size{}, minCore{};
-    std::string hash;
-};
-std::array<Release, 3> catalog;
+bool usable;
+AppInfo mounted;
+std::map<uint16_t, AppInfo> stored;
+std::vector<Listing> catalog;
 std::mutex guard;
 std::atomic<bool> busy{false};
-std::string message = "Check for available releases";
+unsigned revision = 1;
+std::string message = "Refresh the directory to see available apps";
 void note(std::string text) {
     ESP_LOGI("updates", "%s", text.c_str());
-    std::lock_guard<std::mutex> lock(guard);
+    std::lock_guard<std::mutex> l(guard);
     message = std::move(text);
+    ++revision;
 }
 bool save(const Library &next) {
-    if (!usable || nvs_set_blob(handle, "library", &next, sizeof next) != ESP_OK ||
+    auto data = next.encode();
+    if (!usable || nvs_set_blob(handle, "library2", data.data(), data.size() * 2) != ESP_OK ||
         nvs_commit(handle) != ESP_OK)
         return false;
     state = next;
+    ++revision;
     return true;
 }
-const esp_partition_t *bank(unsigned id, unsigned n) {
-    auto label = std::string(names[id]) + char('0' + n);
-    return esp_partition_find_first((esp_partition_type_t)0x40, ESP_PARTITION_SUBTYPE_ANY, label.c_str());
+const esp_partition_t *bank(Extent e) {
+    if (e.start >= bankCount * bankSectors)
+        return nullptr;
+    return esp_partition_find_first((esp_partition_type_t)0x40, ESP_PARTITION_SUBTYPE_ANY,
+                                    bankNames[e.start / bankSectors]);
+}
+unsigned offset(Extent e) { return (e.start % bankSectors) * sectorBytes; }
+Extent fileFor(const std::string &id) {
+    for (auto i : state.items) {
+        auto it = stored.find(i.file.start);
+        if (it != stored.end() && it->second.id == id)
+            return i.file;
+    }
+    return {};
+}
+bool supported(const std::string &adapter) {
+    return adapter == "hemel-corridor/1" || adapter == "lakes-map/1";
 }
 bool verifySignature(const uint8_t *body, size_t n, const uint8_t *sig, size_t size) {
     uint8_t digest[32];
@@ -72,21 +88,28 @@ bool verifySignature(const uint8_t *body, size_t n, const uint8_t *sig, size_t s
 using Client =
     std::unique_ptr<std::remove_pointer_t<esp_http_client_handle_t>, decltype(&esp_http_client_cleanup)>;
 Client get(const std::string &path, int &length) {
-    std::string url = std::string(TRANSPORT_RELEASE_URL) + path;
-    esp_http_client_config_t c{};
-    c.url = url.c_str();
-    c.cert_pem = ca;
-    c.timeout_ms = 20000;
-    c.disable_auto_redirect = true;
-    c.buffer_size = 4096;
-    Client h(esp_http_client_init(&c), esp_http_client_cleanup);
-    length = -1;
-    if (h && esp_http_client_open(h.get(), 0) == ESP_OK) {
+    for (const char *origin : {TRANSPORT_RELEASE_URL, "https://trains-panel.netlify.app"}) {
+        std::string url = std::string(origin) + path;
+        esp_http_client_config_t c{};
+        c.url = url.c_str();
+        c.crt_bundle_attach = esp_crt_bundle_attach;
+        c.timeout_ms = 12000;
+        c.disable_auto_redirect = true;
+        c.buffer_size = 4096;
+        Client h(esp_http_client_init(&c), esp_http_client_cleanup);
+        if (!h)
+            continue;
+        esp_http_client_set_header(h.get(), "Accept-Encoding", "identity");
+        if (esp_http_client_open(h.get(), 0) != ESP_OK)
+            continue;
         auto n = esp_http_client_fetch_headers(h.get());
-        if (esp_http_client_get_status_code(h.get()) == 200 && n > 0 && n <= 0x300000)
-            length = n;
+        if (n >= 0 && n <= 0x300000 && esp_http_client_get_status_code(h.get()) == 200) {
+            length = int(n);
+            return h;
+        }
     }
-    return h;
+    length = -1;
+    return Client(nullptr, esp_http_client_cleanup);
 }
 bool base64(const cJSON *p, std::vector<uint8_t> &out) {
     auto s = cJSON_GetStringValue(p);
@@ -103,16 +126,28 @@ using Json = std::unique_ptr<cJSON, decltype(&cJSON_Delete)>;
 bool check() {
     int len = -1;
     auto client = get("/catalog.json", len);
-    if (len < 1 || len > 16384) {
-        note("Catalogue unavailable. Check Wi-Fi, clock and local server.");
+    constexpr int limit = 1024 * 1024;
+    if (!client || len > limit) {
+        note("Public directory unavailable. Check Wi-Fi and the clock.");
         return false;
     }
-    std::vector<char> bytes(len + 1);
-    int read = esp_http_client_read_response(client.get(), bytes.data(), len);
-    if (read != len) {
-        note("Incomplete catalogue");
+    std::vector<char> bytes;
+    bytes.reserve(len > 0 ? len + 1 : 8192);
+    char block[3072];
+    int n;
+    while ((n = esp_http_client_read(client.get(), block, sizeof block)) > 0) {
+        if (bytes.size() + n > limit) {
+            note("Directory exceeds the reader limit");
+            return false;
+        }
+        bytes.insert(bytes.end(), block, block + n);
+    }
+    if (n < 0 || bytes.empty() || (len && int(bytes.size()) != len) ||
+        !esp_http_client_is_complete_data_received(client.get())) {
+        note("Incomplete directory");
         return false;
     }
+    bytes.push_back(0);
     Json envelope(cJSON_Parse(bytes.data()), cJSON_Delete);
     std::vector<uint8_t> payload, signature;
     if (!base64(cJSON_GetObjectItem(envelope.get(), "payload"), payload) ||
@@ -130,11 +165,24 @@ bool check() {
         return false;
     }
     auto entries = cJSON_GetObjectItem(doc.get(), "artifacts");
-    std::array<Release, 3> verified{};
-    for (unsigned i = 0; i < 3; i++) {
-        auto e = cJSON_GetObjectItemCaseSensitive(entries, names[i]);
-        if (!e && i == 2)
-            continue;
+    if (!cJSON_IsObject(entries)) {
+        note("Missing directory entries");
+        return false;
+    }
+    std::vector<Listing> verified;
+    std::set<std::string> ids;
+    for (auto e = entries->child; e; e = e->next) {
+        std::string id = e->string ? e->string : "";
+        if (id.empty() || id.size() > 40 || id[0] < 'a' || id[0] > 'z' ||
+            id.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789-") != std::string::npos ||
+            !ids.insert(id).second || verified.size() >= 1024) {
+            note("Invalid or duplicate directory ID");
+            return false;
+        }
+        auto str = [&](const char *k) {
+            auto v = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(e, k));
+            return std::string(v ? v : "");
+        };
         auto hash = cJSON_GetStringValue(cJSON_GetObjectItem(e, "sha256"));
         auto number = [&](const char *k, unsigned max) -> unsigned {
             auto p = cJSON_GetObjectItem(e, k);
@@ -143,9 +191,10 @@ bool check() {
                 return 0;
             return p->valueint;
         };
-        auto &r = verified[i];
+        Listing r;
+        r.id = id;
         r.version = number("version", 0x7ffffffe);
-        r.size = number("bytes", i == 2 ? 0x300000 : 0x270000);
+        r.size = number("bytes", id == "core" ? 0x300000 : 0x270000);
         r.minCore = number("minCore", 0x7ffffffe);
         if (!hash || strlen(hash) != 64 || strspn(hash, "0123456789abcdef") != 64 || !r.size ||
             !r.minCore || !r.version) {
@@ -153,37 +202,64 @@ bool check() {
             return false;
         }
         r.hash = hash;
+        if (id != "core") {
+            r.name = str("name");
+            r.description = str("description");
+            r.adapter = str("adapter");
+            if (r.name.empty() || r.name.size() > 96 || r.description.empty() ||
+                r.description.size() > 512 || r.adapter.empty() || r.adapter.size() > 80) {
+                note("Incomplete app description");
+                return false;
+            }
+        }
+        verified.push_back(std::move(r));
     }
     {
         std::lock_guard<std::mutex> lock(guard);
-        catalog = verified;
+        catalog = std::move(verified);
+        ++revision;
     }
     note("Signed catalogue verified");
     return true;
 }
-bool install(unsigned id) {
-    Release r;
+bool install(const std::string &id) {
+    Listing r;
     Library before;
+    Extent old, slot;
+    unsigned oldVersion = 0;
+    bool core = id == "core";
     {
         std::lock_guard<std::mutex> l(guard);
-        r = catalog[id];
+        auto it =
+            std::find_if(catalog.begin(), catalog.end(), [&](const Listing &e) { return e.id == id; });
+        if (it == catalog.end()) {
+            message = "App unavailable in this directory";
+            ++revision;
+            return false;
+        }
+        r = *it;
         before = state;
+        old = fileFor(id);
+        slot = state.allocate(r.size);
+        oldVersion = core ? TRANSPORT_VERSION : old.pages ? stored.at(old.start).version : 0;
     }
-    if (!usable || !r.version || r.minCore > TRANSPORT_VERSION) {
-        note("Install a compatible core first");
+    if (!usable || r.minCore > TRANSPORT_VERSION || (!core && !supported(r.adapter))) {
+        note("A compatible core is required");
         return false;
     }
-    unsigned old = id == 2 ? TRANSPORT_VERSION : before.versions[id][before.banks[id]];
-    if (r.version <= old) {
+    if (r.version <= oldVersion) {
         note("Already current");
         return false;
     }
-    unsigned slot = id == 2 ? 0 : 1 - before.banks[id];
-    auto part = id == 2 ? esp_ota_get_next_update_partition(nullptr) : bank(id, slot);
+    auto part = core ? esp_ota_get_next_update_partition(nullptr) : bank(slot);
+    if (!part || (!core && !slot.pages)) {
+        note("Insufficient contiguous space. Delete an installed app first.");
+        return false;
+    }
     int len = -1;
-    auto client = get("/artifacts/" + r.hash + (id == 2 ? ".bin" : ".tda"), len);
-    if (!part || len != int(r.size) || r.size > part->size) {
-        note("Artifact size or slot mismatch");
+    auto client = get("/artifacts/" + r.hash + (core ? ".bin" : ".tda"), len);
+    if (!client || (len && len != int(r.size)) || r.size > part->size) {
+        note("Artifact unavailable or size mismatch");
         return false;
     }
     // Flash writes share resources with continuous panel scanout. Download first so
@@ -203,7 +279,7 @@ bool install(unsigned id) {
         off += n;
         if (off * 10 / r.size > reported) {
             reported = off * 10 / r.size;
-            note(std::string("Downloading ") + names[id] + " " + std::to_string(reported * 10) + "%");
+            note(std::string("Downloading ") + id + " " + std::to_string(reported * 10) + "%");
         }
     }
     client.reset();
@@ -217,6 +293,13 @@ bool install(unsigned id) {
         snprintf(hex + j * 2, 3, "%02x", digest[j]);
     if (r.hash != hex) {
         note("Artifact checksum failed");
+        return false;
+    }
+    AppInfo manifest;
+    if (!core && (!inspectPackage(image.get(), off, manifest, true) || manifest.bytes != r.size ||
+                  manifest.id != id || manifest.version != r.version || manifest.adapter != r.adapter ||
+                  manifest.name != r.name)) {
+        note("Package and directory disagree");
         return false;
     }
     note("Verified. Screen will turn off briefly while installing.");
@@ -238,8 +321,8 @@ bool install(unsigned id) {
     }
     int64_t started = esp_timer_get_time();
     esp_ota_handle_t ota{};
-    esp_err_t rc = id == 2 ? esp_ota_begin(part, r.size, &ota)
-                           : esp_partition_erase_range(part, 0, (r.size + 4095) & ~4095u);
+    esp_err_t rc = core ? esp_ota_begin(part, r.size, &ota)
+                        : esp_partition_erase_range(part, offset(slot), (r.size + 4095) & ~4095u);
     if (rc != ESP_OK) {
         note("Cannot prepare inactive slot");
         return false;
@@ -248,9 +331,9 @@ bool install(unsigned id) {
     for (unsigned pos = 0; pos < off;) {
         unsigned n = std::min<unsigned>(sizeof block, off - pos);
         memcpy(block, image.get() + pos, n);
-        rc = id == 2 ? esp_ota_write(ota, block, n) : esp_partition_write(part, pos, block, n);
+        rc = core ? esp_ota_write(ota, block, n) : esp_partition_write(part, offset(slot) + pos, block, n);
         if (rc != ESP_OK) {
-            if (id == 2)
+            if (core)
                 esp_ota_abort(ota);
             note("Flash write failed");
             return false;
@@ -258,7 +341,7 @@ bool install(unsigned id) {
         pos += n;
     }
     ESP_LOGI("updates", "Programmed %u bytes in %lld ms", off, (esp_timer_get_time() - started) / 1000);
-    if (id == 2) {
+    if (core) {
         esp_app_desc_t app{};
         if (esp_ota_end(ota) != ESP_OK || esp_ota_get_partition_description(part, &app) != ESP_OK ||
             strcmp(app.project_name, "transport_display") || std::to_string(r.version) != app.version ||
@@ -268,176 +351,279 @@ bool install(unsigned id) {
         }
     } else {
         Library next = before;
-        next.versions[id][slot] = r.version;
-        next.pending = id;
-        next.trialBank = slot;
-        next.attempting = 0;
-        std::lock_guard<std::mutex> lock(guard);
-        if (!save(next)) {
-            ESP_LOGE("updates", "Could not commit trial marker");
-            return false;
+        const bool replaceActive = old.pages && old.start == next.selected;
+        if (auto *i = next.at(old.start)) {
+            // Preserve the last boot-confirmed version across repeated downloads.
+            Extent previous = i->candidate ? i->previous : i->file;
+            *i = {slot, previous, true};
+        } else
+            next.items.push_back({slot, {}, true});
+        if (replaceActive) {
+            next.pending = slot.start;
+            next.selected = slot.start;
+            next.attempted = false;
+        }
+        {
+            std::lock_guard<std::mutex> l(guard);
+            if (!save(next)) {
+                message = "Could not save app library";
+                ++revision;
+                return false;
+            }
+            stored[slot.start] = manifest;
+        }
+        if (!replaceActive) {
+            note(manifest.name + " installed");
+            return true;
         }
     }
-    note("Verified download. Restarting for local checks.");
+    note("Update verified. Restarting.");
     esp_restart();
     return true;
 }
 void job(void *arg) {
-    unsigned op = uintptr_t(arg);
-    if (check() && op < 3)
-        install(op);
+    {
+        std::unique_ptr<std::string> op(static_cast<std::string *>(arg));
+        if (check() && !op->empty())
+            install(*op);
+    }
     busy = false;
+    {
+        std::lock_guard<std::mutex> l(guard);
+        ++revision;
+    }
     vTaskDelete(nullptr);
 }
-lv_obj_t *summaryLabel;
+bool readFile(Extent e, AppInfo &info) {
+    return inspectStored(bank(e), offset(e), e.pages * sectorBytes, info);
+}
+bool migrate() {
+    struct Old {
+        uint32_t format, versions[2][2];
+        uint8_t banks[2], selected, pending, trialBank, attempting;
+    };
+    Old v{};
+    size_t n = sizeof v;
+    auto rc = nvs_get_blob(handle, "library", &v, &n);
+    Library next;
+    if (rc == ESP_ERR_NVS_NOT_FOUND)
+        return save(next);
+    if (rc != ESP_OK || n != sizeof v || v.format != 1 || v.selected > 1 || v.banks[0] > 1 ||
+        v.banks[1] > 1)
+        return false;
+    for (unsigned id = 0; id < 2; id++) {
+        unsigned b = v.banks[id];
+        if (!v.versions[id][b])
+            continue;
+        Extent file{uint16_t((id * 2 + b) * bankSectors), bankSectors};
+        AppInfo m;
+        if (!readFile(file, m) || m.id != (id ? "lakes" : "hemel") || m.version != v.versions[id][b])
+            return false;
+        file.pages = (m.bytes + sectorBytes - 1) / sectorBytes;
+        next.items.push_back({file, {}, false});
+        if (v.selected == id)
+            next.selected = file.start;
+    }
+    return save(next);
+}
 } // namespace
 void storageInit() {
     usable = nvs_open("transport", NVS_READWRITE, &handle) == ESP_OK;
-    size_t n = sizeof state;
-    Library stored;
-    if (usable) {
-        auto rc = nvs_get_blob(handle, "library", &stored, &n);
-        if (rc == ESP_OK && n == sizeof stored && stored.format == 1 && stored.selected < 2 &&
-            stored.pending <= 2 && stored.banks[0] < 2 && stored.banks[1] < 2 && stored.trialBank < 2)
-            state = stored;
-        else if (rc != ESP_ERR_NVS_NOT_FOUND)
-            usable = false;
-    }
     if (!usable) {
         note("App library unavailable");
         return;
     }
-    if (state.pending < 2 && state.attempting) {
-        auto next = state;
-        next.pending = 2;
-        next.attempting = 0;
-        save(next);
-        note("Recovered previous app after failed startup");
+    size_t n = 0;
+    auto rc = nvs_get_blob(handle, "library2", nullptr, &n);
+    if (rc == ESP_ERR_NVS_NOT_FOUND)
+        usable = migrate();
+    else if (rc == ESP_OK && !(n % 2) && n <= 8 + bankCount * bankSectors * 10) {
+        std::vector<uint16_t> data(n / 2);
+        usable = nvs_get_blob(handle, "library2", data.data(), &n) == ESP_OK && state.decode(data);
+    } else
+        usable = false;
+    if (!usable) {
+        note("Could not read the installed library");
+        return;
     }
+    if (state.attempted) {
+        Library next = state;
+        next.reject();
+        usable = save(next);
+        note("Previous selection restored");
+    }
+    Library repaired = state;
+    for (auto i : state.items) {
+        AppInfo m;
+        bool previousOK = i.previous.pages && readFile(i.previous, m);
+        if (previousOK)
+            stored[i.previous.start] = m;
+        if (readFile(i.file, m)) {
+            stored[i.file.start] = m;
+            if (!previousOK)
+                repaired.at(i.file.start)->previous = {};
+        } else if (previousOK) {
+            if (repaired.selected == i.file.start)
+                repaired.selected = i.previous.start;
+            if (repaired.pending == i.file.start)
+                repaired.pending = none;
+            *repaired.at(i.file.start) = {i.previous, {}, false};
+        } else
+            repaired.remove(i.file.start);
+    }
+    if (state.encode() != repaired.encode())
+        usable = save(repaired);
 }
 bool mount() {
     if (!usable)
         return false;
-    trial = state.pending < 2;
-    unsigned id = trial ? state.pending : state.selected;
-    unsigned slot = trial ? state.trialBank : state.banks[id];
-    if (!state.versions[id][slot])
+    auto start = state.pending == none ? state.selected : state.pending;
+    auto *i = state.at(start);
+    if (!i)
         return false;
-    if (trial) {
+    auto file = i->file;
+    if (state.pending != none) {
         auto next = state;
-        next.attempting = 1;
+        next.attempted = true;
         if (!save(next))
             return false;
     }
-    if (!openPackage(bank(id, slot), names[id], state.versions[id][slot])) {
+    auto m = stored.at(start);
+    if (!openPackage(bank(file), offset(file), file.pages * sectorBytes, m)) {
         failedBoot();
-        // A damaged committed bank may still have a usable predecessor.
         auto next = state;
-        next.versions[id][slot] = 0;
-        if (next.versions[id][1 - slot])
-            next.banks[id] = 1 - slot;
-        else if (next.versions[1 - id][next.banks[1 - id]])
-            next.selected = 1 - id;
+        next.pending = start;
+        if (!next.at(start)->candidate)
+            next.remove(start);
+        else
+            next.reject();
         if (save(next))
             esp_restart();
         return false;
     }
-    running = id;
+    mounted = m;
     return true;
 }
 void validated() {
-    const auto *part = esp_ota_get_running_partition();
     esp_ota_img_states_t s;
-    if (esp_ota_get_state_partition(part, &s) == ESP_OK && s == ESP_OTA_IMG_PENDING_VERIFY)
+    if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &s) == ESP_OK &&
+        s == ESP_OTA_IMG_PENDING_VERIFY) {
+        if (!usable) {
+            esp_ota_mark_app_invalid_rollback_and_reboot();
+            return;
+        }
         ESP_ERROR_CHECK(esp_ota_mark_app_valid_cancel_rollback());
-    if (trial && running < 2) {
+    }
+    if (state.pending != none) {
         auto next = state;
-        next.selected = running;
-        next.banks[running] = next.trialBank;
-        next.pending = 2;
-        next.attempting = 0;
+        next.confirm();
         if (!save(next))
             esp_restart();
     }
 }
 void failedBoot() {
-    note("App validation failed");
-    const auto *part = esp_ota_get_running_partition();
     esp_ota_img_states_t s;
-    if (esp_ota_get_state_partition(part, &s) == ESP_OK && s == ESP_OTA_IMG_PENDING_VERIFY)
+    if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &s) == ESP_OK &&
+        s == ESP_OTA_IMG_PENDING_VERIFY)
         esp_ota_mark_app_invalid_rollback_and_reboot();
-    if (trial)
+    if (state.attempted)
         esp_restart();
 }
-const char *activeApp() { return running < 2 ? names[running] : "recovery"; }
+const char *activeApp() { return mounted.id.empty() ? "recovery" : mounted.id.c_str(); }
+const char *activeAdapter() { return mounted.adapter.c_str(); }
 std::string status() {
-    std::lock_guard<std::mutex> lock(guard);
+    std::lock_guard<std::mutex> l(guard);
     std::string s =
         "Running " + std::string(activeApp()) + " | Core v" + std::to_string(TRANSPORT_VERSION) + "\n";
-    for (unsigned i = 0; i < 3; i++) {
-        s += std::string(names[i]) + " v" +
-             std::to_string(i == 2 ? TRANSPORT_VERSION : state.versions[i][state.banks[i]]);
-        if (catalog[i].version)
-            s += "   available v" + std::to_string(catalog[i].version) + " (" +
-                 std::to_string(catalog[i].size) + " bytes)";
-        s += "\n";
+    for (auto i : state.items) {
+        const auto &a = stored.at(i.file.start);
+        s += a.id + " v" + std::to_string(a.version) + "\n";
     }
-    return s + message;
+    return s + "Free " + std::to_string(state.freeBytes()) + " bytes; directory " +
+           std::to_string(catalog.size() - (std::any_of(catalog.begin(), catalog.end(),
+                                                        [](const auto &e) { return e.id == "core"; })
+                                                ? 1
+                                                : 0)) +
+           " apps\n" + message;
 }
-void action(const char *cmd) {
+void action(const char *raw) {
     if (busy.exchange(true))
         return;
-    for (unsigned i = 0; i < 2; i++)
-        if (std::string(cmd) == "open " + std::string(names[i])) {
-            if (state.versions[i][state.banks[i]] && i != running) {
-                Library next = state;
-                next.pending = i;
-                next.trialBank = state.banks[i];
-                next.attempting = 0;
-                if (save(next))
-                    esp_restart();
-            }
-            busy = false;
+    std::string cmd(raw);
+    if (cmd == "check" || cmd.rfind("install ", 0) == 0) {
+        auto op = new (std::nothrow) std::string(cmd == "check" ? "" : cmd.substr(8));
+        note("Checking public directory...");
+        if (op && xTaskCreate(job, "release", 16384, op, 4, nullptr) == pdPASS)
             return;
-        }
-    unsigned op = 3;
-    for (unsigned i = 0; i < 3; i++)
-        if (std::string(cmd) == "install " + std::string(names[i]))
-            op = i;
-    if (op == 3 && strcmp(cmd, "check")) {
-        busy = false;
-        return;
-    }
-    note("Checking release server...");
-    if (xTaskCreate(job, "release", 16384, (void *)(uintptr_t)op, 4, nullptr) != pdPASS) {
-        busy = false;
+        delete op;
         note("Insufficient update memory");
+    } else {
+        std::lock_guard<std::mutex> l(guard);
+        bool open = cmd.rfind("open ", 0) == 0, del = cmd.rfind("delete ", 0) == 0;
+        auto id = open ? cmd.substr(5) : del ? cmd.substr(7) : std::string{};
+        auto file = fileFor(id);
+        if (!file.pages)
+            message = "App is not installed";
+        else if (open && id != mounted.id) {
+            auto next = state;
+            next.pending = file.start;
+            next.attempted = false;
+            if (save(next))
+                esp_restart();
+            message = "Could not switch app";
+        } else if (del) {
+            auto next = state;
+            next.remove(file.start);
+            if (save(next)) {
+                if (id == mounted.id)
+                    esp_restart();
+                message = "App deleted";
+            } else
+                message = "Could not delete app";
+        }
+        ++revision;
     }
+    busy = false;
 }
-void appsPage(lv_obj_t *parent) {
-    summaryLabel = lv_label_create(parent);
-    lv_label_set_text(summaryLabel, status().c_str());
-    lv_obj_add_event_cb(
-        summaryLabel, [](lv_event_t *) { summaryLabel = nullptr; }, LV_EVENT_DELETE, nullptr);
-    static const char *labels[] = {"Check for updates", "Install Hemel", "Install Lakes",
-                                   "Update core",       "Open Hemel",    "Open Lakes"};
-    static const char *commands[] = {"check",        "install hemel", "install lakes",
-                                     "install core", "open hemel",    "open lakes"};
-    for (unsigned i = 0; i < 6; i++) {
-        auto b = lv_button_create(parent);
-        auto l = lv_label_create(b);
-        lv_label_set_text(l, labels[i]);
-        lv_obj_center(l);
-        lv_obj_add_event_cb(
-            b, [](lv_event_t *e) { action((const char *)lv_event_get_user_data(e)); }, LV_EVENT_CLICKED,
-            (void *)commands[i]);
+unsigned directoryRevision() {
+    std::lock_guard<std::mutex> l(guard);
+    return revision;
+}
+Directory directory() {
+    std::lock_guard<std::mutex> l(guard);
+    Directory d;
+    d.free = state.freeBytes();
+    d.capacity = bankCount * bankSectors * sectorBytes;
+    d.message = message;
+    d.busy = busy;
+    std::map<std::string, Listing> all;
+    for (auto r : catalog) {
+        if (r.id == "core") {
+            d.updateCore = r.version > TRANSPORT_VERSION;
+            continue;
+        }
+        r.fits = state.allocate(r.size).pages;
+        r.compatible = r.minCore <= TRANSPORT_VERSION && supported(r.adapter);
+        all.emplace(r.id, std::move(r));
     }
-}
-void pollApps() {
-    if (summaryLabel) {
-        auto s = status();
-        if (s != lv_label_get_text(summaryLabel))
-            lv_label_set_text(summaryLabel, s.c_str());
+    for (auto i : state.items) {
+        auto m = stored.find(i.file.start);
+        if (m == stored.end())
+            continue;
+        auto &a = m->second;
+        auto &r = all[a.id];
+        r.id = a.id;
+        if (r.name.empty()) {
+            r.name = a.name;
+            r.description = a.description;
+        }
+        r.installed = a.version;
+        r.used = (i.file.pages + i.previous.pages) * sectorBytes;
     }
+    for (auto &e : all)
+        d.apps.push_back(std::move(e.second));
+    std::sort(d.apps.begin(), d.apps.end(), [](const auto &a, const auto &b) { return a.name < b.name; });
+    return d;
 }
+std::string sourceCredits() { return mounted.credits; }
 } // namespace transport

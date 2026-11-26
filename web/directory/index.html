@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#193d34" />
+    <title>App directory · Transport Display</title>
+    <link rel="stylesheet" href="./directory.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a class="brand" href="/">Transport Display</a>
+        <h1>App directory</h1>
+      </header>
+      <label for="search">Find an application</label
+      ><input id="search" type="search" placeholder="Search by name or description" autocomplete="off" />
+      <p id="count" aria-live="polite"></p>
+      <section id="apps" aria-label="Applications"></section>
+      <section id="firmware" hidden>
+        <h2>Tablet firmware</h2>
+        <p>Elecrow CrowPanel Advanced 10.1-inch V1.2 · ESP32-P4 revision 1.x</p>
+        <a id="image">Download firmware</a>
+      </section>
+      <footer>
+        <p>
+          On the tablet, open <strong>Settings → Apps → Directory</strong> to install an application. The
+          Installed tab shows your apps and available storage.
+        </p>
+        <a href="https://github.com/rjp44/trains">Made for Jack with love from @rjp44</a> ·
+        <a href="/directory.json">Directory manifest</a>
+      </footer>
+    </main>
+    <template id="card"
+      ><article>
+        <h2></h2>
+        <p></p>
+        <small></small>
+        <nav><a>Open app</a><a>Download package</a></nav>
+      </article></template
+    >
+    <script type="module" src="./directory.mjs"></script>
+  </body>
+</html>

@@ -9,6 +9,8 @@ bool mount();
 void validated();
 void failedBoot();
 const char *activeApp();
+const char *activeAdapter();
+void aboutPage(lv_obj_t* parent);
 std::string status();
 void action(const char *command);
 void appsPage(lv_obj_t *parent);
