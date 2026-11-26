@@ -17,3 +17,8 @@ else()
         VERBATIM)
 endif()
 target_add_binary_data(${COMPONENT_LIB} "${feed}" TEXT)
+
+if(TRANSPORT_PROFILE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE TRANSPORT_PROFILE=1)
+    target_include_directories(${COMPONENT_LIB} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../../tests/conformance/baseline")
+endif()

@@ -1,4 +1,7 @@
 #include "display.h"
+#ifdef TRANSPORT_PROFILE
+#include "profile.h"
+#endif
 #include "driver/uart.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -22,10 +25,17 @@ uint32_t drawMs = 0;
 uint32_t now() { return esp_timer_get_time() / 1000; }
 void draw() {
     uint32_t start = now();
+#ifdef TRANSPORT_PROFILE
+    const bool live = lakes::status().rfind("live", 0) == 0;
+    const int64_t frameStart = esp_timer_get_time();
+#endif
     pixels = crowpanel_back_buffer();
     lakes::render(pixels, start);
     crowpanel_present();
     drawMs = now() - start;
+#ifdef TRANSPORT_PROFILE
+    profileFrame("lakes", live, frameStart);
+#endif
     ++flips;
 }
 void touch() {

@@ -1,0 +1,14 @@
+{
+  "source": "public/data/hemel-replay.json",
+  "originMs": 1795557091127,
+  "layoutEdit": { "originalX": 567, "editedX": 639 },
+  "frames": [
+    { "ms": 0, "berth": "R15139", "x": 402, "y": 373, "card": "-", "entry": -1 },
+    { "ms": 11, "berth": "R15139", "x": 402, "y": 373, "card": "722K65M724", "entry": -1 },
+    { "ms": 47328, "berth": "R15141", "x": 457, "y": 373, "card": "722K65M724", "entry": -1 },
+    { "ms": 85327, "berth": "R15141", "x": 457, "y": 373, "card": "722K65M724", "entry": -1 },
+    { "ms": 85328, "berth": "R15145", "x": 567, "y": 373, "card": "722K65M724", "entry": 85328 },
+    { "ms": 90000, "berth": "R15145", "x": 567, "y": 373, "card": "722K65M724", "entry": 85328 },
+    { "ms": 244076, "berth": "R15147", "x": 622, "y": 373, "card": "-", "entry": 85328 }
+  ]
+}

@@ -1,4 +1,13 @@
 #include "map.h"
+#ifdef TRANSPORT_DEV
+#include "dev.h"
+#include "terrain.h"
+#include "display.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
+#include "esp_rom_crc.h"
+#include "miniz.h"
+#endif
 #include "settings_display.h"
 #include "preferences.h"
 #include "rail_events.h"
@@ -194,6 +203,9 @@ void fit() {
                           scale,
                       1.f, 20.f);
 }
+#ifdef TRANSPORT_DEV
+#include "terrain.inc"
+#endif
 void baseMap() {
     const auto *pal = dark ? nightPalette : dayPalette;
     static int columns[panelWidth];
@@ -204,6 +216,9 @@ void baseMap() {
         rows[y] =
             rasterW * std::clamp(int((cy + (y - (top + bottom) * .5f) / scale - rasterY) * rasterScale), 0,
                                  rasterH - 1);
+#ifdef TRANSPORT_DEV
+    if (scratch) { tileError = !drawTiles(columns,rows,pal); return; }
+#endif
     // Read source rows sequentially, transpose in internal SRAM, then write long
     // contiguous bursts to the inactive PSRAM framebuffer (also in portrait).
     constexpr int block = 16;
@@ -779,4 +794,7 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
         return;
     }
 }
+#ifdef TRANSPORT_DEV
+#include "benchmark.inc"
+#endif
 } // namespace lakes

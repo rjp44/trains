@@ -1,4 +1,7 @@
 #include "display.h"
+#ifdef TRANSPORT_PROFILE
+#include "profile.h"
+#endif
 #include "preferences.h"
 #include "settings_ui.h"
 #include "source.h"
@@ -16,6 +19,13 @@ extern "C" void app_main()
     lv_display_t *display = crowpanel_display_init();
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, 16384, 0, 0, nullptr, 0));
     lvgl_port_lock(0);
+#ifdef TRANSPORT_PROFILE
+    static int64_t frameStart;
+    lv_display_add_event_cb(display, [](lv_event_t *) { frameStart = esp_timer_get_time(); },
+                            LV_EVENT_RENDER_START, nullptr);
+    lv_display_add_event_cb(display, [](lv_event_t *) { profileFrame("hemel", hemel::isLive(), frameStart); },
+                            LV_EVENT_RENDER_READY, nullptr);
+#endif
     ESP_ERROR_CHECK(hemel::attach(display) ? ESP_OK : ESP_ERR_INVALID_SIZE);
     hemel::replay(hemel::Sample::Sector);
     const uint32_t start = esp_timer_get_time() / 1000;

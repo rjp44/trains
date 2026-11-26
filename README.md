@@ -6,6 +6,8 @@ Run `node server.mjs` in this directory with Node.js 22.4 or later. Open [the lo
 
 The [ESP32 port](esp32/README.md) runs the Hemel diagram with live bridge input, touch controls and offline recordings on the laptop and an emulated ESP32-C3.
 
+The [Transport Display development preview](tests/conformance/README.md) loads one recorded Hemel service from the same editable overlay on the browser and the CrowPanel.
+
 ## Netlify preview
 
 Import this repository into Netlify and select the `main` branch. The included `netlify.toml` runs `node build-preview.mjs` and publishes `dist`. The site root opens the full-window 15-mile sector with live trains and signal indications. Each browser connects directly to Signal Maps for R1, WJ and WS. The build includes a Netlify `_redirects` file that forwards Abbey service lookups and Hemel timetable lookups to their public sources. Use the toolbar to return to the dashboard, or bookmark `/?display=dashboard`. Open `/?view=watford` for the live junction view. Select **Recorded replay** on the dashboard for the bundled recordings. Returning to **Live feed**, bringing the app back to the foreground or recovering connectivity starts a fresh subscription. [Netlify build configuration](https://docs.netlify.com/build/configure-builds/file-based-configuration/)

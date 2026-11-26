@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Transport Display · Tablet preview</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header><strong>Transport Display</strong><span>Tablet preview</span></header>
+    <main>
+      <section class="player" aria-label="Tablet preview">
+        <div class="title">
+          <h1 id="station">Hemel Hempstead</h1>
+          <span id="version"></span>
+        </div>
+        <canvas width="1024" height="600" aria-label="Recorded station schematic"></canvas>
+        <div class="controls">
+          <button id="play">Play</button><button id="step">Next change</button>
+          <label class="range">Replay time<input type="range" id="time" min="0" step="1" value="0" /></label>
+          <output id="clock" for="time"></output>
+        </div>
+      </section>
+      <aside>
+        <h2>Replay inspector</h2>
+        <dl>
+          <dt>Berth</dt>
+          <dd id="berth"></dd>
+          <dt>Service card</dt>
+          <dd id="card"></dd>
+          <dt>Last station entry</dt>
+          <dd id="event"></dd>
+        </dl>
+        <h2>Package</h2>
+        <div class="actions">
+          <button id="reload">Reload source</button>
+          <label class="file">Open package<input id="file" type="file" accept=".tdp" /></label>
+          <a href="/hemel.tdp" download="hemel.tdp">Download package</a>
+        </div>
+        <p role="status" id="status"></p>
+      </aside>
+    </main>
+    <footer>
+      <details>
+        <summary>Credits and licence</summary>
+        <p id="credits"></p>
+        <pre id="licence"></pre>
+      </details>
+    </footer>
+    <script type="module" src="/app.mjs"></script>
+  </body>
+</html>
