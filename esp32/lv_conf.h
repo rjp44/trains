@@ -1,6 +1,7 @@
 #ifndef LV_CONF_H
 #define LV_CONF_H
 #define LV_COLOR_DEPTH 16
+#define LV_USE_QRCODE 1
 #define LV_MEM_SIZE (96 * 1024U)
 #define LV_FONT_MONTSERRAT_8 1
 #define LV_FONT_MONTSERRAT_10 1

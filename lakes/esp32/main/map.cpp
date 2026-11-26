@@ -734,6 +734,7 @@ bool scrollDetails(int startX, int startY, int dy) {
     scrollY = next;
     return true;
 }
+bool isLight() { return !dark; }
 void toggleTheme() {
     dark = !dark;
     dirty = true;

@@ -2,7 +2,7 @@
 #include "nvs.h"
 #include <cstring>
 namespace transport {
-// One small record per app. Writes occur only when an interaction changes a saved setting.
+// Each namespace holds one small record. Skip writes when the stored value already matches.
 template <class T> bool loadView(const char *space, T &value) {
     nvs_handle_t h;
     if (nvs_open(space, NVS_READONLY, &h) != ESP_OK)

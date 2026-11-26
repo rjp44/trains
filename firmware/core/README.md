@@ -4,15 +4,17 @@ The production target is the Elecrow CrowPanel Advanced 10.1-inch, PCB V1.2, wit
 
 ## Using the tablet
 
-The gear at the top left opens Settings on the current app's tab. The sun or moon at the top right switches the app theme. Wi-Fi is the last tab.
+The gear at the top left opens **App**, with controls for the current map. From core 0.9.6 the tabs are **App**, **Downloads**, **Sound**, **Display**, **Wi-Fi** and **About**. A tablet with no app installed opens on Downloads.
 
 - **Hemel** offers the 15-mile sector, Hemel Hempstead and Watford Junction views, live data and three recordings. Spread two fingers near Hemel or Watford in the sector diagram to open the nearer close-up. Pinch together to return to the sector.
-- **Lakes** groups route filters, orientation, zoom, fit and live/replay controls on its tab. Pinch to zoom around the midpoint of your fingers and drag with one finger to pan. The app tabs also provide named views and zoom buttons for single-touch panels. Tap a vehicle for its journey card, tap a numbered chevron for intermediate stops or tap outside to dismiss. Buses follow their routes and space themselves along busy roads. Diagonal headings use a three-quarter view. Core 0.9.5 and Lakes 0.9.4 add dedicated dark-mode artwork for buses and trains, with dipped headlights illuminating the road or track ahead. Upgrade the firmware first, then update Lakes in the app directory.
+- **Lakes** groups route filters, orientation, zoom, fit and live/replay controls on its tab. Pinch to zoom around the midpoint of your fingers and drag with one finger to pan. The app tabs also provide named views and zoom buttons for single-touch panels. Tap a vehicle for its journey card, tap a numbered chevron for intermediate stops or tap outside to dismiss. Buses follow their routes and space themselves along busy roads. Diagonal headings use a three-quarter view. Dark-mode vehicles illuminate the road or track ahead.
 
-1. Open **Settings → Wi-Fi** and connect. Open **Apps → Directory** to retrieve the signed catalogue. Search names and descriptions or page through the results.
+1. Connect in **Settings → Wi-Fi**, then open **Downloads**. It checks the signed catalogue in the background. **Refresh** checks again on demand. Choose **Directory** to browse and search all apps or stay on **Installed** to see updates for your apps.
 2. Each entry shows download size and on-device space. The header shows remaining capacity. **Download** and **Update** verify the package before writing it. Updating the running app restarts it. Updating another app leaves the current display running.
 3. **Installed** lists the apps you can open offline. **Delete** asks for confirmation and frees the stored app. Deleting the running app restarts in the launcher. Wi-Fi credentials, brightness, horn and app-view preferences are stored separately.
-4. **Update firmware** installs a newer core in the alternate boot slot. **About** shows the installed core and running app versions, the app’s data credits and the repository QR link.
+4. **Update firmware** installs a newer core in the alternate boot slot. Apps that need newer firmware show **Upgrade core first** alongside a disabled update or download button. After the firmware restarts, the tablet checks again as soon as Wi-Fi and network time are available. **About** shows the installed versions, data credits and the repository QR link.
+
+Choose **Display → Sunrise / sunset** to switch to the light map at sunrise and the dark map at sunset. Hemel uses Hemel Hempstead and Lakes uses Windermere. The tablet refreshes a seven-day schedule daily, keeps a separate offline cache for each location and displays times in UK local time. If the cache runs out while offline, it keeps the current theme until fresh times arrive. Selecting **Light**, **Dark** or the sun/moon on the map returns to manual control. [Open-Meteo sunrise and sunset data](https://open-meteo.com/en/docs)
 
 ## Publishing a release
 

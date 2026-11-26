@@ -8,7 +8,7 @@
 namespace transport {
 namespace {
 lv_obj_t *body, *rows, *search, *keyboard, *storageLabel, *notice, *installedTab, *directoryTab;
-bool installedOnly = true, dirty = false, requested = false;
+bool installedOnly = true, dirty = false;
 unsigned page = 0, lastRevision = 0;
 std::string deleting;
 constexpr unsigned pageSize = 5;
@@ -47,10 +47,6 @@ void clicked(lv_event_t *e) {
         installedOnly = cmd == "installed";
         page = 0;
         deleting.clear();
-        if (!installedOnly && !requested) {
-            requested = true;
-            action("check");
-        }
     } else if (cmd == "next")
         ++page;
     else if (cmd == "previous" && page)
@@ -76,8 +72,12 @@ lv_obj_t *button(lv_obj_t *parent, const char *caption, std::string cmd, bool en
     lv_obj_add_event_cb(
         b, [](lv_event_t *e) { delete static_cast<std::string *>(lv_event_get_user_data(e)); },
         LV_EVENT_DELETE, data);
-    if (!enabled)
+    if (!enabled) {
         lv_obj_add_state(b, LV_STATE_DISABLED);
+        lv_obj_set_style_bg_color(b, lv_color_hex(0xd2d6d5), LV_STATE_DISABLED);
+        lv_obj_set_style_text_color(l, lv_color_hex(0x535b59), 0);
+        lv_obj_set_style_shadow_width(b, 0, LV_STATE_DISABLED);
+    }
     return b;
 }
 void render() {
@@ -117,12 +117,12 @@ void render() {
             label(card, a.description);
         std::string meta;
         if (a.installed)
-            meta = "Installed " + versionLabel(a.installed) + " · " + sizeText(a.used) + " used";
+            meta = "Installed " + versionLabel(a.installed) + " (" + sizeText(a.used) + " used)";
         if (a.version) {
             if (!meta.empty())
                 meta += "   ";
-            meta += versionLabel(a.version) + " download " + sizeText(a.size) + " · " +
-                    sizeText((a.size + 4095u) & ~4095u) + " storage";
+            meta += versionLabel(a.version) + " download " + sizeText(a.size) + " (" +
+                    sizeText((a.size + 4095u) & ~4095u) + " storage)";
         }
         label(card, meta);
         if (deleting == a.id) {
@@ -137,7 +137,10 @@ void render() {
         if (a.installed && a.id != activeApp())
             button(controls, "Open", "open " + a.id, !d.busy);
         if (a.version > a.installed) {
-            if (!a.compatible)
+            if (a.minCore > TRANSPORT_VERSION) {
+                button(controls, a.installed ? "Update" : "Download", "install " + a.id, false);
+                label(card, "Upgrade core first (requires " + versionLabel(a.minCore) + ").");
+            } else if (!a.compatible)
                 label(card, "Requires a newer or compatible firmware.");
             else if (!a.fits)
                 label(card, "Insufficient space for this download.");
@@ -145,11 +148,11 @@ void render() {
                 button(controls, a.installed ? "Update" : "Download", "install " + a.id, !d.busy);
         }
         if (a.installed)
-            button(controls, "Delete…", "confirm " + a.id, !d.busy);
+            button(controls, "Delete...", "confirm " + a.id, !d.busy);
     }
     if (pages > 1) {
-        label(rows, "Page " + std::to_string(page + 1) + " of " + std::to_string(pages) + " · " +
-                        std::to_string(matches.size()) + " apps");
+        label(rows, "Page " + std::to_string(page + 1) + " of " + std::to_string(pages) + " (" +
+                        std::to_string(matches.size()) + " apps)");
         auto nav = group(rows, LV_FLEX_FLOW_ROW);
         button(nav, "Previous", "previous", page > 0);
         button(nav, "Next", "next", page + 1 < pages);
@@ -163,6 +166,7 @@ void appsPage(lv_obj_t *parent) {
     lastRevision = 0;
     dirty = true;
     installedOnly = true;
+    requestDirectoryCheck();
     lv_obj_add_event_cb(body, [](lv_event_t *) { body = nullptr; }, LV_EVENT_DELETE, nullptr);
     storageLabel = label(parent, "");
     auto tabs = group(parent, LV_FLEX_FLOW_ROW_WRAP);
@@ -196,6 +200,7 @@ void appsPage(lv_obj_t *parent) {
     render();
 }
 void pollApps() {
+    pollDirectoryCheck();
     if (!body)
         return;
     auto rev = directoryRevision();
@@ -216,6 +221,7 @@ void aboutPage(lv_obj_t *parent) {
     lv_obj_set_style_border_color(qr, lv_color_white(), 0);
     lv_qrcode_update(qr, link, sizeof link - 1);
     label(parent, "Data sources");
+    label(parent, "Sunrise and sunset: Open-Meteo (open-meteo.com).");
     auto credits = sourceCredits();
     if (!credits.empty())
         label(parent, credits);

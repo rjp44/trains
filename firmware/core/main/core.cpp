@@ -1,5 +1,6 @@
 #include "core.h"
 #include "version.h"
+#include "appearance.h"
 #include "toolbar.h"
 #include "gestures.h"
 #include "package.h"
@@ -123,8 +124,7 @@ void contacts(const TouchFrame &frame) {
             if (isLakes) lakes::dismissDetails(now());
             if (button(end) == ToolbarButton::Settings) settings();
             if (button(end) == ToolbarButton::Theme) {
-                if (isHemel) hemel::toggleLight();
-                else lakes::toggleTheme();
+                transport::toggleAppearance();
             }
         } else if (isLakes) {
             if (!gesture.dragged || std::abs(end.x - start.x) + std::abs(end.y - start.y) > 14)
@@ -231,8 +231,8 @@ extern "C" void app_main() {
         transport::failedBoot();
         esp_restart();
     }
-    if (isLakes) panel::setAppPage("Lakes", lakes::drawOptions);
-    if (isHemel) panel::setAppPage("Hemel", hemelOptions);
+    if (isLakes) panel::setAppPage(lakes::drawOptions);
+    if (isHemel) panel::setAppPage(hemelOptions);
     panel::setAppsPage(transport::appsPage);
     panel::setAboutPage(transport::aboutPage);
     if (isLakes) {
@@ -253,7 +253,7 @@ extern "C" void app_main() {
             });
         } else {
             auto l = lv_label_create(lv_screen_active());
-            lv_label_set_text(l, "Transport Display\nOpen Settings > Apps to download an app.");
+            lv_label_set_text(l, "Transport Display\nOpen Settings > Downloads to download an app.");
             lv_obj_center(l);
             auto b = lv_button_create(lv_screen_active());
             lv_obj_align(b, LV_ALIGN_CENTER, 0, 55);
@@ -264,6 +264,12 @@ extern "C" void app_main() {
             lv_obj_add_event_cb(b, [](lv_event_t *) { settings(); }, LV_EVENT_CLICKED, nullptr);
         }
         lv_refr_now(display);
+    }
+    if (isLakes || isHemel) {
+        setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0/2", 1);
+        tzset();
+        transport::initAppearance(isLakes);
+        panel::setDisplayOptions(transport::appearanceOptions);
     }
     crowpanel_prime_other_buffer();
     panel::startBacklight();
@@ -297,6 +303,7 @@ extern "C" void app_main() {
                 hemel::seek((now() - replayStart) % (hemel::duration() + 1), now());
         }
         transport::pollApps();
+        transport::pollAppearance();
         if (!isLakes || panel::settingsOpen())
             lakes::updatePanelSettings();
         else if (lakes::needsRender(now()))

@@ -6,9 +6,9 @@
 
 namespace panel {
 namespace {
-enum class Page { App, Sound, Display, Apps, About, Wifi };
-const char *appName;
+enum class Page { App, Apps, Sound, Display, Wifi, About };
 void (*appPage)(lv_obj_t *);
+void (*displayOptions)(lv_obj_t *);
 void (*apps)(lv_obj_t*);
 void (*about)(lv_obj_t*);
 Page page;
@@ -263,6 +263,7 @@ void soundOrDisplay() {
                 },
                 i, unsigned(sound()) == i);
     }
+    if (page == Page::Display && displayOptions) displayOptions(content);
     int n = page == Page::Sound ? volume() : brightness();
     levelLabel = label(content, "");
     lv_obj_set_style_pad_top(levelLabel, 20, 0);
@@ -298,14 +299,15 @@ void render() {
     button(header, "Done", finish);
     auto *nav = group(overlay, LV_FLEX_FLOW_ROW_WRAP);
     auto tab = [&](Page target, const char *name) {
-        button(nav, name, visit, static_cast<uintptr_t>(target), page == target);
+        auto *item = button(nav, name, visit, static_cast<uintptr_t>(target), page == target);
+        lv_obj_set_style_pad_hor(item, 14, 0);
     };
-    if (appPage) tab(Page::App, appName);
+    if (appPage) tab(Page::App, "App");
+    if (apps) tab(Page::Apps, "Downloads");
     tab(Page::Sound, "Sound");
     tab(Page::Display, "Display");
-    if (apps) tab(Page::Apps, "Apps");
-    if (about) tab(Page::About, "About");
     tab(Page::Wifi, "Wi-Fi");
+    if (about) tab(Page::About, "About");
     content = group(overlay, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_grow(content, 1);
     lv_obj_add_flag(content, LV_OBJ_FLAG_SCROLLABLE);
@@ -324,7 +326,9 @@ void render() {
         networks();
 }
 } // namespace
-void setAppPage(const char *name, void (*draw)(lv_obj_t *)) { appName = name; appPage = draw; }
+void setAppPage(void (*draw)(lv_obj_t *)) { appPage = draw; }
+void setDisplayOptions(void (*draw)(lv_obj_t *)) { displayOptions = draw; }
+void refreshDisplayPage() { if (overlay && page == Page::Display) render(); }
 lv_obj_t *optionRow(lv_obj_t *parent, const char *title) {
     label(parent, title);
     return group(parent, LV_FLEX_FLOW_ROW_WRAP);

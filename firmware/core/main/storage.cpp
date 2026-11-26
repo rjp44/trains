@@ -6,6 +6,8 @@
 #include "library.h"
 #include "directory.h"
 #include "version.h"
+#include "wifi.h"
+#include <ctime>
 #include "esp_crt_bundle.h"
 #include <map>
 #include <set>
@@ -40,8 +42,12 @@ std::map<uint16_t, AppInfo> stored;
 std::vector<Listing> catalog;
 std::mutex guard;
 std::atomic<bool> busy{false};
+// UI thread owns the request and retry deadline. Workers publish the last successful check.
+bool checkWanted = false;
+int64_t nextCheck = 0;
+int64_t lastVerified = -1; // protected by guard
 unsigned revision = 1;
-std::string message = "Refresh the directory to see available apps";
+std::string message = "The directory will update when Wi-Fi and network time are ready.";
 void note(std::string text) {
     ESP_LOGI("updates", "%s", text.c_str());
     std::lock_guard<std::mutex> l(guard);
@@ -218,6 +224,7 @@ bool check() {
     {
         std::lock_guard<std::mutex> lock(guard);
         catalog = std::move(verified);
+        lastVerified = esp_timer_get_time();
         ++revision;
     }
     note("Signed catalogue verified");
@@ -514,6 +521,7 @@ void validated() {
             return;
         }
         ESP_ERROR_CHECK(esp_ota_mark_app_valid_cancel_rollback());
+        requestDirectoryCheck();
     }
     if (state.pending != none) {
         auto next = state;
@@ -589,6 +597,24 @@ void action(const char *raw) {
 unsigned directoryRevision() {
     std::lock_guard<std::mutex> l(guard);
     return revision;
+}
+void requestDirectoryCheck() {
+    checkWanted = true;
+}
+void pollDirectoryCheck() {
+    if (!checkWanted) return;
+    const auto now = esp_timer_get_time();
+    {
+        std::lock_guard<std::mutex> lock(guard);
+        if (lastVerified >= 0 && now - lastVerified < 300000000LL) {
+            checkWanted = false;
+            return;
+        }
+    }
+    if (busy || now < nextCheck || !(wifi_link_state() & 1) || std::time(nullptr) < 1700000000)
+        return;
+    nextCheck = now + 15000000;
+    action("check");
 }
 Directory directory() {
     std::lock_guard<std::mutex> l(guard);

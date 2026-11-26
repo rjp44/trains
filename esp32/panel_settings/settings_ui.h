@@ -3,7 +3,9 @@
 namespace panel {
 // Use from the app's display thread.
 void openSettings(void (*onClose)(), const char *stopsLabel);
-void setAppPage(const char *name, void (*draw)(lv_obj_t *));
+void setAppPage(void (*draw)(lv_obj_t *));
+void setDisplayOptions(void (*draw)(lv_obj_t *));
+void refreshDisplayPage();
 lv_obj_t *optionRow(lv_obj_t *parent, const char *title);
 void option(lv_obj_t *row, const char *name, lv_event_cb_t click, uintptr_t id, bool selected = false);
 void refreshAppPage();

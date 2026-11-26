@@ -35,26 +35,35 @@ yy, xx = np.mgrid[0:samples, 0:samples]
 x = (xx + .5 - samples / 2) / (supersample * pixels_per_unit)
 y = (yy + .5 - samples / 2) / (supersample * pixels_per_unit)
 
-# Lens position, beam length, downward slope and intensity in vehicle coordinates.
+# Lens position, reach, lower-ray slope (outward splay in plan), intensity, wheel plane.
 lamps = {
-    'side': [(13.4, 3.55, 13, .32, 1)],
-    'oblique': [(13.9, .35, 11, .27, .70), (13.4, 3.4, 13, .36, 1)],
-    'roof': [(13.4, -3.4, 13, -.10, .98), (13.4, 3.4, 13, .10, .98)],
-    'rail': [(16.2, 3.25, 12, .27, 1)],
+    'side': [(13.4, 3.55, 15, .53, 1, 7.5)],
+    'oblique': [(13.9, .35, 14, .48, .70, 4.2), (13.4, 3.4, 15, .55, 1, 7.15)],
+    'roof': [(13.4, -3.4, 14.8, -.10, .98, None), (13.4, 3.4, 14.8, .10, .98, None)],
+    'rail': [(16.2, 3.25, 12.4, .47, 1, 6.8)],
     'front': [],  # A missing heading gives no direction for a projected beam.
 }
 
 def render(name, view):
     alpha = np.zeros_like(x)
     lenses = []
-    for lamp_x, lamp_y, length, slope, power in lamps[view]:
-        along = np.maximum(0, (x - lamp_x) / length)
-        width = .37 + 2.25 * np.minimum(along, 1)
-        across = y - lamp_y - (x - lamp_x) * slope
-        core = np.exp(-.5 * (across / width) ** 2)
-        spill = np.exp(-.5 * ((across - .65) / (width + .8)) ** 2)
-        falloff = np.maximum(0, 1 - along ** 1.65) ** 1.5
-        beam = np.where(x >= lamp_x, (.74 * core + .11 * spill) * falloff * power, 0)
+    for lamp_x, lamp_y, length, slope, power, ground in lamps[view]:
+        distance = np.maximum(0, x - lamp_x)
+        along = distance / length
+        if ground is None:
+            width = .45 + 3 * np.minimum(along, 1)
+            across = y - lamp_y - distance * slope
+            profile = .82 * np.exp(-.5 * (across / width) ** 2)
+        else:
+            # A level upper cutoff; the lower ray meets the tyres' contact plane.
+            # Beyond that intersection the light spreads along the road surface.
+            upper = lamp_y - .45
+            lower = np.minimum(ground, lamp_y + .45 + distance * slope)
+            coverage = np.clip((y - upper + .35) / .75, 0, 1) * np.clip((lower - y + .3) / .8, 0, 1)
+            strike = np.exp(-.5 * ((y - ground + .75) / .85) ** 2)
+            profile = coverage * (.72 + .24 * strike)
+        falloff = np.maximum(0, 1 - along ** 2.4) ** 1.4
+        beam = np.where(x >= lamp_x, profile * falloff * power, 0)
         alpha = 1 - (1 - alpha) * (1 - beam)
         lenses.append(f'<ellipse cx="{lamp_x}" cy="{lamp_y}" rx=".85" ry=".67" fill="#fff3c5"/>')
     image = Image.new('RGBA', (samples, samples), (255, 212, 131))

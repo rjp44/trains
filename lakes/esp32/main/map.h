@@ -36,6 +36,7 @@ bool needsRender(uint32_t now);
 void dismissDetails(uint32_t now);
 bool scrollDetails(int startX, int startY, int dy);
 void toggleTheme();
+bool isLight();
 void pinch(float ratio, int fromX, int fromY, int toX, int toY);
 void finishPinch();
 void gesture(int x, int y, int dx, int dy, uint32_t now);

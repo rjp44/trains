@@ -1,6 +1,6 @@
 # Transport Display
 
-Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The **0.9.5** tablet core runs two independently installable apps, Hemel **0.9.0** and Lakes **0.9.4**. Made for Jack with love from @rjp44.
+Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The tablet core runs two independently installable apps, Hemel and Lakes. The signed directory lists the versions available for download. Made for Jack with love from @rjp44.
 
 | App | What it shows |
 | --- | --- |
@@ -11,7 +11,7 @@ Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and 
 
 Open the public directory to search by name or description. Each browser app can be installed from its own page. After an online installation, its recorded data works offline. The site root still opens the full-window Hemel diagram. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
 
-On a commissioned tablet, connect to Wi-Fi in **Settings**, then open **Apps → Directory**. Each entry shows its download size and flash space, and the header shows remaining capacity. Download the apps you want. **Installed** lets you open or delete them offline. A firmware update appears here when available. **About** shows the running versions, data credits and a QR link to this repository. [Hardware, commissioning and OTA](firmware/core/README.md)
+On a commissioned tablet, connect to Wi-Fi in **Settings**, then open **Downloads** (**Apps** on core 0.9.5 and earlier). From core 0.9.6, opening Downloads checks both firmware and app versions in the background. **Directory** shows each app's download size and flash space, and the header shows remaining capacity. **Installed** lets you open or delete apps offline. **About** shows versions, data credits and a QR link to this repository. [Hardware, commissioning and OTA](firmware/core/README.md)
 
 ## Run locally
 

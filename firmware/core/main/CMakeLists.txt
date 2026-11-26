@@ -2,7 +2,7 @@ set(root "${CMAKE_CURRENT_LIST_DIR}/../../..")
 set(hemel "${root}/esp32/crowpanel-p4/main")
 set(lakes "${root}/lakes/esp32/main")
 set(panel "${root}/esp32/component")
-idf_component_register(SRCS "toolbar.cpp" "apps-ui.cpp" "core.cpp" "storage.cpp" "package.cpp"
+idf_component_register(SRCS "toolbar.cpp" "apps-ui.cpp" "appearance.cpp" "core.cpp" "storage.cpp" "package.cpp"
   "${lakes}/display.c" "${lakes}/map.cpp" "${lakes}/feed.cpp" "${lakes}/settings_display.cpp"
   "${hemel}/source.cpp" "${hemel}/feed.cpp" "${hemel}/feed_vm.cpp" "${panel}/panel.cpp" "${panel}/wire.cpp"
   INCLUDE_DIRS "." "${lakes}" "${hemel}" "${panel}"

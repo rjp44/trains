@@ -42,16 +42,18 @@ void tap(const char *name) {
 void exercise(int width, int height) {
     lv_display_set_resolution(lv_display_get_default(), width, height);
     closed = false;
-    panel::setAppPage("Hemel", [](lv_obj_t *parent) { panel::optionRow(parent, "View"); });
+    panel::setAppPage([](lv_obj_t *parent) { panel::optionRow(parent, "View"); });
     panel::setAppsPage([](lv_obj_t *) {});
     panel::setAboutPage([](lv_obj_t *) {});
     unsigned previousScans = scans;
     panel::openSettings([] { closed = true; }, "Stopping trains only");
     assert(named("View") && !named("Hidden network") && scans == previousScans);
-    auto *tab = lv_obj_get_parent(named("Hemel"));
+    auto *tab = lv_obj_get_parent(named("App"));
     auto *nav = lv_obj_get_parent(tab);
     assert(lv_obj_get_child(nav, 0) == tab);
-    assert(lv_obj_get_child(nav, -1) == lv_obj_get_parent(named("Wi-Fi")));
+    const char *tabs[] = {"App", "Downloads", "Sound", "Display", "Wi-Fi", "About"};
+    for (int i = 0; i < 6; ++i)
+        assert(lv_obj_get_child(nav, i) == lv_obj_get_parent(named(tabs[i])));
     tap("Wi-Fi");
     tap("Hidden network");
     auto *keyboard = find(lv_layer_top(), &lv_keyboard_class);

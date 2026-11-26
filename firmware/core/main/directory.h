@@ -14,6 +14,8 @@ struct Directory {
     bool busy{};
 };
 unsigned directoryRevision();
+void requestDirectoryCheck();
+void pollDirectoryCheck();
 Directory directory();
 std::string sourceCredits();
 std::string installedVersions();
