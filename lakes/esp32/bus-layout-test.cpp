@@ -10,17 +10,29 @@ int main() {
     assert(bearing(paths[0], 0) == 90 && bearing(paths[1], 250) == 0);
     for (float axis : {0.f, 180.f})
         for (float sign : {-1.f, 1.f}) {
-            auto view = [&](float offset) { return busView(std::fmod(360 + axis + sign * offset, 360.f)); };
+            auto view = [&](float offset) { return vehicleView(std::fmod(360 + axis + sign * offset, 360.f)); };
             assert(view(0) == View::Roof && view(22.5f) == View::Roof);
             assert(view(22.51f) == View::Oblique && view(45) == View::Oblique && view(67.49f) == View::Oblique);
             assert(view(67.5f) == View::Side && view(90) == View::Side);
         }
-    assert(busView(360) == View::Roof && busView(-1) == View::Front && busView(NAN) == View::Front);
+    assert(vehicleView(360) == View::Roof && vehicleView(-1) == View::Front && vehicleView(NAN) == View::Front);
     for (int heading = 0; heading <= 360; ++heading) {
-        assert(busView(heading, 7) == View::Side);
+        auto train = vehicleSprite(3, heading, railAtlasFrames);
+        auto view = vehicleView(heading);
+        assert(train.view == view);
+        assert(train.asset == (view == View::Roof ? 13 : view == View::Oblique ? 14 : 3));
+        for (unsigned old : {7u, 10u, 13u}) {
+            auto legacy = vehicleSprite(3, heading, old);
+            assert(legacy.asset == 3 && legacy.view == View::Side);
+        }
+        for (int bus = 0; bus < 3; ++bus)
+            assert(vehicleSprite(bus, heading, railAtlasFrames).asset == bus + static_cast<int>(view));
+        assert(vehicleView(heading, 7) == View::Side);
         bool oldRoof = heading >= 315 || heading <= 45 || (heading >= 135 && heading <= 205);
-        assert(busView(heading, 10) == (oldRoof ? View::Roof : View::Side));
+        assert(vehicleView(heading, 10) == (oldRoof ? View::Roof : View::Side));
     }
+    assert(vehicleSprite(3, -1, railAtlasFrames).asset == 15);
+    assert(vehicleSprite(3, NAN, railAtlasFrames).view == View::Front);
 
     const Vertex zigzag[] = {{0, 96, 0}, {0, 8, 11}, {8, 8, 12}, {8, 0, 13}, {0, 0, 14}, {0, -96, 26}};
     const Path path{zigzag, 6};

@@ -64,8 +64,9 @@ export function ageLabel(ms) {
   return seconds < 60 ? seconds + 's ago' : Math.floor(seconds / 60) + 'm ago';
 }
 
-export function nearestRailSegment(point, line, start = 0, end = line.length - 1) {
+export function nearestRailSegment(point, line, start = 0, end = line.length - 1, forward) {
   let best = { distance: Infinity };
+  let bestScore = Infinity;
   for (let i = start + 1; i <= end; i++) {
     const [x, y] = line[i - 1],
       dx = line[i][0] - x,
@@ -74,8 +75,14 @@ export function nearestRailSegment(point, line, start = 0, end = line.length - 1
     if (!length2) continue;
     const t = Math.max(0, Math.min(1, ((point[0] - x) * dx + (point[1] - y) * dy) / length2));
     const distance = Math.hypot(point[0] - x - t * dx, point[1] - y - t * dy);
-    if (distance < best.distance)
+    // Some coastal track traces double back over the same rails near stations.
+    // Within a quarter map unit (~27 m), favour the trace advancing along this leg.
+    const againstLeg = forward && dx * forward[0] + dy * forward[1] < 0;
+    const score = distance + (againstLeg ? 0.25 : 0);
+    if (score < bestScore) {
+      bestScore = score;
       best = { distance, vertex: i - 1 + t, bearing: (Math.atan2(dx, -dy) * 180) / Math.PI };
+    }
   }
   return best;
 }
@@ -86,11 +93,14 @@ export function railBearing(fix, point, line, stations) {
   const last = stationIndex(fix.lastCode, fix.last),
     next = stationIndex(fix.nextCode, fix.next);
   const known = last >= 0 && next >= 0 && last !== next;
-  const direction = fix.direction ?? (known ? Math.sign(next - last) : null);
+  const direction = fix.direction || (known ? Math.sign(next - last) : null);
   if (!direction) return null;
   const start = known ? stations[Math.min(last, next)].vertex : undefined;
   const end = known ? stations[Math.max(last, next)].vertex : undefined;
-  const { bearing } = nearestRailSegment(point, line, start, end);
+  const firstPoint = known && (stations[Math.min(last, next)].point ?? line[start]);
+  const lastPoint = known && (stations[Math.max(last, next)].point ?? line[end]);
+  const forward = firstPoint && lastPoint && [lastPoint[0] - firstPoint[0], lastPoint[1] - firstPoint[1]];
+  const { bearing } = nearestRailSegment(point, line, start, end, forward);
   return Number.isFinite(bearing) ? (bearing + (direction > 0 ? 360 : 540)) % 360 : null;
 }
 export function visibleFixes(snapshot, now) {

@@ -13,7 +13,7 @@ import {
   freshMs,
 } from './model.mjs';
 import { Timetable, hhmm, stopTitle, serviceSeconds, journeySummary } from './timetable.mjs';
-import { BusPaths, busView, placeVehicles } from './bus-layout.mjs';
+import { BusPaths, vehicleView, placeVehicles } from './bus-layout.mjs';
 
 const $ = (id) => document.getElementById(id);
 const svg = $('map'),
@@ -889,11 +889,13 @@ function drawMarkers() {
         g,
       );
     }
-    const view = rail ? 'side' : busView(bearing);
+    const view = vehicleView(bearing);
     const known = Number.isFinite(bearing) && view !== 'front';
     const angle = known ? bearing - 90 : 0;
     const flip = known && view !== 'roof' && bearing > 180 ? -1 : 1;
-    const icon = rail ? 'northern-carriage' : routes[v.route].icon + '-' + view;
+    const icon = rail
+      ? (view === 'side' ? 'northern-carriage' : 'northern-carriage-' + view)
+      : routes[v.route].icon + '-' + view;
     const transform = `translate(${x} ${y}) scale(${drawUnit}) rotate(${angle}) scale(1 ${flip})`;
     // The vector body continues to anchor journey cards and receive taps in either theme.
     shape('use', {href: '#' + icon, color: fill, transform, class: 'vehicle-day'}, g);

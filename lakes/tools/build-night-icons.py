@@ -41,6 +41,8 @@ lamps = {
     'oblique': [(13.9, .35, 14, .48, .70, 4.2), (13.4, 3.4, 15, .55, 1, 7.15)],
     'roof': [(13.4, -3.4, 14.8, -.10, .98, None), (13.4, 3.4, 14.8, .10, .98, None)],
     'rail': [(16.2, 3.25, 12.4, .47, 1, 6.8)],
+    'rail-oblique': [(16.2, .7, 12.2, .47, .72, 3.8), (14.45, 3.1, 13.9, .50, 1, 6.5)],
+    'rail-roof': [(15.6, -2.45, 12.9, -.10, .98, None), (15.6, 2.45, 12.9, .10, .98, None)],
     'front': [],  # A missing heading gives no direction for a projected beam.
 }
 
@@ -86,3 +88,6 @@ for bus in ('single', 'closed-decker', 'open-decker'):
     for view in ('side', 'oblique', 'roof', 'front'):
         render(bus + '-' + view, view)
 render('northern-carriage', 'rail')
+render('northern-carriage-roof', 'rail-roof')
+render('northern-carriage-oblique', 'rail-oblique')
+render('northern-carriage-front', 'front')

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BusPaths, busView, makePath, placeVehicles, routeBearing } from './public/bus-layout.mjs';
+import { BusPaths, vehicleView, makePath, placeVehicles, routeBearing } from './public/bus-layout.mjs';
 import { project, railBearing, visibleFixes } from './public/model.mjs';
 import { Timetable } from './public/timetable.mjs';
 
@@ -53,14 +53,41 @@ test('journey direction survives a local zigzag and conflicting or absent GPS re
   }
 });
 
-test('bus elevations agree in all four quadrants with a three-quarter view on each diagonal', () => {
+test('vehicle elevations agree in all four quadrants with a three-quarter view on each diagonal', () => {
   for (const northSouth of [0, 180])
     for (const sign of [-1, 1])
       for (const [offset, view] of [[0, 'roof'], [22.5, 'roof'], [22.51, 'oblique'], [45, 'oblique'],
         [67.49, 'oblique'], [67.5, 'side'], [90, 'side']])
-        assert.equal(busView((360 + northSouth + sign * offset) % 360), view);
-  assert.equal(busView(360), 'roof');
-  for (const unknown of [null, undefined, NaN, Infinity, -1, 361]) assert.equal(busView(unknown), 'front');
+        assert.equal(vehicleView((360 + northSouth + sign * offset) % 360), view);
+  assert.equal(vehicleView(360), 'roof');
+  for (const unknown of [null, undefined, NaN, Infinity, -1, 361]) assert.equal(vehicleView(unknown), 'front');
+});
+
+test('coastal trains keep their elevation and reverse their cab on the return working', () => {
+  const { track, stations } = read('rail').lines.coast;
+  for (const [lastCode, nextCode, view] of [
+    ['BOC', 'RAV', 'roof'], ['DRI', 'SSC', 'oblique'], ['KBK', 'CAK', 'side'],
+  ]) {
+    const vertex = code => stations.find(s => s.code === code).vertex;
+    const i = Math.floor((vertex(lastCode) + vertex(nextCode)) / 2);
+    const point = track[i].map((v, j) => (v + track[i + 1][j]) / 2);
+    const heading = (from, to) => railBearing({lastCode: from, nextCode: to}, point, track, stations);
+    const out = heading(lastCode, nextCode), back = heading(nextCode, lastCode);
+    assert.equal(vehicleView(out), view);
+    assert.equal(vehicleView(back), view);
+    assert.ok(Math.abs((360 + back - out) % 360 - 180) < 0.00001);
+    assert.equal(vehicleView(railBearing({}, point, track, stations)), 'front');
+  }
+});
+
+test('the overlapping Drigg trace faces Seascale on both map and tablet coordinates', () => {
+  const { track, stations } = read('rail').lines.coast;
+  const packed = track.map(point => point.map(x => Math.round(x * 8) / 8));
+  for (const line of [track, packed])
+    for (const [lastCode, nextCode, expected] of [['DRI', 'SSC', 319], ['SSC', 'DRI', 139]]) {
+      const heading = railBearing({lastCode, nextCode}, [156.08, 380.93], line, stations);
+      assert.ok(Math.abs(heading - expected) < 5);
+    }
 });
 
 test('buses line up on their own paths at a rail crossing and keep trip order and IDs', () => {

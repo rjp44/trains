@@ -5,8 +5,7 @@ uint8_t *terrain, *advances, *fontMask;
 uint16_t *dayPalette, *nightPalette, *sprites;
 const uint16_t *nightSprites;
 const uint8_t *nightOpacity;
-constexpr unsigned nightSide = 64, nightFrames = 13;
-constexpr size_t nightPixels = nightFrames * nightSide * nightSide;
+constexpr unsigned nightSide = 64;
 unsigned spriteCount;
 std::vector<Route> routes;
 std::vector<XY> vertices;
@@ -85,12 +84,16 @@ bool loadLakes() {
         return false;
     const size_t artHeader = 24 + 4 * colors + 95 * (1 + 19 * 23);
     const size_t spriteBytes = 48 * 48 * 2;
-    const size_t dayEnd = artHeader + nightFrames * spriteBytes;
-    const bool hasNight = atlas.size == dayEnd + nightPixels * 3;
-    const size_t daySize = hasNight ? dayEnd : atlas.size;
-    if (daySize < artHeader || (daySize - artHeader) % spriteBytes) return false;
-    spriteCount = (daySize - artHeader) / spriteBytes;
-    if (spriteCount == 10 || spriteCount == 13) {
+    if (atlas.size < artHeader) return false;
+    const size_t artBytes = atlas.size - artHeader;
+    const size_t pairedBytes = spriteBytes + 3 * nightSide * nightSide;
+    const bool hasNight = artBytes == 13 * pairedBytes || artBytes == bus::railAtlasFrames * pairedBytes;
+    const size_t frameBytes = hasNight ? pairedBytes : spriteBytes;
+    if (artBytes % frameBytes) return false;
+    spriteCount = artBytes / frameBytes;
+    const size_t dayEnd = artHeader + spriteCount * spriteBytes;
+    const size_t nightPixels = spriteCount * nightSide * nightSide;
+    if (spriteCount == 10 || spriteCount == 13 || (hasNight && spriteCount == bus::railAtlasFrames)) {
         auto raw = unpack("native/bus-paths.bin");
         if (raw.size < 4) return false;
         unsigned pathCount = little(raw.data);

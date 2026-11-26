@@ -318,18 +318,27 @@ double railAngle(const Vehicle &v) {
     const Place *from = nullptr, *to = nullptr;
     for (const auto &p : places)
         if (p.route == v.route) {
-            if (v.lastCode == p.code)
+            if (v.lastCode.empty() ? v.last == p.name : v.lastCode == p.code)
                 from = &p;
-            if (v.nextCode == p.code)
+            if (v.nextCode.empty() ? v.next == p.name : v.nextCode == p.code)
                 to = &p;
         }
     unsigned lo = 0, hi = 65535, base = 0;
-    if (from && to) {
+    const bool knownLeg = from && to && from->vertex != to->vertex;
+    if (knownLeg) {
         lo = std::min(from->vertex, to->vertex);
         hi = std::max(from->vertex, to->vertex);
     }
-    double best = 1e30, angle = 0;
-    int dir = v.direction ? v.direction : from && to && to->vertex < from->vertex ? -1 : 1;
+    if (!v.direction && !knownLeg) return -1;
+    double best = INFINITY, angle = 0;
+    int dir = v.direction ? v.direction : to->vertex < from->vertex ? -1 : 1;
+    int legX = 0, legY = 0;
+    if (knownLeg) {
+        const auto *first = from->vertex < to->vertex ? from : to;
+        const auto *last = first == from ? to : from;
+        legX = last->point.x - first->point.x;
+        legY = last->point.y - first->point.y;
+    }
     for (const auto &s : segments)
         if (s.mask == (1u << v.route)) {
             for (unsigned i = 1; i < s.count; i++) {
@@ -342,7 +351,8 @@ double railAngle(const Vehicle &v) {
                     continue;
                 double rx = v.x * 8 - a.x, ry = v.y * 8 - a.y,
                        t = std::clamp((rx * dx + ry * dy) / len, 0., 1.);
-                double e = (rx - t * dx) * (rx - t * dx) + (ry - t * dy) * (ry - t * dy);
+                // Resolve overlapping track in station order (two packed units are ~27 m).
+                double e = std::hypot(rx - t * dx, ry - t * dy) + (dx * legX + dy * legY < 0 ? 2 : 0);
                 if (e < best) {
                     best = e;
                     angle = atan2(dx * dir, -dy * dir) * 180 / M_PI;
@@ -350,7 +360,7 @@ double railAngle(const Vehicle &v) {
             }
             base += s.count - 1;
         }
-    return fmod(angle + 360, 360);
+    return std::isfinite(best) ? fmod(angle + 360, 360) : -1;
 }
 void drawVehicleSprite(int x, int y, int asset, float size, double angle, int flip, bool stale) {
     const bool useNight = dark && nightSprites;
@@ -431,14 +441,13 @@ void vehicles(uint32_t now) {
                     : !strcmp(routes[k].icon, "open-decker")   ? 2
                     : !strcmp(routes[k].icon, "closed-decker") ? 1
                                                                : 0;
-        auto view = asset == 3 ? bus::View::Side : bus::busView(direction, m.path >= 0 ? spriteCount : 7);
-        asset += static_cast<int>(view);
-        double angle = view == bus::View::Front ? 0 : (direction - 90) * M_PI / 180;
-        int flip = view != bus::View::Roof && direction > 180 ? -1 : 1;
+        auto sprite = bus::vehicleSprite(asset, direction, asset == 3 || m.path >= 0 ? spriteCount : 7);
+        double angle = sprite.view == bus::View::Front || direction < 0 ? 0 : (direction - 90) * M_PI / 180;
+        int flip = sprite.view != bus::View::Roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);
         int radius = int(24 * size);
         if (v.id == selection) anchor = {x - radius, y - radius, 2 * radius, 2 * radius};
-        drawVehicleSprite(x, y, asset, size, angle, flip, stale);
+        drawVehicleSprite(x, y, sprite.asset, size, angle, flip, stale);
         std::string badge = routes[k].name;
         int width = textWidth(badge) + 7;
         int left = sx(m.box.x), up = sy(m.box.y);

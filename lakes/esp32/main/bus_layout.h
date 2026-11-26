@@ -55,7 +55,7 @@ inline Match nearest(Path path, Point fix, float expected) {
 }
 // Each offset selects the single, closed double or open double in the packed atlas.
 enum class View { Side = 0, Front = 4, Roof = 7, Oblique = 10 };
-inline View busView(float heading, unsigned spriteCount = 13) {
+inline View vehicleView(float heading, unsigned spriteCount = 13) {
     if (!(heading >= 0 && heading <= 360))
         return View::Front;
     if (spriteCount == 7)
@@ -69,13 +69,33 @@ inline View busView(float heading, unsigned spriteCount = 13) {
     if (tilt >= 67.5f) return View::Roof;
     return View::Oblique;
 }
+inline constexpr unsigned railAtlasFrames = 16;
+struct Sprite {
+    int asset;
+    View view;
+};
+inline Sprite vehicleSprite(int sideAsset, float heading, unsigned frames) {
+    if (sideAsset != 3) {
+        View view = vehicleView(heading, frames);
+        return {sideAsset + static_cast<int>(view), view};
+    }
+    if (frames >= railAtlasFrames) {
+        switch (vehicleView(heading, frames)) {
+        case View::Roof: return {13, View::Roof};
+        case View::Oblique: return {14, View::Oblique};
+        case View::Front: return {15, View::Front};
+        case View::Side: break;
+        }
+    }
+    return {3, View::Side};
+}
 struct Box {
     float x, y, w, h;
 };
 inline Box footprint(Point p, float heading, float unit, bool bus, unsigned spriteCount = 13) {
     float a = (heading < 0 ? 90 : heading) * radians;
     float s = std::abs(std::sin(a)), c = std::abs(std::cos(a));
-    float halfHeight = bus && busView(heading, spriteCount) == View::Roof ? 7.3f : 10.5f;
+    float halfHeight = bus && vehicleView(heading, spriteCount) == View::Roof ? 7.3f : 10.5f;
     float halfLength = bus ? 18.3f : 18.f;
     if (bus) {
         p.x += 2.5f * std::sin(a) * unit;
