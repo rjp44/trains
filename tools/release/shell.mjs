@@ -44,9 +44,10 @@ export function writeAppShell(dir, id, entry, signedEntry, publicKey) {
   fs.copyFileSync(path.join(root, 'packages/app-format/archive.mjs'), path.join(appDir, 'archive.mjs'));
   write('trust.mjs', 'export const publicKey=' + JSON.stringify(publicKey) + ';\n');
   write('release.json', signedEntry);
+  // The offline manifest and worker entry point are generated from the asset hashes below.
   const files = fs
     .readdirSync(appDir, { recursive: true })
-    .filter((n) => fs.statSync(path.join(appDir, n)).isFile())
+    .filter((n) => n !== 'offline.mjs' && n !== 'sw.js' && fs.statSync(path.join(appDir, n)).isFile())
     .sort();
   const revision = digest(
     Buffer.concat(

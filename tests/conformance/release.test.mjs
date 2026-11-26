@@ -129,6 +129,10 @@ test('publishing a third app retains existing packages and public exports contai
   }
   assert.throws(() => readFileSync(join(dest, 'signing.key')));
   assert.throws(() => readFileSync(join(dest, 'local-ca.pem')));
+  const offlineManifest = join(dest, 'apps', 'hemel', 'offline.mjs');
+  const firstBuild = readFileSync(offlineManifest, 'utf8');
+  buildPublicSite(root, dest);
+  assert.equal(readFileSync(offlineManifest, 'utf8'), firstBuild);
   const record = data.applications[2];
   writeFileSync(join(root, record.download), 'corrupt');
   assert.throws(() => buildPublicSite(root, dest), /checksum/);
