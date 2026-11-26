@@ -1,6 +1,6 @@
 # Transport Display
 
-Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. Release **0.9.0** includes the tablet core and two independently installable apps. Made for Jack with love from @rjp44.
+Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The **0.9.1** tablet core runs two independently installable apps, Hemel **0.9.0** and Lakes **0.9.0**. Made for Jack with love from @rjp44.
 
 | App | What it shows |
 | --- | --- |
@@ -31,7 +31,7 @@ Hemel listens on port 8174. Lakes listens on port 8186 and uses Python for its l
 
 The core owns the touchscreen, Wi-Fi, app storage and updater. Each app package contains a manifest, data, attribution and tables for one of the core’s renderers. A new app can reuse a renderer. Adding a renderer requires a core update. A browser app verifies the same signed package and uses its web renderer. The release key stays with the publisher. Netlify deploys the public catalogue and content-addressed files committed under `releases/`. [Package format](packages/app-format/README.md) · [Publishing guide](firmware/core/README.md#publishing-a-release)
 
-The core version lives in `firmware/core/VERSION`. Each app owns the version in `apps/<id>/app.json`. Change the component that ships. The Git tag `v0.9.0` identifies the source for this combined release.
+The core version lives in `firmware/core/VERSION`. Each app owns the version in `apps/<id>/app.json`. Change the component that ships. Release tags identify the source and signed catalogue for each rollout.
 
 ## Licence and credits
 

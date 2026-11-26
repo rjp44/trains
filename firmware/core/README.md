@@ -4,6 +4,11 @@ The production target is the Elecrow CrowPanel Advanced 10.1-inch, PCB V1.2, wit
 
 ## Using the tablet
 
+The gear at the top left opens Settings on the current app's tab. The sun or moon at the top right switches the app theme. Wi-Fi is the last tab.
+
+- **Hemel** offers the 15-mile sector, Hemel Hempstead and Watford Junction views, live data and three recordings. Spread two fingers near Hemel or Watford in the sector diagram to open the nearer close-up. Pinch together to return to the sector.
+- **Lakes** groups route filters, orientation, zoom, fit and live/replay controls on its tab. Pinch to zoom around the midpoint of your fingers and drag with one finger to pan. The app tabs also provide named views and zoom buttons for single-touch panels.
+
 1. Open **Settings → Wi-Fi** and connect. Open **Apps → Directory** to retrieve the signed catalogue. Search names and descriptions or page through the results.
 2. Each entry shows download size and on-device space. The header shows remaining capacity. **Download** and **Update** verify the package before writing it. Updating the running app restarts it. Updating another app leaves the current display running.
 3. **Installed** lists the apps you can open offline. **Delete** asks for confirmation and frees the stored app. Deleting the running app restarts in the launcher. Wi-Fi credentials, brightness, horn and app-view preferences are stored separately.

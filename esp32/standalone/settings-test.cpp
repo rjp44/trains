@@ -13,6 +13,7 @@ std::string joined, key;
 panel::Sound mode = panel::Sound::All;
 unsigned light = 100, gain = 100, saves = 0;
 bool closed;
+unsigned scans;
 lv_obj_t *find(lv_obj_t *parent, const lv_obj_class_t *type, const char *name = nullptr) {
     if (lv_obj_check_type(parent, type) && (!name || !strcmp(lv_label_get_text(parent), name)))
         return parent;
@@ -41,7 +42,17 @@ void tap(const char *name) {
 void exercise(int width, int height) {
     lv_display_set_resolution(lv_display_get_default(), width, height);
     closed = false;
+    panel::setAppPage("Hemel", [](lv_obj_t *parent) { panel::optionRow(parent, "View"); });
+    panel::setAppsPage([](lv_obj_t *) {});
+    panel::setAboutPage([](lv_obj_t *) {});
+    unsigned previousScans = scans;
     panel::openSettings([] { closed = true; }, "Stopping trains only");
+    assert(named("View") && !named("Hidden network") && scans == previousScans);
+    auto *tab = lv_obj_get_parent(named("Hemel"));
+    auto *nav = lv_obj_get_parent(tab);
+    assert(lv_obj_get_child(nav, 0) == tab);
+    assert(lv_obj_get_child(nav, -1) == lv_obj_get_parent(named("Wi-Fi")));
+    tap("Wi-Fi");
     tap("Hidden network");
     auto *keyboard = find(lv_layer_top(), &lv_keyboard_class);
     assert(keyboard);
@@ -99,7 +110,7 @@ void exercise(int width, int height) {
 } // namespace
 WifiStatus wifi_status() { return networks; }
 unsigned wifi_revision() { return networks.revision; }
-bool wifi_scan() { return true; }
+bool wifi_scan() { ++scans; return true; }
 bool wifi_join(std::string_view s, std::string_view p) {
     joined = s;
     key = p;

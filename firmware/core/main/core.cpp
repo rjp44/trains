@@ -1,5 +1,7 @@
 #include "core.h"
 #include "version.h"
+#include "toolbar.h"
+#include "gestures.h"
 #include "package.h"
 #include "display.h"
 #include "map.h"
@@ -25,45 +27,113 @@ bool isLakes, isHemel;
 int replaySelection = -1;
 uint32_t replayStart, holdStart;
 bool held;
-void chooseRecording(lv_event_t *event) {
-    static const char *captions[] = {"Use replay", "Sector replay", "Hemel replay", "Watford replay"};
-    replaySelection = (replaySelection + 2) % 4 - 1;
-    setManualReplay(replaySelection >= 0);
-    if (replaySelection >= 0) {
-        hemel::replay(static_cast<hemel::Sample>(replaySelection));
-        hemel::view(static_cast<hemel::View>(replaySelection));
-        replayStart = esp_timer_get_time() / 1000;
-    }
-    lv_label_set_text((lv_obj_t *)lv_event_get_user_data(event), captions[replaySelection + 1]);
-}
 uint32_t now() { return esp_timer_get_time() / 1000; }
+void hemelOptions(lv_obj_t *parent) {
+    constexpr const char *views[] = {"15-mile sector", "Hemel Hempstead", "Watford Junction"};
+    auto row = panel::optionRow(parent, "View");
+    for (unsigned i = 0; i < 3; ++i)
+        panel::option(row, views[i], [](lv_event_t *e) {
+            hemel::view(static_cast<hemel::View>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
+            panel::refreshAppPage();
+        }, i, i == static_cast<unsigned>(hemel::currentView()));
+    row = panel::optionRow(parent, "Data source");
+    constexpr const char *sources[] = {"Live", "Sector replay", "Hemel replay", "Watford replay"};
+    for (int i = 0; i < 4; ++i) {
+        panel::option(row, sources[i], [](lv_event_t *e) {
+            int selected = int(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))) - 1;
+            if (selected == replaySelection) return;
+            replaySelection = selected;
+            setManualReplay(selected >= 0);
+            if (selected >= 0) {
+                hemel::replay(static_cast<hemel::Sample>(selected));
+                hemel::view(static_cast<hemel::View>(selected));
+                replayStart = now();
+            }
+            panel::refreshAppPage();
+        }, i, i == replaySelection + 1);
+    }
+}
 void drawLakes() {
     lakes::render(crowpanel_back_buffer(), now());
     crowpanel_present();
 }
 void settings() {
-    panel::openSettings(nullptr, isHemel ? "Stopping at Hemel only" : "Stopping trains only");
+    if (isLakes) lakes::openPanelSettings(lakes::portraitView());
+    else panel::openSettings(nullptr, isHemel ? "Stopping at Hemel only" : "Stopping trains only");
 }
-void pointer(int x, int y, bool pressed) {
-    static int startX, startY;
-    static bool down = false, settingsTouch = false;
-    if (isHemel) {
-        hemel::pointer(x, y, pressed);
+void contacts(const TouchFrame &frame) {
+    using namespace transport;
+    static Gesture gesture;
+    static Point previousCentre, uiPoint;
+    static float previousSpan;
+    static bool eligible, pinched, uiMulti;
+    if (panel::settingsOpen() || (!isLakes && !isHemel) || uiMulti) {
+        if (frame.count >= 2 && !uiMulti) {
+            uiMulti = true;
+            for (auto *dev = lv_indev_get_next(nullptr); dev; dev = lv_indev_get_next(dev))
+                if (lv_indev_get_type(dev) == LV_INDEV_TYPE_POINTER) lv_indev_wait_release(dev);
+        }
+        if (frame.count == 1 && !uiMulti) uiPoint = {frame.points[0].x, frame.points[0].y};
+        if (frame.count == 0 || (frame.count == 1 && !uiMulti)) {
+            if (isHemel) hemel::pointer(uiPoint.x, uiPoint.y, frame.count != 0);
+            else lakes::settingsPointer(uiPoint.x, uiPoint.y, frame.count != 0);
+        }
+        if (!frame.count) uiMulti = false;
         return;
     }
-    if (panel::settingsOpen() || settingsTouch || !isLakes) {
-        lakes::settingsPointer(x, y, pressed);
-        settingsTouch = pressed;
-        down = false;
-        return;
+    bool portrait = isLakes && lakes::portraitView();
+    auto logicalY = [&](Point p) { return portrait ? 1023 - p.x : p.y; };
+    auto button = [&](Point p) {
+        return toolbarButton(portrait ? p.y : p.x, logicalY(p), portrait ? 600 : 1024);
+    };
+    switch (gesture.sample(frame)) {
+    case ContactEvent::PinchStart:
+        previousSpan = gesture.span;
+        previousCentre = gesture.centre;
+        eligible = logicalY({frame.points[0].x, frame.points[0].y}) >= toolbarHeight &&
+                   logicalY({frame.points[1].x, frame.points[1].y}) >= toolbarHeight;
+        pinched = false;
+        break;
+    case ContactEvent::PinchMove: {
+        if (!eligible || gesture.span < 1) break;
+        if (previousSpan < 1) {
+            previousSpan = gesture.span;
+            previousCentre = gesture.centre;
+            break;
+        }
+        float ratio = gesture.span / previousSpan;
+        if (!pinched && !pinchThreshold(previousSpan, gesture.span, isHemel)) break;
+        if (isHemel) {
+            if (!pinched) hemel::pinchView(ratio > 1, previousCentre.x);
+        } else lakes::pinch(ratio, previousCentre.x, previousCentre.y, gesture.centre.x, gesture.centre.y);
+        previousSpan = gesture.span;
+        previousCentre = gesture.centre;
+        pinched = true;
+        break;
     }
-    if (pressed && !down) {
-        startX = x;
-        startY = y;
+    case ContactEvent::PinchEnd:
+        if (isLakes && pinched) lakes::finishPinch();
+        break;
+    case ContactEvent::SingleEnd: {
+        Point start = gesture.start, end = gesture.last;
+        if (logicalY(start) < toolbarHeight || logicalY(end) < toolbarHeight) {
+            if (gesture.dragged || button(start) != button(end)) break;
+            if (button(end) == ToolbarButton::Settings) settings();
+            if (button(end) == ToolbarButton::Theme) {
+                if (isHemel) hemel::toggleLight();
+                else lakes::toggleTheme();
+            }
+        } else if (isLakes) {
+            if (!gesture.dragged || std::abs(end.x - start.x) + std::abs(end.y - start.y) > 14)
+                lakes::gesture(end.x, end.y, end.x - start.x, end.y - start.y, now());
+        } else if (!gesture.dragged) {
+            hemel::pointer(start.x, start.y, true);
+            hemel::pointer(end.x, end.y, false);
+        }
+        break;
     }
-    if (!pressed && down)
-        lakes::gesture(x, y, x - startX, y - startY, now());
-    down = pressed;
+    case ContactEvent::None: break;
+    }
 }
 void capture() {
     const auto *frame = crowpanel_front_buffer();
@@ -94,10 +164,10 @@ void input(char c) {
     }
     if (line == "STATUS") {
         printf("DISPLAY slot=%s refresh=%lu held=%d sound=%u volume=%u brightness=%u orientation=%s "
-               "settings=%d\n",
+               "settings=%d touch_capacity=%u\n",
                esp_ota_get_running_partition()->label, (unsigned long)crowpanel_refresh_count(), held,
                unsigned(panel::sound()), panel::volume(), panel::brightness(),
-               isLakes && lakes::portraitView() ? "portrait" : "landscape", panel::settingsOpen());
+               isLakes && lakes::portraitView() ? "portrait" : "landscape", panel::settingsOpen(), crowpanel_touch_capacity());
         const auto s = transport::status();
         printf("TRANSPORT_STATUS wifi=%u %s  %s\n", unsigned(wifi_link_state() & 1), s.c_str(),
                isLakes   ? lakes::status().c_str()
@@ -119,15 +189,13 @@ void input(char c) {
     } else if (line.rfind("APP ", 0) == 0)
         transport::action(line.c_str() + 4);
     else if (line == "SETTINGS") {
-        if (isLakes)
-            lakes::openPanelSettings(lakes::portraitView());
-        else
-            settings();
+        settings();
     } else if (line.rfind("TAP ", 0) == 0) {
         int x, y;
         if (sscanf(line.c_str() + 4, "%d %d", &x, &y) == 2 && unsigned(x) < 1024 && unsigned(y) < 600) {
-            pointer(x, y, true);
-            pointer(x, y, false);
+            TouchFrame tap{1, {{uint16_t(x), uint16_t(y)}, {}}};
+            contacts(tap);
+            contacts(TouchFrame{});
         }
     } else if (line.rfind("W1\t", 0) == 0)
         wifi_save(line);
@@ -149,11 +217,13 @@ extern "C" void app_main() {
     const bool mounted = transport::mount();
     isHemel = mounted && !strcmp(transport::activeAdapter(), "hemel-corridor/1");
     isLakes = mounted && !strcmp(transport::activeAdapter(), "lakes-map/1");
-    auto display = lakes::coreDisplay(!isLakes);
+    auto display = lakes::coreDisplay(!isLakes, isHemel);
     if (!display) {
         transport::failedBoot();
         esp_restart();
     }
+    if (isLakes) panel::setAppPage("Lakes", lakes::drawOptions);
+    if (isHemel) panel::setAppPage("Hemel", hemelOptions);
     panel::setAppsPage(transport::appsPage);
     panel::setAboutPage(transport::aboutPage);
     if (isLakes) {
@@ -169,13 +239,6 @@ extern "C" void app_main() {
             hemel::replay(static_cast<hemel::Sample>(transport::defaultRecording));
             hemel::restoreView(static_cast<hemel::View>(transport::defaultView));
             hemel::seek(5000, now());
-            auto replay = lv_button_create(lv_screen_active());
-            lv_obj_set_pos(replay, 3, 105);
-            lv_obj_set_size(replay, 100, 32);
-            auto text = lv_label_create(replay);
-            lv_label_set_text(text, "Use replay");
-            lv_obj_center(text);
-            lv_obj_add_event_cb(replay, chooseRecording, LV_EVENT_CLICKED, text);
             hemel::setArrivalHandler([](hemel::Direction d, bool stops) {
                 panel::trainHorn(d == hemel::Direction::Down, stops);
             });
@@ -183,14 +246,14 @@ extern "C" void app_main() {
             auto l = lv_label_create(lv_screen_active());
             lv_label_set_text(l, "Transport Display\nOpen Settings > Apps to download an app.");
             lv_obj_center(l);
+            auto b = lv_button_create(lv_screen_active());
+            lv_obj_align(b, LV_ALIGN_CENTER, 0, 55);
+            lv_obj_set_style_bg_color(b, lv_color_hex(0x236b59), 0);
+            auto caption = lv_label_create(b);
+            lv_label_set_text(caption, "Settings");
+            lv_obj_center(caption);
+            lv_obj_add_event_cb(b, [](lv_event_t *) { settings(); }, LV_EVENT_CLICKED, nullptr);
         }
-        auto b = lv_button_create(lv_screen_active());
-        lv_obj_set_pos(b, 3, 70);
-        lv_obj_set_size(b, 88, 32);
-        auto l = lv_label_create(b);
-        lv_label_set_text(l, "Settings");
-        lv_obj_center(l);
-        lv_obj_add_event_cb(b, [](lv_event_t *) { settings(); }, LV_EVENT_CLICKED, nullptr);
         lv_refr_now(display);
     }
     crowpanel_prime_other_buffer();
@@ -214,10 +277,8 @@ extern "C" void app_main() {
         if (held && now() - holdStart < 10000)
             continue;
         held = false;
-        static uint16_t x = 0, y = 0;
-        bool pressed;
-        if (crowpanel_touch(&x, &y, &pressed))
-            pointer(x, y, pressed);
+        TouchFrame frame{};
+        if (crowpanel_touch(&frame)) contacts(frame);
         if (isLakes)
             lakes::consumeFeed(now());
         if (isHemel) {

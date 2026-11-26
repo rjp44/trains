@@ -6,7 +6,9 @@
 
 namespace panel {
 namespace {
-enum class Page { Wifi, Sound, Display, Apps, About };
+enum class Page { App, Sound, Display, Apps, About, Wifi };
+const char *appName;
+void (*appPage)(lv_obj_t *);
 void (*apps)(lv_obj_t*);
 void (*about)(lv_obj_t*);
 Page page;
@@ -294,15 +296,23 @@ void render() {
     lv_obj_set_flex_align(header, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     label(header, "Settings");
     button(header, "Done", finish);
-    auto *nav = group(overlay, LV_FLEX_FLOW_ROW);
-    const char *names[] = {"Wi-Fi", "Sound", "Display", "Apps", "About"};
-    for (unsigned i = 0; i < (about ? 5u : apps ? 4u : 3u); ++i)
-        button(nav, names[i], visit, i, unsigned(page) == i);
+    auto *nav = group(overlay, LV_FLEX_FLOW_ROW_WRAP);
+    auto tab = [&](Page target, const char *name) {
+        button(nav, name, visit, static_cast<uintptr_t>(target), page == target);
+    };
+    if (appPage) tab(Page::App, appName);
+    tab(Page::Sound, "Sound");
+    tab(Page::Display, "Display");
+    if (apps) tab(Page::Apps, "Apps");
+    if (about) tab(Page::About, "About");
+    tab(Page::Wifi, "Wi-Fi");
     content = group(overlay, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_grow(content, 1);
     lv_obj_add_flag(content, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(content, LV_DIR_VER);
-    if (page == Page::About && about)
+    if (page == Page::App && appPage)
+        appPage(content);
+    else if (page == Page::About && about)
         about(content);
     else if (page == Page::Apps && apps)
         apps(content);
@@ -314,6 +324,21 @@ void render() {
         networks();
 }
 } // namespace
+void setAppPage(const char *name, void (*draw)(lv_obj_t *)) { appName = name; appPage = draw; }
+lv_obj_t *optionRow(lv_obj_t *parent, const char *title) {
+    label(parent, title);
+    return group(parent, LV_FLEX_FLOW_ROW_WRAP);
+}
+void option(lv_obj_t *row, const char *name, lv_event_cb_t click, uintptr_t id, bool selected) {
+    button(row, name, click, id, selected);
+}
+void refreshAppPage() {
+    if (!overlay || page != Page::App) return;
+    int y = lv_obj_get_scroll_y(content);
+    render();
+    lv_obj_update_layout(content);
+    lv_obj_scroll_to_y(content, y, LV_ANIM_OFF);
+}
 void setAppsPage(void (*draw)(lv_obj_t*)){apps=draw;}
 void setAboutPage(void (*draw)(lv_obj_t*)){about=draw;}
 bool settingsOpen() { return overlay != nullptr; }
@@ -325,7 +350,7 @@ void openSettings(void (*onClose)(), const char *stopsLabel) {
     editing = false;
     first = 0;
     hidden = false;
-    page = Page::Wifi;
+    page = appPage ? Page::App : apps ? Page::Apps : Page::Wifi;
     overlay = lv_obj_create(lv_layer_top());
     lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
     lv_obj_set_style_radius(overlay, 0, 0);
@@ -335,7 +360,7 @@ void openSettings(void (*onClose)(), const char *stopsLabel) {
     lv_obj_set_style_pad_all(overlay, 20, 0);
     lv_obj_set_flex_flow(overlay, LV_FLEX_FLOW_COLUMN);
     lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-    wifi_scan();
+    if (page == Page::Wifi) wifi_scan();
     render();
 }
 void pollSettings() {

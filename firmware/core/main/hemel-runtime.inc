@@ -83,6 +83,12 @@ bool loadHemel() {
         for (size_t j = 1; j < v.frames.size(); j++)
             if (v.frames[j].end < v.frames[j - 1].end || v.frames[j].ms < v.frames[j - 1].ms)
                 return false;
+        // Reserve a toolbar in every installed layout. Drawing and hit testing share these coordinates.
+        auto diagramY = [](int y) { return toolbarHeight + y * (panelHeight - toolbarHeight) / panelHeight; };
+        for (auto &line : v.lines) { line.y1 = diagramY(line.y1); line.y2 = diagramY(line.y2); }
+        for (auto &label : v.labels) label.y = diagramY(label.y);
+        for (auto &marker : v.markers) { marker.y = diagramY(marker.y); marker.signalY = diagramY(marker.signalY); }
+        for (auto *card : {&s.fast, &s.slow}) { card->top = diagramY(card->top); card->bottom = diagramY(card->bottom); }
         s.lines = span(v.lines);
         s.markers = span(v.markers);
         s.labels = span(v.labels);

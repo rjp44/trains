@@ -1,5 +1,8 @@
 #include "map.h"
 #include "settings_display.h"
+#include "settings_ui.h"
+#include "toolbar.h"
+#include "esp_timer.h"
 #include "preferences.h"
 #include "rail_events.h"
 #include <algorithm>
@@ -74,16 +77,6 @@ float zoom = 1, cx = mapW * .5f, cy = mapH * .5f;
 int top, bottom;
 float scale;
 enum Action {
-    All,
-    Filter,
-    Minus,
-    Plus,
-    Fit,
-    Rotate,
-    Theme,
-    Settings,
-    Mode,
-    Frame,
     Marker,
     BusStop,
     Close,
@@ -166,8 +159,8 @@ int sy(double y) { return std::lround((y - cy) * scale + (top + bottom) * .5); }
 void layout() {
     W = portrait ? 600 : 1024;
     H = portrait ? 1024 : 600;
-    top = portrait ? 94 : 48;
-    bottom = H - 40;
+    top = transport::toolbarHeight;
+    bottom = H;
     scale = std::min((W - 40.f) / mapW, (bottom - top - 28.f) / mapH) * zoom;
 }
 void fit() {
@@ -578,40 +571,14 @@ void card() {
         tag({W - 102, y + 194, 80, 38}, "Next", paper, ink, More);
     }
 }
-void buttons(uint32_t now) {
+void toolbar(uint32_t now) {
     rect(0, 0, W, top, paper);
-    rect(0, bottom, W, H - bottom, paper);
-    const int cols = portrait ? 6 : 11;
-    for (int i = 0; i <= int(std::size(routes)); i++) {
-        int col = i % cols, row = i / cols;
-        Rect box{col * W / cols + 2, row * 46 + 2, (col + 1) * W / cols - col * W / cols - 4, 42};
-        bool on = i ? mask & (1u << (i - 1)) : !mask;
-        uint16_t accent = i ? color(routes[i - 1].rgb) : color(0x355d4e);
-        tag(box, i ? routes[i - 1].name : "All", on ? accent : paper, on ? color(0xffffff) : ink,
-            i ? Filter : All, i - 1);
-        rect(box.x + 1, box.y + box.h - 3, box.w - 2, 2, accent);
-    }
-    int y = bottom + 2, x = 4;
-    auto btn = [&](const char *label, int w, Action act) {
-        tag({x, y, w, 36}, label, paper, ink, act);
-        x += w + 4;
-    };
-    btn("-", 36, Minus);
-    btn("+", 36, Plus);
-    btn("Fit", 44, Fit);
-    btn("Turn", 52, Rotate);
-    btn(dark ? "Light" : "Dark", 55, Theme);
-    btn(manualReplay ? "Live" : "Replay", 65, Mode);
-    if (manualReplay)
-        btn("Step", 50, Frame);
-    btn("Settings", 78, Settings);
     auto clock = london(clockMs(now));
-    std::string status =
-        replaying()
-            ? (manualReplay ? "Replay" : "Replay / Wi-Fi")
-            : (liveFailed ? "Feed offline" : (!latest.busOk || !latest.railOk ? "Partial feed" : "Live"));
-    text(x + 4, y + 8, status + "  " + hhmm(clock.second) + "  (" + std::to_string(count) + ")", muted,
-         W - x - 6);
+    std::string status = replaying() ? (manualReplay ? "Replay" : "Replay / Wi-Fi") :
+        liveFailed ? "Feed offline" : (!latest.busOk || !latest.railOk ? "Partial feed" : "Live");
+    status += "  " + hhmm(clock.second) + "  (" + std::to_string(count) + ")";
+    text(std::max(60, (W - textWidth(status)) / 2), (top - 23) / 2, status, muted, W - 120);
+    transport::drawToolbar(pixels, portrait, dark);
 }
 void loadFrame() { replayInput(recordings[replayFrame]); }
 } // namespace
@@ -635,6 +602,72 @@ bool mountPackage(){
 struct MapSettings {float zoom,x,y;uint32_t mask,portrait,dark;};
 void saveView(){ transport::saveView("lakes_view",MapSettings{zoom,cx,cy,mask,portrait,dark}); }
 bool portraitView(){return portrait;}
+void toggleTheme() {
+    dark = !dark;
+    dirty = true;
+    saveView();
+}
+void pinch(float ratio, int fromX, int fromY, int toX, int toY) {
+    auto logicalX = [&](int x, int y) { return portrait ? y : x; };
+    auto logicalY = [&](int x, int y) { return portrait ? panelWidth - 1 - x : y; };
+    const float anchorX = cx + (logicalX(fromX, fromY) - W * .5f) / scale;
+    const float anchorY = cy + (logicalY(fromX, fromY) - (top + bottom) * .5f) / scale;
+    zoom = std::clamp(zoom * ratio, 1.f, 24.f);
+    layout();
+    cx = std::clamp(anchorX - (logicalX(toX, toY) - W * .5f) / scale, 0.f, float(mapW));
+    cy = std::clamp(anchorY - (logicalY(toX, toY) - (top + bottom) * .5f) / scale, 0.f, float(mapH));
+    dirty = true;
+}
+void finishPinch() { saveView(); }
+
+void drawOptions(lv_obj_t *parent) {
+    enum Choice : uintptr_t { Live, Replay, Step, ZoomOut, ZoomIn, FitRoutes, Portrait, Landscape, AllRoutes, Route };
+    auto choose = [](lv_event_t *e) {
+        auto id = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
+        if (id == Live || id == Replay || id == Step || id >= AllRoutes) {
+            selection.clear();
+            stopSelection = -1;
+            page = 0;
+        }
+        if (id <= Step) {
+            if (id == Step) {
+                replayFrame = (replayFrame + 1) % std::size(recordings);
+                loadFrame();
+            } else manualReplay = id == Replay;
+            replayAt = esp_timer_get_time() / 1000;
+        } else {
+            if (id == Portrait || id == Landscape) portrait = id == Portrait;
+            else if (id == ZoomOut) zoom = std::max(1.f, zoom / 1.5f);
+            else if (id == ZoomIn) zoom = std::min(24.f, zoom * 1.5f);
+            else {
+                if (id == AllRoutes) mask = 0;
+                if (id >= Route && id - Route < routes.size()) mask ^= 1u << (id - Route);
+                fit();
+            }
+            layout();
+            saveView();
+        }
+        dirty = true;
+        panel::refreshAppPage();
+    };
+    auto row = panel::optionRow(parent, "Data source");
+    panel::option(row, "Live", choose, Live, !manualReplay);
+    panel::option(row, "Replay", choose, Replay, manualReplay);
+    if (manualReplay) panel::option(row, "Next frame", choose, Step);
+    char level[32];
+    std::snprintf(level, sizeof level, "Map zoom   %.1fx", double(zoom));
+    row = panel::optionRow(parent, level);
+    panel::option(row, "Zoom out", choose, ZoomOut);
+    panel::option(row, "Zoom in", choose, ZoomIn);
+    panel::option(row, "Fit routes", choose, FitRoutes);
+    row = panel::optionRow(parent, "Map orientation");
+    panel::option(row, "Portrait", choose, Portrait, portrait);
+    panel::option(row, "Landscape", choose, Landscape, !portrait);
+    row = panel::optionRow(parent, "Routes");
+    panel::option(row, "All", choose, AllRoutes, !mask);
+    for (unsigned i = 0; i < routes.size(); ++i)
+        panel::option(row, routes[i].name, choose, Route + i, mask & (1u << i));
+}
 void init() {
     cx=mapW*.5f; cy=mapH*.5f;
     zoom=transport::defaultZoom;
@@ -699,8 +732,8 @@ void render(uint16_t *target, uint32_t now) {
     network();
     geography();
     vehicles(now);
-    buttons(now);
     card();
+    toolbar(now);
     lastDraw = now;
     dirty = false;
 }
@@ -709,7 +742,7 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
     int x = portrait ? py : px, y = portrait ? panelWidth - 1 - px : py;
     int dx = portrait ? pdy : pdx, dy = portrait ? -pdx : pdy;
     if (abs(dx) + abs(dy) > 14) {
-        if (y >= top && y < bottom && selection.empty() && stopSelection < 0) {
+        if (y - dy >= top && y >= top && y < bottom && selection.empty() && stopSelection < 0) {
             cx = std::clamp(cx - dx / scale, 0.f, float(mapW));
             cy = std::clamp(cy - dy / scale, 0.f, float(mapH));
             dirty = true;
@@ -723,47 +756,7 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             continue;
         int i = it->index;
         Action a = it->action;
-        if (a == Filter || a == All || a == Mode || a == Frame) {
-            selection.clear();
-            stopSelection = -1;
-        }
         switch (a) {
-        case All:
-            mask = 0;
-            fit();
-            break;
-        case Filter:
-            mask ^= 1u << i;
-            fit();
-            break;
-        case Minus:
-            zoom = std::max(1.f, zoom / 1.5f);
-            break;
-        case Plus:
-            zoom = std::min(24.f, zoom * 1.5f);
-            break;
-        case Fit:
-            fit();
-            break;
-        case Settings:
-            openPanelSettings(portrait);
-            break;
-        case Theme:
-            dark = !dark;
-            break;
-        case Rotate:
-            portrait = !portrait;
-            layout();
-            break;
-        case Mode:
-            manualReplay = !manualReplay;
-            replayAt = now;
-            break;
-        case Frame:
-            replayFrame = (replayFrame + 1) % std::size(recordings);
-            loadFrame();
-            replayAt = now;
-            break;
         case Marker:
             if (unsigned(i) < active().vehicles.size()) {
                 selection = active().vehicles[i].id;
@@ -790,7 +783,7 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
             }
             break;
         }
-        if(a==All||a==Filter||a==Minus||a==Plus||a==Fit||a==Rotate||a==Theme)saveView();
+
         dirty = true;
         return;
     }

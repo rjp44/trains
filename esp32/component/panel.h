@@ -15,6 +15,9 @@ bool attach(lv_display_t *display);
 void view(View value);
 #ifdef TRANSPORT_CORE
 void restoreView(View fallback);
+View currentView();
+bool isLight();
+void pinchView(bool closer, int x);
 #endif
 void light(bool enabled);
 void replay(Sample value);

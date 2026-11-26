@@ -18,5 +18,6 @@ void pollApps();
 } // namespace transport
 namespace lakes {
 bool portraitView();
-lv_display_t *coreDisplay(bool landscapeApp);
+void drawOptions(lv_obj_t *);
+lv_display_t *coreDisplay(bool landscapeApp, bool schematic);
 } // namespace lakes

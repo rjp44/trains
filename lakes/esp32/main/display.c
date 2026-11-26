@@ -28,6 +28,10 @@ static void panel_power(void) {
     ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_31, GPIO_MODE_OUTPUT));
 }
 
+static esp_lcd_panel_io_handle_t touch_io;
+static uint8_t touch_capacity;
+uint8_t crowpanel_touch_capacity(void) { return touch_capacity; }
+
 static esp_lcd_touch_handle_t touch_init(void) {
     const i2c_master_bus_config_t cfg = {
         .i2c_port = I2C_NUM_0,
@@ -58,8 +62,14 @@ static esp_lcd_touch_handle_t touch_init(void) {
         esp_lcd_panel_io_handle_t io;
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(bus, &io_cfg, &io));
         esp_lcd_touch_handle_t touch = NULL;
-        if (esp_lcd_touch_new_i2c_gt911(io, &touch_cfg, &touch) == ESP_OK)
+        if (esp_lcd_touch_new_i2c_gt911(io, &touch_cfg, &touch) == ESP_OK) {
+            touch_io = io;
+            uint8_t config;
+            if (esp_lcd_panel_io_rx_param(io, 0x804c, &config, 1) == ESP_OK)
+                touch_capacity = config & 15;
+            ESP_LOGI("touch", "GT911 configured for %u contacts", touch_capacity);
             return touch;
+        }
         ESP_ERROR_CHECK(esp_lcd_panel_io_del(io));
     }
     ESP_LOGW("hemel", "GT911 unavailable; continuing with the rail display");
@@ -160,17 +170,17 @@ void crowpanel_prime_other_buffer(void) {
                                     ESP_CACHE_MSYNC_FLAG_DIR_C2M));
 }
 
-bool crowpanel_touch(uint16_t *x, uint16_t *y, bool *pressed) {
-    if (!touch || esp_lcd_touch_read_data(touch) != ESP_OK)
+bool crowpanel_touch(TouchFrame *frame) {
+    // Only a ready report with zero contacts is a release. Polls between reports carry no event.
+    uint8_t status;
+    if (!touch || esp_lcd_panel_io_rx_param(touch_io, 0x814e, &status, 1) != ESP_OK ||
+        !(status & 0x80) || esp_lcd_touch_read_data(touch) != ESP_OK)
         return false;
-    esp_lcd_touch_point_data_t point;
+    esp_lcd_touch_point_data_t points[2];
     uint8_t count = 0;
-    if (esp_lcd_touch_get_data(touch, &point, &count, 1) != ESP_OK)
-        return false;
-    *pressed = count > 0;
-    if (count) {
-        *x = point.x;
-        *y = point.y;
-    }
+    if (esp_lcd_touch_get_data(touch, points, &count, 2) != ESP_OK) return false;
+    frame->count = count;
+    for (unsigned i = 0; i < count; ++i)
+        frame->points[i] = (TouchPoint){points[i].x, points[i].y};
     return true;
 }

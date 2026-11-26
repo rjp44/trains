@@ -10,6 +10,7 @@
 #ifdef TRANSPORT_CORE
 #include "rows.h"
 #include "view-settings.h"
+#include "toolbar.h"
 #endif
 
 namespace hemel {
@@ -272,8 +273,13 @@ template <class Visitor> void visitBadges(Visitor visit) {
 Rect button(int row) { return {3, 2 + row * 34, std::min(88, panelWidth / 9), 32}; }
 Rect popup() {
     const int w = std::min(350, panelWidth - 8), h = 104;
+#ifdef TRANSPORT_CORE
+    const int minY = transport::toolbarHeight + 2;
+#else
+    const int minY = 4;
+#endif
     return {std::clamp(selected.x - w / 2, 4, panelWidth - w - 4),
-            std::clamp(selected.y > h + 20 ? selected.y - h - 14 : selected.y + 14, 4, panelHeight - h - 4),
+            std::clamp(selected.y > h + 20 ? selected.y - h - 14 : selected.y + 14, minY, panelHeight - h - 4),
             w, h};
 }
 void follow() {
@@ -311,6 +317,11 @@ void follow() {
     }
 }
 void drawControls(lv_layer_t *layer) {
+#ifdef TRANSPORT_CORE
+    box(layer, 0, 0, panelWidth, transport::toolbarHeight, Board);
+    const char *viewName = scene == &hemelScene ? "Hemel Hempstead" : scene == &watfordScene ? "Watford Junction" : "15-mile sector";
+    text(layer, 60, transport::toolbarHeight / 2, panelWidth - 120, viewName, 16, Text);
+#else
     const char *viewName = scene == &hemelScene ? "Hemel" : scene == &watfordScene ? "Watford" : "15 miles";
     const char *labels[] = {viewName, palette == darkPalette ? "Light" : "Dark"};
     for (int i = 0; i < 2; ++i) {
@@ -318,6 +329,7 @@ void drawControls(lv_layer_t *layer) {
         box(layer, r.x, r.y, r.w, r.h, Board, Edge, 4);
         text(layer, r.x, r.y + r.h / 2, r.w, labels[i], 12, Text);
     }
+#endif
     {
         const char *statuses[] = {"Waiting", "Live", "Partial", "Stale", "Replay"};
         text(layer, 2, panelHeight - 22, button(0).w,
@@ -383,6 +395,7 @@ void tap(int x, int y) {
         }
         dismiss();
     }
+#ifndef TRANSPORT_CORE
     if (button(0).contains(x, y)) {
         view(scene == &sectorScene ? View::Hemel : scene == &hemelScene ? View::Watford : View::Sector);
         return;
@@ -391,6 +404,7 @@ void tap(int x, int y) {
         toggleLight();
         return;
     }
+#endif
     for (int line = 0; line < 2; ++line) {
         auto *c = rotation[line].shown;
         if (offline || !c || !cardLayout(line, *c).bounds.contains(x, y))
@@ -553,6 +567,27 @@ bool dismiss() {
 }
 void toggleLight() { light(palette == darkPalette); }
 #ifdef TRANSPORT_CORE
+View currentView() {
+    return scene == &hemelScene ? View::Hemel : scene == &watfordScene ? View::Watford : View::Sector;
+}
+bool isLight() { return palette == lightPalette; }
+void pinchView(bool closer, int x) {
+    if (!closer) {
+        if (currentView() != View::Sector) view(View::Sector);
+        return;
+    }
+    if (currentView() != View::Sector) return;
+    int nearest = panelWidth + 1;
+    View target = View::Hemel;
+    for (const auto &label : sectorScene.labels) {
+        int gap = std::abs(x - label.x);
+        if ((label.preset == 1 || label.preset == 2) && gap < nearest) {
+            nearest = gap;
+            target = label.preset == 1 ? View::Hemel : View::Watford;
+        }
+    }
+    view(target);
+}
 struct SchematicSettings {uint32_t view,light;};
 static bool restoringView;
 static void saveSchematic(){

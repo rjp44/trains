@@ -2,6 +2,8 @@
 #include "settings_ui.h"
 #include "display.h"
 #include "map.h"
+#include "toolbar.h"
+#include "panel.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "esp_log.h"
@@ -13,7 +15,7 @@ lv_display_t *ui;
 lv_indev_t *input;
 lv_indev_data_t pointer{};
 bool rotated;
-bool renderApp;
+bool renderApp, showSchematicToolbar;
 uint16_t *canvas, *presented;
 void flush(lv_display_t *display, const lv_area_t *, uint8_t *data) {
     // FULL mode supplies the entire logical frame on each flush.
@@ -30,6 +32,8 @@ void flush(lv_display_t *display, const lv_area_t *, uint8_t *data) {
                     for (int y = y0; y < y0 + 16; ++y)
                         presented[x * panelWidth + panelWidth - 1 - y] = src[y * panelHeight + x];
         }
+        if (showSchematicToolbar && !panel::settingsOpen())
+            transport::drawToolbar(presented, false, !hemel::isLight());
         crowpanel_present();
     }
     lv_display_flush_ready(display);
@@ -54,6 +58,7 @@ static bool configure(bool portrait) {
         lv_display_set_flush_cb(ui, flush);
         input = lv_indev_create();
         lv_indev_set_type(input, LV_INDEV_TYPE_POINTER);
+        lv_indev_set_mode(input, LV_INDEV_MODE_EVENT);
         lv_indev_set_display(input, ui);
         lv_indev_set_read_cb(input, [](lv_indev_t *, lv_indev_data_t *d) {
             d->point = pointer.point;
@@ -68,7 +73,8 @@ static bool configure(bool portrait) {
     pointer.state = LV_INDEV_STATE_RELEASED;
     return true;
 }
-lv_display_t *coreDisplay(bool landscapeApp) {
+lv_display_t *coreDisplay(bool landscapeApp, bool schematic) {
+    showSchematicToolbar = schematic;
     renderApp=landscapeApp;
     return configure(false)?ui:nullptr;
 }

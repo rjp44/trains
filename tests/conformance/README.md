@@ -18,6 +18,6 @@ cmake --build esp32/build
 ctest --test-dir esp32/build --output-on-failure
 ```
 
-CTest exercises flash allocation and rollback, Lakes rail transitions, touch settings, horn PCM, recorded frames and live input in the Hemel simulator. [Simulator controls](../../esp32/README.md)
+CTest exercises single-touch and pinch transitions, toolbar hit areas in both orientations, Settings tab order, flash allocation and rollback, Lakes rail transitions, touch settings, horn PCM, recorded frames and live input in the Hemel simulator. [Simulator controls](../../esp32/README.md)
 
 For release acceptance, build the site, verify the public catalogue and hashes, open each scoped PWA online and reopen its recording offline. On a commissioned panel, record the running app, installed versions, free space and preferences. Install the core from Settings, update each app, open both and check their feeds and About versions. Restore the original app and compare preferences. [OTA commands and recovery](../../firmware/core/README.md)
