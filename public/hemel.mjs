@@ -153,6 +153,8 @@ export function stationName(s) {
     .replace(/\bDc\b/g, 'DC') || 'Unknown';
 }
 export const operators = {
+  LF: 'Lumo',
+  LD: 'Lumo',
   VT: 'Avanti West Coast',
   LM: 'WM Trains',
   LO: 'London Overground',

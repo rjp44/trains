@@ -1,3 +1,4 @@
+import railLiveries from '../public/rail-liveries.json' with { type: 'json' };
 // Export the same geometry, line identities and timetable used by the PWA.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -125,6 +126,8 @@ h += rows(
 );
 if (!process.argv[2]) fs.writeFileSync(new URL('network.inc', out), h);
 const replay = load('replay');
+// Each entry owns four consecutive day/night frames after the original 16.
+tables.railLiveries = railLiveries.map(({name,aliases}) => [name,...aliases]);
 tables.firstDay = Math.floor(Date.parse(tt.start) / 86400000);
 tables.recordings = replay.frames.map(f => JSON.stringify(f));
 if (process.argv[2]) {

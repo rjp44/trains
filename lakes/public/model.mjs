@@ -1,3 +1,5 @@
+import railLiveries from './rail-liveries.json' with { type: 'json' };
+
 export const routes = {
   505: { icon: 'single', name: 'Coniston', via: 'Kendal · Windermere · Hawkshead', colour: '#ad4936' },
   555: {
@@ -129,8 +131,15 @@ export function confirmedRailStop(fix, reports) {
 }
 
 // The feed identifies the operator, not the diagrammed rolling-stock class.
+const liveriesByAgency = new Map(railLiveries.flatMap(livery =>
+  [livery.name, ...livery.aliases].map(agency => [agency, livery])
+));
+
+export function railOperatorName(agency) {
+  return liveriesByAgency.get(agency)?.name ?? agency;
+}
+
 export function railIcon(agency, view) {
-  const livery = ['Avanti West Coast','VT','AWC'].includes(agency) ? 'avanti'
-    : ['TransPennine Express','TP','TPE'].includes(agency) ? 'tpe' : 'northern';
-  return livery + '-carriage' + (view === 'side' ? '' : '-' + view);
+  const id = liveriesByAgency.get(agency)?.id ?? 'northern';
+  return id + '-carriage' + (view === 'side' ? '' : '-' + view);
 }

@@ -1,6 +1,6 @@
 import busCoverage from './bus-coverage.json' with { type: 'json' };
 import railMap from './public/data/rail.json' with { type: 'json' };
-import { project, nearestRailSegment } from './public/model.mjs';
+import { project, nearestRailSegment, railOperatorName } from './public/model.mjs';
 
 export function busFixes(rows) {
   if (!Array.isArray(rows)) throw Error('Invalid BODS response');
@@ -129,7 +129,7 @@ export function railFixes(data) {
       time: Date.parse(data.generated_at),
       label: (t.origin || t.last.name) + ' → ' + (t.destination || t.next.name),
       destination: t.destination,
-      agency: t.operator || 'Rail',
+      agency: railOperatorName(t.operator) || 'Rail',
       precision:
         t.last.crs && t.next.crs ? 'Estimated between stations' : 'Estimated between reporting points',
       last: t.last.name,

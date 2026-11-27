@@ -1,0 +1,5 @@
+[
+  { "id": "avanti", "name": "Avanti West Coast", "aliases": ["VT", "AWC"] },
+  { "id": "tpe", "name": "TransPennine Express", "aliases": ["TP", "TPE"] },
+  { "id": "lumo", "name": "Lumo", "aliases": ["LF", "LD", "Lumo West Coast", "Lumo East Coast"] }
+]

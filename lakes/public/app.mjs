@@ -1,4 +1,4 @@
-import { railIcon } from './model.mjs';
+import { railIcon, railOperatorName } from './model.mjs';
 import {panelSettings, settingGroup} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
 import {readSetting, saveSetting} from './panel/appearance.mjs';
@@ -736,7 +736,7 @@ function detail() {
       text('b', routes[v.route].chip || v.route, 'service-badge'),
       text(
         'span',
-        [v.agency, !rail && v.label?.startsWith('Vehicle ') ? v.label.slice(8) : '']
+        [rail ? railOperatorName(v.agency) : v.agency, !rail && v.label?.startsWith('Vehicle ') ? v.label.slice(8) : '']
           .filter(Boolean)
           .join(' ') +
           ' · ' +

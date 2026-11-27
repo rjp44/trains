@@ -7,6 +7,27 @@ const uint16_t *nightSprites;
 const uint8_t *nightOpacity;
 constexpr unsigned nightSide = 64;
 unsigned spriteCount;
+struct RailLivery { const char *name; unsigned side; };
+std::map<std::string_view, RailLivery> railLiveries;
+
+// The signed table lists one family of four views per operator, in atlas order.
+bool loadRailLiveries(const cJSON *families) {
+    unsigned side = bus::railAtlasFrames;
+    for (auto family = families->child; family; family = family->next, side += 4) {
+        const char *name = cJSON_GetStringValue(cJSON_GetArrayItem(family, 0));
+        if (!cJSON_IsArray(family) || !name || !*name) return false;
+        for (auto alias = family->child; alias; alias = alias->next) {
+            const char *code = cJSON_GetStringValue(alias);
+            if (!code || !*code || !railLiveries.emplace(code, RailLivery{name, side}).second) return false;
+        }
+    }
+    return true;
+}
+int railAsset(std::string_view agency) {
+    if (railLiveries.empty()) return bus::railSideAsset(agency, spriteCount);
+    auto match = railLiveries.find(agency);
+    return match != railLiveries.end() ? int(match->second.side) : 3;
+}
 std::vector<Route> routes;
 std::vector<XY> vertices;
 std::vector<Segment> segments;
@@ -87,13 +108,23 @@ bool loadLakes() {
     if (atlas.size < artHeader) return false;
     const size_t artBytes = atlas.size - artHeader;
     const size_t pairedBytes = spriteBytes + 3 * nightSide * nightSide;
-    const bool hasNight = artBytes == 13 * pairedBytes || artBytes == bus::railAtlasFrames * pairedBytes || artBytes == bus::operatorAtlasFrames * pairedBytes;
+    railLiveries.clear();
+    auto families = field(tables, "railLiveries");
+    if (families) {
+        if (!cJSON_IsArray(families) || artBytes % pairedBytes) return false;
+        const size_t frames = artBytes / pairedBytes;
+        if (frames < bus::railAtlasFrames || (frames - bus::railAtlasFrames) % 4 ||
+            (frames - bus::railAtlasFrames) / 4 != size_t(cJSON_GetArraySize(families)) ||
+            !loadRailLiveries(families)) return false;
+    }
+    const bool hasNight = families || artBytes == 13 * pairedBytes ||
+        artBytes == bus::railAtlasFrames * pairedBytes || artBytes == bus::operatorAtlasFrames * pairedBytes;
     const size_t frameBytes = hasNight ? pairedBytes : spriteBytes;
     if (artBytes % frameBytes) return false;
     spriteCount = artBytes / frameBytes;
     const size_t dayEnd = artHeader + spriteCount * spriteBytes;
     const size_t nightPixels = spriteCount * nightSide * nightSide;
-    if (spriteCount == 10 || spriteCount == 13 || (hasNight && (spriteCount == bus::railAtlasFrames || spriteCount == bus::operatorAtlasFrames))) {
+    if (spriteCount == 10 || spriteCount == 13 || hasNight) {
         auto raw = unpack("native/bus-paths.bin");
         if (raw.size < 4) return false;
         unsigned pathCount = little(raw.data);

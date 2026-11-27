@@ -437,7 +437,7 @@ void vehicles(uint32_t now) {
         int k = v.route, x = sx(m.point.x), y = sy(m.point.y);
         double direction = m.bearing;
         int64_t age = clockMs(now) - v.time;
-        int asset = k >= 8                                     ? bus::railSideAsset(v.agency, spriteCount)
+        int asset = k >= 8                                     ? railAsset(v.agency)
                     : !strcmp(routes[k].icon, "open-decker")   ? 2
                     : !strcmp(routes[k].icon, "closed-decker") ? 1
                                                                : 0;
@@ -649,6 +649,10 @@ void fillDetails(uint32_t now) {
     bool stale = clockMs(now) - v.time >= 120000 || (!replaying() && liveFailed) ||
                  !(v.route >= 8 ? active().railOk : active().busOk);
     subtitle = v.agency.empty() ? (v.route >= 8 ? "Rail" : "Stagecoach") : v.agency;
+    if (v.route >= 8) {
+        auto livery = railLiveries.find(v.agency);
+        if (livery != railLiveries.end()) subtitle = livery->second.name;
+    }
     if (v.route < 8 && v.label.rfind("Vehicle ", 0) == 0) subtitle += " " + v.label.substr(8);
     subtitle += replaying() ? "  /  Replay" : stale ? "  /  Stale fix" : "  /  Live";
     title = v.destination.empty() ? v.label : "To " + v.destination;

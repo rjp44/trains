@@ -83,7 +83,7 @@ struct Sprite {
     View view;
 };
 inline Sprite vehicleSprite(int sideAsset, float heading, unsigned frames) {
-    if (sideAsset == 16 || sideAsset == 20) {
+    if (sideAsset >= int(railAtlasFrames) && unsigned(sideAsset) + 3 < frames) {
         const auto view = vehicleView(heading, frames);
         const int offset = view == View::Roof ? 1 : view == View::Oblique ? 2 : view == View::Front ? 3 : 0;
         return {sideAsset + offset, view};

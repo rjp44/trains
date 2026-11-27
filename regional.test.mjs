@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { regionalMarkers, regionalRows, locationArrivals, slots } from './public/regional.mjs';
-import { railIcon } from './lakes/public/model.mjs';
+import { railIcon, railOperatorName } from './lakes/public/model.mjs';
 
 for (const id of ['crewe-birmingham', 'preston-crewe']) {
   const layout = JSON.parse(readFileSync(new URL('./apps/' + id + '/data/corridor.json', import.meta.url)));
@@ -48,8 +48,21 @@ test('Lakes selects an operator livery in every elevation', () => {
     ['Avanti West Coast', 'avanti'],
     ['TP', 'tpe'],
     ['TransPennine Express', 'tpe'],
+    ['LF', 'lumo'],
+    ['LD', 'lumo'],
+    ['Lumo West Coast', 'lumo'],
+    ['Lumo', 'lumo'],
     ['Northern', 'northern'],
   ])
     for (const view of ['side', 'roof', 'oblique', 'front'])
       assert.equal(railIcon(agency, view), operator + '-carriage' + (view === 'side' ? '' : '-' + view));
+});
+
+test('the recorded Euston to Stirling service has the Lumo livery and operator label', () => {
+  const replay = JSON.parse(readFileSync(new URL('./lakes/public/data/replay.json', import.meta.url)));
+  const train = replay.frames.flatMap(f => f.rail.vehicles).find(v => v.route === 'wcml' && v.agency === 'LF');
+  assert.equal(train.destination, 'Stirling');
+  assert.equal(railIcon(train.agency, 'roof'), 'lumo-carriage-roof');
+  assert.equal(railOperatorName(train.agency), 'Lumo');
+  assert.equal(railOperatorName('Northern'), 'Northern');
 });

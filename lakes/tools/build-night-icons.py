@@ -1,6 +1,7 @@
 """Render the dark Lakes vehicle icons from the map's SVG artwork."""
 from io import BytesIO
 from pathlib import Path
+import json
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -84,6 +85,7 @@ def render(name, lamps=()):
 for bus in ('single', 'closed-decker', 'open-decker'):
     for view in ('side', 'oblique', 'roof', 'front'):
         render(bus + '-' + view, bus_lamps[view])
-for operator in ('northern', 'avanti', 'tpe'):
+operators = [entry['id'] for entry in json.loads((public / 'rail-liveries.json').read_text())]
+for operator in ['northern', *operators]:
     for suffix in ('', '-roof', '-oblique', '-front'):
         render(operator + '-carriage' + suffix)

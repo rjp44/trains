@@ -40,6 +40,10 @@ int main() {
         assert(vehicleSprite(side,-1,24).asset == side+3);
         assert(railSideAsset(name,16) == 3);
     }
+    assert(vehicleSprite(24, 90, 28).asset == 24);
+    assert(vehicleSprite(24, 180, 28).asset == 25);
+    assert(vehicleSprite(24, 315, 28).asset == 26);
+    assert(vehicleSprite(24, -1, 28).asset == 27);
     assert(vehicleSprite(3, -1, railAtlasFrames).asset == 15);
     assert(vehicleSprite(3, NAN, railAtlasFrames).view == View::Front);
 
