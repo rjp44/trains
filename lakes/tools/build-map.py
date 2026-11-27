@@ -19,12 +19,13 @@ from shapely.ops import linemerge, transform, unary_union
 OUT = Path(__file__).resolve().parents[1] / 'public/data'
 CACHE = Path(sys.argv[1])
 CACHE.mkdir(parents=True, exist_ok=True)
-WEST, NORTH, UNIT, WIDTH, HEIGHT = -3.69, 54.74, 1030, 635, 770
+WEST, NORTH, UNIT, WIDTH, HEIGHT = -3.69, 54.94, 1030, 700, 976
 # Keep the whole service area in view on phones in either orientation and on widescreen monitors.
 BLEED_X, BLEED_Y = 700, 240
 ASPECT = math.cos(math.radians(54.35))
 RAIL_ROUTES = {
     'rail': 'WDM SVL BUD KEN OXN'.split(),
+    'wcml': 'LAN OXN PNR CAR'.split(),
     'coast': 'LAN CNF SVR ARN GOS KBK CAK ULV DLT ROO BIF ASK KBF FOX GNR MLM SIC BOC RAV DRI SSC SEL BYS NRT SBS CKL WTH'.split(),
 }
 
@@ -208,7 +209,7 @@ with ThreadPoolExecutor(max_workers=4) as pool:
         if 'transportation' in layers:
             roads.extend(geom for props, geom in features(tile, layers['transportation'])
                          if props['class'] in ('motorway','trunk','primary','secondary') and geom.geom_type.endswith('LineString'))
-    for tile, layers in pool.map(vector_tile, tiles([-3.635,54.022,-2.69,54.573], 12)):
+    for tile, layers in pool.map(vector_tile, tiles([-3.635,54.022,-2.53,54.91], 12)):
         if 'transportation' in layers:
             for props, geom in features(tile, layers['transportation']):
                 if props['class']=='rail':

@@ -6,7 +6,7 @@
 namespace lakes {
 constexpr int panelWidth = 1024, panelHeight = 600;
 struct Vehicle {
-    std::string id, label, destination, origin, terminus, departure, serviceDate;
+    std::string id, label, agency, destination, origin, terminus, departure, serviceDate;
     std::string last, lastCode, next, nextCode, lastTime, nextTime;
     int lastStop = -1; // Unknown on older feed responses.
     int route = -1, direction = 0;

@@ -249,7 +249,7 @@ void network() {
         const unsigned owners = mask ? s.mask & mask : s.mask;
         if (!owners)
             continue;
-        uint16_t colors[10];
+        uint16_t colors[32];
         int n = 0;
         for (unsigned k = 0; k < std::size(routes); k++)
             if (owners & (1u << k))
@@ -648,7 +648,7 @@ void fillDetails(uint32_t now) {
     accent = color(routes[v.route].rgb);
     bool stale = clockMs(now) - v.time >= 120000 || (!replaying() && liveFailed) ||
                  !(v.route >= 8 ? active().railOk : active().busOk);
-    subtitle = v.route >= 8 ? "Northern" : "Stagecoach";
+    subtitle = v.agency.empty() ? (v.route >= 8 ? "Rail" : "Stagecoach") : v.agency;
     if (v.route < 8 && v.label.rfind("Vehicle ", 0) == 0) subtitle += " " + v.label.substr(8);
     subtitle += replaying() ? "  /  Replay" : stale ? "  /  Stale fix" : "  /  Live";
     title = v.destination.empty() ? v.label : "To " + v.destination;

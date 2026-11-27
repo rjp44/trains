@@ -45,9 +45,33 @@ export function busFixes(rows) {
   return [...fixes.values()];
 }
 
-// Only the Lancaster–Carnforth section is shared with other passenger routes.
+// Railinfo reports both stations and passing points. Order runs north on the WCML.
+const wcmlReports = [
+  ['LAN'], ['Morecambe South Junction'], ['Hest Bank'], ['North Junction', 'Carnforth North Junction'],
+  ['Milnthorpe'], ['OXN'], ['Lambrigg'], ['Grayrigg'], ['Tebay'], ['Shap Summit'],
+  ['Shap'], ['Shap Harrisons Sidings'], ['Eden Valley'], ['PNR'], ['Plumpton'],
+  ['Southwaite'], ['Upperby Bridge Junction'], ['Upperby Junction'], ['CAR'],
+];
+const reportOrder = new Map(wcmlReports.flatMap((names, index) => names.map(name => [name.toLowerCase(), index])));
+
+function wcmlLeg(train, point) {
+  const rank = call => reportOrder.get((call.crs || call.name || '').toLowerCase());
+  const last = rank(train.last), next = rank(train.next);
+  if (last == null || next == null || last === next) return null;
+  // Coastal, Morecambe and Leeds trains also use the southern approach to Carnforth.
+  if (Math.max(last, next) <= rank({name:'North Junction'})) {
+    const mainLine = /Glasgow|Edinburgh|Stirling|Euston|Oxenholme|Penrith|Carlisle|Windermere/i;
+    if (![train.origin, train.destination].some(place => mainLine.test(place || ''))) return null;
+  }
+  const near = nearestRailSegment(point, railMap.lines.wcml.track);
+  // Running estimates can cut across a curve between widely spaced reports.
+  if (near.distance > 35) return null;
+  return {route: 'wcml', direction: Math.sign(next - last)};
+}
+
 function railLeg(train, point) {
   for (const [route, { stations, track }] of Object.entries(railMap.lines)) {
+    if (route === 'wcml') continue;
     const find = (crs) => stations.findIndex((s) => s.code === crs);
     const last = find(train.last.crs),
       next = find(train.next.crs);
@@ -82,7 +106,7 @@ function railLeg(train, point) {
             : null;
     if (direction) return { route, direction };
   }
-  return null;
+  return wcmlLeg(train, point);
 }
 
 export function railFixes(data) {

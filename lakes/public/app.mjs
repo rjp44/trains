@@ -48,7 +48,6 @@ const busPaths = new BusPaths(timetable, point => project(point, frame));
 const routeMatches = new WeakMap();
 const [W, H] = [frame.width, frame.height];
 const positions = [
-  ['Penrith', -2.757, 54.663, 0, -9, 1],
   ['Keswick', -3.139, 54.601, 0, -9, 1],
   ['Pooley Bridge', -2.821, 54.612, 8, -4],
   ['Glenridding', -2.952, 54.544, 7, -4],
@@ -313,6 +312,7 @@ for (const [name, lon, lat, dx, dy, major] of positions)
 const stationOffsets = { WDM: [8, -12, 1], SVL: [2, 14], BUD: [6, -2], KEN: [8, 7, 1], OXN: [7, 10] };
 const coastalHubs = new Set(['LAN', 'WTH', 'BIF', 'ULV', 'GOS']);
 const stationNames = {
+  CAR: 'Carlisle',
   OXN: 'Oxenholme',
   BIF: 'Barrow-in-Furness',
   GOS: 'Grange-over-Sands',
@@ -322,7 +322,8 @@ const stationNames = {
 };
 for (const [key, line] of Object.entries(railways)) {
   for (const s of line.stations) {
-    const hub = coastalHubs.has(s.code);
+    if (key === 'wcml' && (s.code === 'LAN' || s.code === 'OXN')) continue;
+    const hub = coastalHubs.has(s.code) || ['OXN', 'CAR', 'PNR'].includes(s.code);
     const [dx, dy, major] = stationOffsets[s.code] || [5, -5, hub];
     // Keep interchanges visible on the bus map. Small coastal stations appear on zoom or route selection.
     place(
@@ -920,7 +921,7 @@ function drawMarkers() {
 }
 function render() {
   const now = recorded() ? snapshot?.time : Date.now();
-  const vehicles = visibleFixes(snapshot, now);
+  const vehicles = visibleFixes(snapshot, now).filter(v => Object.hasOwn(routes, v.route));
   fixes = vehicles.filter((v) => routeVisible(v.route));
   if (!fixes.some((v) => v.id === selection)) selection = null;
   drawMarkers();
@@ -996,7 +997,7 @@ async function soundReports(token, trains) {
 async function poll(token) {
   if (token !== generation || document.hidden || mode !== 'live') return;
   try {
-    const s = await get('/api/vehicles');
+    const s = await get('/api/lakes-vehicles');
     if (token !== generation) return;
     if ((!snapshot || previewing) && !s.rail?.ok && !s.bus?.ok) throw Error('Waiting for live reports');
     if (!previewing && !fetchFailed && settings.sound.mode !== 'off')

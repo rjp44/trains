@@ -5,7 +5,9 @@ const snapshot = createVehicleFeed(readBusArchive);
 export default async function vehicles(request) {
   if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } });
   const data = await snapshot();
-  return Response.json(data, {
+  const legacy = new URL(request.url).pathname === '/api/vehicles';
+  const rail = legacy ? { ...data.rail, vehicles: data.rail.vehicles.filter(v => v.route !== 'wcml') } : data.rail;
+  return Response.json({ ...data, rail }, {
     headers: {
       'Cache-Control': 'no-store',
       'Netlify-CDN-Cache-Control':
@@ -13,4 +15,4 @@ export default async function vehicles(request) {
     },
   });
 }
-export const config = { path: '/api/vehicles' };
+export const config = { path: ['/api/vehicles', '/api/lakes-vehicles'] };

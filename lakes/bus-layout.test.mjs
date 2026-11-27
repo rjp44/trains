@@ -82,10 +82,11 @@ test('coastal trains keep their elevation and reverse their cab on the return wo
 
 test('the overlapping Drigg trace faces Seascale on both map and tablet coordinates', () => {
   const { track, stations } = read('rail').lines.coast;
+  const point = project([-3.43000415, 54.37016505], read('map').frame);
   const packed = track.map(point => point.map(x => Math.round(x * 8) / 8));
   for (const line of [track, packed])
     for (const [lastCode, nextCode, expected] of [['DRI', 'SSC', 319], ['SSC', 'DRI', 139]]) {
-      const heading = railBearing({lastCode, nextCode}, [156.08, 380.93], line, stations);
+      const heading = railBearing({lastCode, nextCode}, point, line, stations);
       assert.ok(Math.abs(heading - expected) < 5);
     }
 });

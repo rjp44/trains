@@ -24,6 +24,7 @@ extern const cJSON *tables;
 extern Bytes corridor;
 extern unsigned defaultView, defaultRecording;
 extern float defaultZoom;
+extern std::string vehicleFeed;
 } // namespace transport
 namespace lakes {
 bool mountPackage();

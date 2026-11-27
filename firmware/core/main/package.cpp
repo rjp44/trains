@@ -13,6 +13,7 @@ const cJSON *tables;
 Bytes corridor;
 unsigned defaultView, defaultRecording;
 float defaultZoom = 1;
+std::string vehicleFeed;
 uint32_t little(const uint8_t *p) {
     return unsigned(p[0]) | (unsigned(p[1]) << 8) | (unsigned(p[2]) << 16) | (unsigned(p[3]) << 24);
 }
@@ -130,7 +131,9 @@ bool openPackage(const esp_partition_t *part, unsigned offset, unsigned length, 
         ok = scene("defaultView", defaultView) && scene("defaultRecording", defaultRecording);
     } else if (ok) {
         const double zoom = cJSON_GetNumberValue(cJSON_GetObjectItem(m, "defaultZoom"));
-        ok = zoom >= 1 && zoom <= 24;
+        const char *url = cJSON_GetStringValue(cJSON_GetObjectItem(m, "feed"));
+        vehicleFeed = url ? url : "https://lakes-transit.netlify.app/api/vehicles";
+        ok = zoom >= 1 && zoom <= 24 && vehicleFeed.size() < 256 && vehicleFeed.rfind("https://", 0) == 0;
         if (ok)
             defaultZoom = zoom;
     }

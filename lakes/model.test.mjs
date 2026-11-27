@@ -18,7 +18,7 @@ test('bus GPS is geofenced and newer observations win for the same vehicle', () 
   assert.equal(results[0].time, Date.parse(fix.time));
   assert.equal(results[0].precision, 'Vehicle GPS');
 });
-test('main-line traffic at Oxenholme is excluded while a branch leg gets an estimated position', () => {
+test('main-line and branch traffic at Oxenholme receive their own route and direction', () => {
   const train = {
     id: 'X',
     lat: 54.32,
@@ -35,7 +35,7 @@ test('main-line traffic at Oxenholme is excluded while a branch leg gets an esti
     ],
   };
   const results = railFixes(data);
-  assert.equal(results.length, 1);
+  assert.deepEqual(results.map(v => [v.route, v.direction]), [['rail', 1], ['wcml', 1]]);
   assert.equal(results[0].precision, 'Estimated between stations');
   assert.equal(results[0].lastStop, true);
   train.last.stop = false;
@@ -65,6 +65,7 @@ test('recorded winter geography and observations cover every requested service',
   const { lines } = read('rail.json');
   assert.equal(lines.rail.stations.length, 5);
   assert.equal(lines.coast.stations.length, 27);
+  assert.deepEqual(lines.wcml.stations.map(s => s.code), ['LAN', 'OXN', 'PNR', 'CAR']);
   for (const line of Object.values(lines)) {
     let previous = -1;
     for (const station of line.stations) {

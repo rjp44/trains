@@ -63,7 +63,6 @@ for (const { points: xy, mask, closed } of links.values()) {
 }
 h += rows('vertices', 'XY', points) + rows('segments', 'Segment', parts);
 const towns = [
-  ['Penrith', -2.757, 54.663],
   ['Keswick', -3.139, 54.601],
   ['Ambleside', -2.963, 54.431],
   ['Workington', -3.546, 54.644],

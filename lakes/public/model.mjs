@@ -37,6 +37,7 @@ export const routes = {
     colour: '#9c3d63',
   },
   X6: { icon: 'single', name: 'Kendal – Barrow', via: 'Grange-over-Sands · Ulverston', colour: '#565fa0' },
+  wcml: { chip: 'WCML', name: 'West Coast Main Line', via: 'Lancaster – Oxenholme – Penrith – Carlisle', colour: '#88324f' },
   coast: {
     chip: 'Coast',
     name: 'Furness & Cumbrian Coast lines',
@@ -45,7 +46,7 @@ export const routes = {
   },
   rail: { chip: 'Lakes', name: 'Lakes Line', via: 'Oxenholme – Windermere', colour: '#273e53' },
 };
-export const order = ['505', '555', '599', '516', '508', 'X4', 'X5', 'X6', 'rail', 'coast'];
+export const order = ['505', '555', '599', '516', '508', 'X4', 'X5', 'X6', 'rail', 'coast', 'wcml'];
 export const freshMs = 120_000;
 export const expireMs = 600_000;
 export const londonTime = (t) =>

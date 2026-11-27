@@ -1,6 +1,10 @@
 [build]
-  command = "node build-preview.mjs"
+  command = "npm ci --prefix lakes && node build-preview.mjs"
+  functions = "lakes/functions"
   publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
 
 [build.environment]
   NODE_VERSION = "22"

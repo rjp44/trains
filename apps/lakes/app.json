@@ -1,15 +1,15 @@
 {
   "id": "lakes",
   "name": "Lakes Transit",
-  "version": "0.9.7",
-  "minCore": 9007,
+  "version": "0.9.8",
+  "minCore": 9009,
   "adapter": "lakes-map/1",
   "viewport": [
     600,
     1024
   ],
   "defaultZoom": 1,
-  "feed": "https://lakes-transit.netlify.app/api/vehicles",
+  "feed": "https://transport.pickering.org/api/lakes-vehicles",
   "data": [
     "map.json",
     "rail.json",
@@ -18,5 +18,5 @@
     "relief.webp"
   ],
   "credits": "Map data © OpenStreetMap contributors (ODbL), OpenFreeMap and OpenMapTiles. Terrain derived from Mapzen Terrain Tiles. Bus data from BODS under the Open Government Licence v3.0. Rail observations from Railinfo.",
-  "description": "Lake District buses and trains on a relief map, with route filters, stop departures and recorded journeys."
+  "description": "Lake District buses, coastal trains and the Lancaster–Carlisle West Coast Main Line on a relief map, with route filters, stop departures and recorded journeys."
 }

@@ -9,6 +9,7 @@
 #include "map.h"
 #include "preferences.h"
 #include "rail_events.h"
+#include "package.h"
 #include "wifi.h"
 #include <cmath>
 #include <cctype>
@@ -25,7 +26,7 @@ const char *str(const cJSON *o, const char *k) {
 double num(const cJSON *v, double fallback = -1) {
     return cJSON_IsNumber(v) && std::isfinite(v->valuedouble) ? v->valuedouble : fallback;
 }
-bool readBody(std::string &body, const char *url = "https://lakes-transit.netlify.app/api/vehicles",
+bool readBody(std::string &body, const char *url = transport::vehicleFeed.c_str(),
               int maxBytes = 131072) {
     esp_http_client_config_t cfg = {};
     cfg.url = url;
@@ -170,6 +171,7 @@ bool decode(const char *body, Snapshot &out) {
                 continue;
             project(lon, lat, v.x, v.y);
             v.label = str(row, "label");
+            v.agency = str(row, "agency");
             v.destination = str(row, "destination");
             v.origin = str(row, "origin");
             v.terminus = str(row, "terminus");

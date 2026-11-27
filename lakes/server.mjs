@@ -61,7 +61,7 @@ createServer(async (req, res) => {
       res.writeHead(200, {'Content-Type':'application/json'}).end(await reports.text());
       return;
     }
-    if (path === '/api/vehicles') {
+    if (path === '/api/vehicles' || path === '/api/lakes-vehicles') {
       const data = await snapshot();
       res
         .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
