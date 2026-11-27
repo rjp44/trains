@@ -1,3 +1,4 @@
+import { laneName } from './directional-scene.mjs';
 import { regionalScene } from './regional-scene.mjs';
 import { resolve } from 'node:path';
 // Build-time only. The device consumes const geometry and timestamped marker changes.
@@ -43,6 +44,12 @@ out.push('static constexpr uint32_t layoutFingerprint = ' + fingerprint + 'u;');
 const stationsByCode = new Map(
   [...(layout.stations || []), ...layout.branches.flatMap((b) => b.stations)].map((s) => [s.code, s.name]),
 );
+function directionalTrack(berth) {
+  if (layout.diagram !== 'directional') return '';
+  const direction = { up: 'Up', down: 'Down', both: 'Up / Down' }[berth.direction];
+  const line = laneName(berth.track, berth);
+  return [direction, line === 'P' + berth.platform ? '' : line].filter(Boolean).join(' ');
+}
 array(
   'MarkerInfo',
   'markerInfo',
@@ -52,6 +59,7 @@ array(
     b.bit || '',
     [
       b.track.name,
+      directionalTrack(b),
       b.platform
         ? 'P' + b.platform
         : stationsByCode.get(b.station) ||

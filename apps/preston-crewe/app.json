@@ -1,8 +1,8 @@
 {
   "id": "preston-crewe",
   "name": "Preston to Crewe",
-  "version": "0.9.0",
-  "minCore": 9010,
+  "version": "0.9.1",
+  "minCore": 9012,
   "adapter": "hemel-corridor/1",
   "presentation": "regional",
   "viewport": [
@@ -20,6 +20,6 @@
     "corridor.json",
     "replay.json"
   ],
-  "description": "Live WCML train movements from Preston to Crewe via Wigan North Western and Warrington Bank Quay.",
+  "description": "Scrollable Up and Down WCML berth diagram from Preston to Crewe via Wigan North Western and Warrington Bank Quay.",
   "credits": "Train descriptions and service running information from Signal Maps and Network Rail. Reporting locations from Network Rail SMART via VailData. Contains public sector information licensed under the Open Government Licence v3.0."
 }

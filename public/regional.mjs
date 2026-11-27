@@ -1,10 +1,12 @@
-// Each location owns a set of physical TD berths. Fit occupied trains into a
-// fixed number of display positions without assigning a spurious track or signal.
+// Marker order is shared by live packets, recorded frames and the native scene.
+// Older station-overview packages also reserve summary positions at each stop.
 import { isTrainCode, operators, stationName } from './hemel.mjs';
 export const slots = 8;
 export function regionalMarkers(layout) {
   return layout.tracks.flatMap((track) => [
-    ...Array.from({ length: slots }, (_, i) => ({ id: track.id + '-' + (i + 1), track })),
+    ...(layout.diagram === 'directional'
+      ? []
+      : Array.from({ length: slots }, (_, i) => ({ id: track.id + '-' + (i + 1), track }))),
     ...track.berths.map((b) => ({ ...b, track })),
   ]);
 }
@@ -29,7 +31,7 @@ export function regionalRows(layout, state, live = false) {
       .join(' | ');
     return [0, train.fresh ? 1 : 3, head, s?.id || '', route, info];
   }
-  return layout.tracks.flatMap((track) => {
+  function overviewRows(track) {
     const occupied = new Map();
     for (const b of track.berths) {
       const head = state.values[b.id];
@@ -47,7 +49,7 @@ export function regionalRows(layout, state, live = false) {
     const trains = [...occupied.values()].sort(
       (a, b) => Number(b.fresh) - Number(a.fresh) || a.head.localeCompare(b.head),
     );
-    const rows = Array.from({ length: slots }, (_, i) => {
+    return Array.from({ length: slots }, (_, i) => {
       const train = trains[i];
       if (!train) return [0, 0, '', '', '', ''];
       if (i === slots - 1 && trains.length > slots) {
@@ -56,6 +58,9 @@ export function regionalRows(layout, state, live = false) {
       }
       return describe(train);
     });
+  }
+  return layout.tracks.flatMap((track) => {
+    const rows = layout.diagram === 'directional' ? [] : overviewRows(track);
     for (const b of track.berths) {
       const head = state.values[b.id];
       const row = head

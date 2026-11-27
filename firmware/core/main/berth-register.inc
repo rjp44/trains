@@ -1,4 +1,4 @@
-// Each signed regional layout indexes its real SMART berths after its overview badges.
+// Each signed regional layout indexes its physical SMART berths by location.
 struct RegisterLocation { const char *name; unsigned first, count; };
 std::vector<RegisterLocation> registerLocations;
 int registerIndex = -1, registerPage = 0;

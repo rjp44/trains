@@ -28,7 +28,8 @@ const names = {
 };
 for (const [id, route] of Object.entries(routes)) {
   const tracks = [],
-    owners = new Map();
+    owners = new Map(),
+    evidence = new Map();
   for (const code of route.places.split(' ')) {
     const source = process.argv[2]
       ? JSON.parse(await fs.readFile(join(process.argv[2], code + '.json')))
@@ -36,27 +37,39 @@ for (const [id, route] of Object.entries(routes)) {
           if (!r.ok) throw Error(code + ' ' + r.status);
           return r.json();
         });
-    const track = { id: code, name: names[code] || source.location_name, berths: [] };
+    const track = { id: code, name: names[code] || source.location_name, berths: [], steps: [] };
     tracks.push(track);
     // An arrival steps into the station berth. A departure steps out of it.
     // Other end-points still locate a train on the approach. Prefer the station
     // end when neighbouring reporting points refer to the same physical berth.
     for (const s of source.smart) {
-      if (s.STEPTYPE !== 'B') continue;
-      for (const [address, primary] of [
-        [s.TOBERTH, s.EVENT === 'A'],
-        [s.FROMBERTH, s.EVENT === 'D'],
+      if (s.STEPTYPE !== 'B' || !/^[ABCD]$/.test(s.EVENT) || !/^[A-Z0-9]{2}$/.test(s.TD)) continue;
+      // SMART A/B are Up arrival/departure, C/D are Down arrival/departure.
+      const direction = 'AB'.includes(s.EVENT) ? 'up' : 'down';
+      const arrival = 'AC'.includes(s.EVENT);
+      const from = s.TD + s.FROMBERTH,
+        to = s.TD + s.TOBERTH;
+      if ([from, to].every((key) => /^[A-Z0-9]{6}$/.test(key)) && from !== to) {
+        if (!track.steps.some((step) => step[0] === from && step[1] === to && step[2] === direction))
+          track.steps.push([from, to, direction]);
+      }
+      for (const [key, primary, line] of [
+        [from, !arrival, s.FROMLINE],
+        [to, arrival, s.TOLINE],
       ]) {
-        if (!/^[A-Z0-9]{4}$/.test(address) || !/^[A-Z0-9]{2}$/.test(s.TD)) continue;
-        const key = s.TD + address,
-          rank = primary ? 2 : 1;
+        if (!/^[A-Z0-9]{6}$/.test(key)) continue;
+        if (!evidence.has(key)) evidence.set(key, new Set());
+        evidence.get(key).add(direction);
+        const rank = primary ? 2 : 1;
         let owner = owners.get(key);
-        if (owner && rank < owner.rank) continue;
-        if (!owner || rank > owner.rank) {
-          owner = { track, rank, platforms: new Set() };
+        if (!owner || (owner.track !== track && rank > owner.rank)) {
+          owner = { track, rank, platforms: new Set(), lines: new Set() };
           owners.set(key, owner);
         }
-        if (owner.track === track && primary && s.PLATFORM.trim()) owner.platforms.add(s.PLATFORM.trim());
+        if (owner.track !== track) continue;
+        owner.rank = Math.max(rank, owner.rank);
+        if (primary && s.PLATFORM.trim()) owner.platforms.add(s.PLATFORM.trim());
+        if (line.trim()) owner.lines.add(line.trim());
       }
     }
   }
@@ -84,8 +97,14 @@ for (const [id, route] of Object.entries(routes)) {
       if (exact.length === 1) signals.set(key, { signal: exact[0].d, bit: exact[0].i });
     }
   }
-  for (const [key, { track, platforms }] of [...owners].sort(([a], [b]) => a.localeCompare(b))) {
-    const berth = { id: key, ...signals.get(key) };
+  for (const [key, { track, platforms, lines }] of [...owners].sort(([a], [b]) => a.localeCompare(b))) {
+    const directions = evidence.get(key);
+    const berth = {
+      id: key,
+      direction: directions.size === 2 ? 'both' : [...directions][0],
+      ...signals.get(key),
+    };
+    if (lines.size) berth.lines = [...lines].sort();
     if (platforms.size === 1) berth.platform = [...platforms][0];
     track.berths.push(berth);
   }
@@ -93,6 +112,7 @@ for (const [id, route] of Object.entries(routes)) {
     throw Error('No mapped berths at ' + tracks.find((t) => !t.berths.length).name);
   const layout = {
     profile: 'regional',
+    diagram: 'directional',
     name: route.name,
     views: [route.name, ...route.sections],
     focus: route.focus,

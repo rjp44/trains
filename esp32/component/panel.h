@@ -18,6 +18,8 @@ void restoreView(View fallback);
 View currentView();
 const char *viewName(View value);
 bool regionalLayout();
+bool directionalLayout();
+bool dragCorridor(int dx,int startY);
 bool isLight();
 void pinchView(bool closer, int x);
 #endif

@@ -1,3 +1,4 @@
+import { lineBoard } from './line-board.mjs';
 import { Corridor } from './rail.mjs';
 import { createLiveFeed } from './live.mjs';
 import { regionalRows, locationArrivals, slots } from './regional.mjs';
@@ -10,6 +11,12 @@ const $ = (s) => document.querySelector(s);
 const tracks = $('#tracks'),
   dialog = $('#detail'),
   status = document.createElement('span');
+const directional = layout.diagram === 'directional';
+const tables = directional ? await json('native/tables.json') : null;
+const board = directional
+  ? lineBoard(tracks, layout, tables, (t, b, signal) => show(t, '', signal ? b : null, b))
+  : null;
+const physical = new Map(layout.tracks.flatMap((t) => t.berths).map((b, i) => [b.id, i]));
 const focus = layout.tracks.findIndex((t) => t.id === layout.focus);
 const arrivals = locationArrivals(layout),
   feed = createLiveFeed(layout, { onFrame: arrivals.accept, onReset: arrivals.reset });
@@ -38,10 +45,11 @@ function options(title, labels, act) {
     },
   };
 }
-function setView(i) {
+function setView(i, anchor) {
   view = i;
   saveSetting(id + '.view', i);
   views.mark(i);
+  board?.paint(i, anchor);
   last = '';
   draw();
 }
@@ -68,6 +76,7 @@ const ui = panelSettings({
   appControls: [views.group, sources.group],
 });
 views.mark(view);
+board?.paint(view);
 sources.mark(0);
 document.title = manifest.name + ' · WCML';
 function rowDetails(title, location, lines) {
@@ -81,8 +90,8 @@ function rowDetails(title, location, lines) {
     }),
   );
 }
-function show(t, head = '', signal = null) {
-  selected = { t, head, signal };
+function show(t, head = '', signal = null, berth = null) {
+  selected = { t, head, signal, berth };
   details();
   if (!dialog.open) dialog.showModal();
 }
@@ -99,6 +108,21 @@ function details() {
           ? 'Off · less restrictive'
           : 'Indication unknown',
       signal.bit,
+    ]);
+    return;
+  }
+  if (selected.berth) {
+    const b = selected.berth,
+      index = physical.get(b.id),
+      row = regionalRows(layout, state, !recorded)[index];
+    const moves = t.steps.filter(([a, z]) => a === b.id || z === b.id);
+    rowDetails(row[2] || b.id, t.name, [
+      tables.markerInfo[index][3],
+      'Berth ' + b.id + (b.lines?.length ? ' · Line code ' + b.lines.join('/') : ''),
+      row[2] ? row[4] : 'Berth clear',
+      row[2] ? row[5] : '',
+      !fresh(b) ? 'Last known position' : '',
+      ...moves.map(([a, z, dir]) => (dir === 'up' ? 'Up' : 'Down') + ' · ' + a + ' → ' + z),
     ]);
     return;
   }
@@ -122,6 +146,7 @@ function details() {
     ...t.berths.map((b) =>
       [
         b.id,
+        directional && (b.direction === 'both' ? 'Up / Down' : b.direction === 'up' ? 'Up' : 'Down'),
         b.platform && 'P' + b.platform,
         state.values[b.id] || '—',
         b.signal && b.signal + ' ' + (fresh(b) ? state.values[b.bit] || 'unknown' : 'unknown'),
@@ -158,7 +183,7 @@ function draw() {
     for (const direction of arrivals.take(['Live', 'Partial'].includes(state.status)))
       ui.sound.play(direction === 'D', false);
   const visible = [layout.tracks, layout.tracks.slice(0, focus + 1), layout.tracks.slice(focus)][view];
-  const rows = regionalRows({ ...layout, tracks: visible }, state, !recorded);
+  const rows = regionalRows(directional ? layout : { ...layout, tracks: visible }, state, !recorded);
   const key = JSON.stringify([view, rows]);
   $('h1').textContent = layout.views[view];
   $('#readout').textContent =
@@ -169,6 +194,11 @@ function draw() {
       : '');
   if (key === last) return;
   last = key;
+  if (board) {
+    board.update(rows);
+    details();
+    return;
+  }
   let lane,
     offset = 0;
   const columns =
@@ -214,10 +244,17 @@ function draw() {
   details();
 }
 mapGestures(tracks, {
-  drag() {},
+  drag(a, b) {
+    if (board) tracks.scrollLeft += a.x - b.x;
+  },
   pinch(a, b) {
     const ratio = b.span / a.span;
     if (ratio > 1.25 && view === 0) {
+      if (board) {
+        const station = board.station(b.x);
+        setView(layout.tracks.findIndex((t) => t.id === station) < focus ? 1 : 2, station);
+        return true;
+      }
       const at = document
         .elementFromPoint(b.x, b.y)
         ?.closest('.location')
@@ -226,13 +263,14 @@ mapGestures(tracks, {
       return true;
     }
     if (ratio < 0.8 && view) {
-      setView(0);
+      setView(0, board?.station(b.x));
       return true;
     }
     return false;
   },
 });
 window.addEventListener('resize', () => {
+  board?.resize();
   last = '';
   draw();
 });

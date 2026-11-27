@@ -5,7 +5,10 @@ uint32_t layoutFingerprint, darkPalette[20], lightPalette[20];
 std::vector<MarkerInfo> markerInfo;
 std::vector<Card> cards;
 std::vector<Detail> details;
+struct StationOffset { const char *id,*name; int x; };
 struct ViewTables {
+    int width = panelWidth, pan = 0;
+    std::vector<StationOffset> stations;
     std::vector<Segment> lines;
     std::vector<Label> labels;
     std::vector<Marker> markers;
@@ -72,6 +75,13 @@ bool loadHemel() {
                   }) ||
             !value(field(tables, key("Duration").c_str()), r.duration) || !r.duration)
             return false;
+        if (auto width = field(tables,key("Width").c_str())) {
+            if (!value(width,v.width) || v.width<panelWidth || v.width>32767 ||
+                !load(key("Stations").c_str(),v.stations,[&](auto p,StationOffset &stop) {
+                    return row(p,stop.id,stop.name,stop.x) && stop.x>=0 && stop.x<v.width;
+                },256) || v.stations.front().x!=0) return false;
+            for (size_t j=1;j<v.stations.size();++j) if(v.stations[j].x<=v.stations[j-1].x) return false;
+        }
         auto space = field(tables, key("Space").c_str());
         auto rect = [&](int j, CardSpace &a) {
             return row(cJSON_GetArrayItem(space, j), a.centre, a.left, a.top, a.bottom) && a.left >= 0 &&

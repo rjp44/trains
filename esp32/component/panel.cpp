@@ -131,7 +131,7 @@ lv_point_t pointerPoint{}, startPoint{};
 bool pressed = false, dragged = false;
 struct Selection {
     int index = -1, x = 0, y = 0;
-    bool signal = false, present = false;
+    bool signal = false, berth = false, present = false;
     std::string head, service, route, running;
 };
 Selection selected;
@@ -258,7 +258,7 @@ template <class Visitor> void visitBadges(Visitor visit) {
     // the closest occupied neighbour on either side, preserving its centre.
     for (const Marker &m : scene->markers) {
 #ifdef TRANSPORT_CORE
-        if (m.radius && regionalLayout()) continue;
+        if (m.radius && regionalLayout() && !directionalLayout()) continue;
 #endif
         if (!current[m.id].kind)
             continue;
@@ -288,7 +288,7 @@ Rect popup() {
             w, h};
 }
 void follow() {
-    if (selected.index < 0 || selected.signal)
+    if (selected.index < 0 || selected.signal || selected.berth)
         return;
     const auto compatible = [&](int i) {
         const auto &r = current[i];
@@ -324,6 +324,7 @@ void follow() {
 #ifdef TRANSPORT_CORE
 void chooseTrain(int id, int x, int y);
 #include "berth-register.inc"
+#include "corridor-scroll.inc"
 #endif
 void drawControls(lv_layer_t *layer) {
 #ifdef TRANSPORT_CORE
@@ -354,6 +355,7 @@ void drawControls(lv_layer_t *layer) {
         }
     }
 #ifdef TRANSPORT_CORE
+    if (directionalLayout()) drawScrollBar(layer);
     drawRegister(layer);
 #endif
     if (selected.index < 0)
@@ -368,7 +370,12 @@ void drawControls(lv_layer_t *layer) {
     if (selected.signal || !regionalLayout())
 #endif
         where += std::string(" | ") + m.id;
-    if (selected.signal) {
+    if (selected.berth) {
+        text(layer, x, r.y + 17, w - 35, m.id, 16, Text, false);
+        const auto &row = current[selected.index];
+        text(layer, x, r.y + 44, w, *row.head ? row.head : "No description reported", 14, Text, false);
+        text(layer, x, r.y + 70, w, where.c_str(), 12, Muted, false);
+    } else if (selected.signal) {
         const unsigned aspect = offline ? 0 : current[selected.index].aspect;
         text(layer, x, r.y + 17, w - 35, m.signal, 16, Text, false);
         text(layer, x, r.y + 44, w,
@@ -415,7 +422,7 @@ void tap(int x, int y) {
 #endif
     }
 #ifdef TRANSPORT_CORE
-    if (registerTap(x,y)) return;
+    if (registerTap(x,y) || scrollBarTap(x,y)) return;
 #endif
 #ifndef TRANSPORT_CORE
     if (button(0).contains(x, y)) {
@@ -476,6 +483,22 @@ void tap(int x, int y) {
         invalidate();
         return;
     }
+#ifdef TRANSPORT_CORE
+    if (directionalLayout()) {
+        for (const auto &m : scene->markers) {
+            if (std::abs(x - m.x) > 34 || y < m.y - 9 || y > m.y + 25) continue;
+            if (current[m.id].kind) chooseTrain(m.id, x, y);
+            else {
+                selected.index = m.id;
+                selected.x = x;
+                selected.y = y;
+                selected.berth = true;
+                invalidate();
+            }
+            return;
+        }
+    }
+#endif
     for (const auto &label : scene->labels)
         if (std::abs(x - label.x) <= label.width / 2 && std::abs(y - label.y) <= 12) {
 #ifdef TRANSPORT_CORE
@@ -598,6 +621,21 @@ View currentView() {
 }
 bool isLight() { return palette == lightPalette; }
 void pinchView(bool closer, int x) {
+    if (directionalLayout()) {
+        auto &v = activeCorridor();
+        if ((closer && currentView()!=View::Sector) || (!closer && currentView()==View::Sector)) return;
+        const auto &stop = v.stations[stationAt(v.pan+x)];
+        View target = View::Sector;
+        if (closer) {
+            const auto &second=viewTables[2].stations;
+            target = std::any_of(second.begin(),second.end(),[&](const auto &s){return !strcmp(s.id,stop.id);})
+                ? View::Watford : View::Hemel;
+        }
+        view(target);
+        auto &next=activeCorridor();
+        for (const auto &s:next.stations) if(!strcmp(s.id,stop.id)) { panTo(s.x); break; }
+        return;
+    }
     if (!closer) {
         if (currentView() != View::Sector) view(View::Sector);
         return;
@@ -613,6 +651,14 @@ void pinchView(bool closer, int x) {
         }
     }
     view(target);
+}
+bool directionalLayout() { return !activeCorridor().stations.empty(); }
+bool dragCorridor(int dx, int startY) {
+    if (!directionalLayout() || registerIndex>=0 || selected.index>=0 || startY<transport::toolbarHeight) return false;
+    const auto &v=activeCorridor();
+    if (startY>=scrollY) panTo(v.pan + int(std::lround(dx * double(v.width-panelWidth) / scrollWidth)));
+    else panTo(v.pan-dx);
+    return true;
 }
 bool regionalLayout() { return transport::field(transport::tables,"viewNames") != nullptr; }
 const char *viewName(View value) {
@@ -644,6 +690,7 @@ void view(View value) {
     dismiss();
     scene = value == View::Hemel ? &hemelScene : value == View::Watford ? &watfordScene : &sectorScene;
 #ifdef TRANSPORT_CORE
+    if (directionalLayout()) panTo(activeCorridor().pan);
     saveSchematic();
 #endif
     invalidate();

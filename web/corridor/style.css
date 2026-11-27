@@ -181,3 +181,70 @@ button {
     min-height: 55px;
   }
 }
+
+#tracks.line-board {
+  display: block;
+  overflow-x: auto;
+  padding: 0;
+  max-width: 100%;
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--rail) var(--edge);
+}
+.line-board svg {
+  display: block;
+  max-width: none;
+  user-select: none;
+}
+.line-board svg text {
+  font-family: ui-monospace, monospace;
+}
+.line-board svg .station {
+  font-family: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.line-board .berth,
+.line-board .signal {
+  cursor: pointer;
+}
+.line-board .berth rect {
+  fill: transparent;
+}
+.line-board .berth.head rect:first-child {
+  fill: var(--head);
+}
+.line-board .berth text {
+  fill: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+.line-board .berth:hover rect:first-child,
+.line-board .berth:focus rect:first-child {
+  stroke: var(--rail);
+}
+.line-board .lamp {
+  fill: var(--muted);
+  stroke: var(--bg);
+}
+.line-board [data-value='on'] .lamp {
+  fill: #eb705d;
+}
+.line-board [data-value='off'] .lamp {
+  fill: #56b688;
+}
+.jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  color: var(--muted);
+  font-size: 14px;
+}
+.jump select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 5px;
+}

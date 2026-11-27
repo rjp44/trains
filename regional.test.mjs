@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { regionalMarkers, regionalRows, locationArrivals, slots } from './public/regional.mjs';
+import { directionalScene, laneName } from './esp32/directional-scene.mjs';
 import { railIcon, railOperatorName } from './lakes/public/model.mjs';
 
 for (const id of ['crewe-birmingham', 'preston-crewe']) {
@@ -21,12 +22,44 @@ for (const id of ['crewe-birmingham', 'preston-crewe']) {
       assert.equal(rows.length, markers.length);
       assert.equal(rows[i][2], '1A01');
       assert.match(rows[i][5], new RegExp(b.id));
-      assert.equal(rows[0][2], '1A01');
+      assert.equal(rows.filter((row) => row[2] === '1A01').length, 1);
+      assert.deepEqual(markers.map((m) => m.id), layout.tracks.flatMap((t) => t.berths.map((b) => b.id)));
       state.areaStatus[area] = 'Stale';
       assert.equal(regionalRows(layout, state, true)[i][1], 3);
-      assert.ok(i >= slots);
+      const legacy = { ...layout, diagram: undefined };
+      const oldRows = regionalRows(legacy, state, true);
+      assert.equal(oldRows[0][2], '1A01');
+      assert.equal(oldRows[slots + station.berths.indexOf(b)][2], '1A01');
     },
   );
+  test(id + ' puts each physical berth on its diagram once across all three views', () => {
+    const markers = regionalMarkers(layout);
+    for (const view of [0, 1, 2]) {
+      const scene = directionalScene(layout, markers, view);
+      const ids = scene.Markers.map(([i]) => markers[i].id);
+      const stops = new Set(scene.Stations.map(([id]) => id));
+      const expected = markers.filter((m) => stops.has(m.track.id)).map((m) => m.id);
+      assert.deepEqual(ids.sort(), expected.sort());
+      assert.equal(new Set(ids).size, ids.length);
+      assert.ok(scene.Width > 1024 && scene.Width < 32768);
+      assert.equal(scene.Stations[0][2], 0);
+      assert.ok(scene.Markers.every(([, x]) => x > 0 && x < scene.Width));
+    }
+    if (id === 'preston-crewe') {
+      const leyland = layout.tracks.find((t) => t.id === 'LEYLAND');
+      const scene = directionalScene(layout, markers, 0);
+      const positions = new Map(scene.Markers.map(([i,x,y]) => [markers[i].id, {x,y}]));
+      const lines = ['PX0041', 'PX0039', 'PX0043', 'PX0042'].map((id) => {
+        const berth = leyland.berths.find((b) => b.id === id);
+        return [berth.direction, laneName(leyland, berth), berth.platform];
+      });
+      assert.deepEqual(lines, [['up','Fast','4'], ['up','Slow','2'], ['down','Fast','3'], ['down','Slow','1']]);
+      assert.equal(new Set(['PX0041','PX0039','PX0043','PX0042'].map((id) => positions.get(id).y)).size, 4);
+      for (const [a,b,dir] of leyland.steps) {
+        assert.ok(dir === 'up' ? positions.get(a).x < positions.get(b).x : positions.get(a).x > positions.get(b).x);
+      }
+    }
+  });
   test(id + ' uses observed movements into the focus station for directional arrival sounds', () => {
     const arrivals = locationArrivals(layout),
       index = layout.tracks.findIndex((t) => t.id === layout.focus);

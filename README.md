@@ -8,8 +8,8 @@ Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and 
 | --- | --- |
 | [Hemel rail monitor](https://transport.pickering.org/apps/hemel/) | Live trains, signals and booked calls around Hemel Hempstead and Watford Junction, with three recorded journeys through the diagram. |
 | [Lakes Transit](https://transport.pickering.org/apps/lakes/) | Lake District buses, coastal trains and the Lancaster–Carlisle WCML on a relief map. Avanti, TransPennine Express and Lumo trains have their own liveries. |
-| [Crewe to Birmingham International](https://transport.pickering.org/apps/crewe-birmingham/) | WCML train-describer panel via Stafford, Wolverhampton and Birmingham New Street. Includes mapped signal indications around Birmingham. |
-| [Preston to Crewe](https://transport.pickering.org/apps/preston-crewe/) | WCML train-describer panel via Wigan North Western, Warrington Bank Quay and Winsford. |
+| [Crewe to Birmingham International](https://transport.pickering.org/apps/crewe-birmingham/) | Scrollable Up and Down berth diagram via Stafford, Wolverhampton and Birmingham New Street. Includes mapped signal indications around Birmingham. |
+| [Preston to Crewe](https://transport.pickering.org/apps/preston-crewe/) | Scrollable Up and Down berth diagram via Wigan North Western, Warrington Bank Quay and Winsford. |
 
 ## Get the apps
 

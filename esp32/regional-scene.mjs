@@ -1,6 +1,8 @@
+import { directionalScene } from './directional-scene.mjs';
 import { slots } from '../public/regional.mjs';
 // The whole line runs down each successive column, in timetable order.
 export function regionalScene(layout, markers, view) {
+  if (layout.diagram === 'directional') return directionalScene(layout,markers,view);
   const focus = layout.tracks.findIndex((t) => t.id === layout.focus);
   const tracks = [layout.tracks, layout.tracks.slice(0, focus + 1), layout.tracks.slice(focus)][view];
   const cols = tracks.length > 15 ? 4 : tracks.length > 8 ? 3 : 2;

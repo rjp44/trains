@@ -66,7 +66,7 @@ void contacts(const TouchFrame &frame) {
     static Gesture gesture;
     static Point previousCentre, uiPoint, scrollPoint;
     static float previousSpan;
-    static bool eligible, pinched, uiMulti, scrollingCard;
+    static bool eligible, pinched, uiMulti, scrolled;
     if (panel::settingsOpen() || (!isLakes && !isHemel) || uiMulti) {
         if (frame.count >= 2 && !uiMulti) {
             uiMulti = true;
@@ -88,7 +88,7 @@ void contacts(const TouchFrame &frame) {
     };
     switch (gesture.sample(frame)) {
     case ContactEvent::PinchStart:
-        scrollingCard = false;
+        scrolled = false;
         previousSpan = gesture.span;
         previousCentre = gesture.centre;
         eligible = logicalY({frame.points[0].x, frame.points[0].y}) >= toolbarHeight &&
@@ -116,7 +116,7 @@ void contacts(const TouchFrame &frame) {
         if (isLakes && pinched) lakes::finishPinch();
         break;
     case ContactEvent::SingleEnd: {
-        if (scrollingCard) { scrollingCard = false; break; }
+        if (scrolled) { scrolled = false; break; }
         Point start = gesture.start, end = gesture.last;
         if (logicalY(start) < toolbarHeight || logicalY(end) < toolbarHeight) {
             if (gesture.dragged || button(start) != button(end)) break;
@@ -135,9 +135,13 @@ void contacts(const TouchFrame &frame) {
         break;
     }
     case ContactEvent::None:
-        if (isLakes && frame.count == 1 && !gesture.multi && gesture.dragged) {
-            int dy = logicalY(gesture.last) - logicalY(scrollingCard ? scrollPoint : gesture.start);
-            scrollingCard = lakes::scrollDetails(portrait ? gesture.start.y : gesture.start.x, logicalY(gesture.start), dy);
+        if (isHemel && frame.count==1 && !gesture.multi && gesture.dragged) {
+            int dx=gesture.last.x - (scrolled ? scrollPoint.x : gesture.start.x);
+            scrolled=hemel::dragCorridor(dx,gesture.start.y);
+            scrollPoint=gesture.last;
+        } else if (isLakes && frame.count == 1 && !gesture.multi && gesture.dragged) {
+            int dy = logicalY(gesture.last) - logicalY(scrolled ? scrollPoint : gesture.start);
+            scrolled = lakes::scrollDetails(portrait ? gesture.start.y : gesture.start.x, logicalY(gesture.start), dy);
             scrollPoint = gesture.last;
         }
         break;
