@@ -48,7 +48,7 @@ export function dayAt(days, now) {
   return days.find(([rise]) => londonDay.format(rise) === londonDay.format(now));
 }
 export function mapAppearance(id, initial, apply, report) {
-  const [place, latitude, longitude] = locations[id];
+  const [place, latitude, longitude] = globalThis.transportApp?.manifest?.solar ?? locations[id];
   let theme = readSetting(id + '.theme', initial);
   if (theme !== 'light' && theme !== 'dark') theme = initial;
   let auto = readSetting('sunAuto', false) === true;

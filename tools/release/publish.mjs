@@ -105,6 +105,7 @@ for (const file of files) {
     )
       throw Error('Missing or oversized app name or description: ' + id);
     Object.assign(entries[id], { name, description, adapter });
+    if (app.manifest.presentation === 'regional') entries[id].presentation = 'regional';
   }
   const dest = path.join(artifactDir, sha256 + ext);
   if (!fs.existsSync(dest)) {

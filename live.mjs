@@ -7,7 +7,7 @@ const relay = 'wss://ws.signalmaps.co.uk/new';
 // The browser and the optional Node recorder use the same area and freshness rules.
 export function createLiveFeed(layout, { abbeyEndpoint, abbeyURL = lookupURL, onFrame, onReset } = {}) {
   const board = new Corridor(layout);
-  const stations = new Set(layout.branches.find((b) => b.id === 'abbey').stations.map((s) => s.code));
+  const stations = new Set(layout.branches?.find((b) => b.id === 'abbey')?.stations.map((s) => s.code) ?? []);
   let transport = 'Disconnected';
   let lastError = '';
   let backoff = 2000;
@@ -149,7 +149,7 @@ export function createLiveFeed(layout, { abbeyEndpoint, abbeyURL = lookupURL, on
       if (change) onFrame?.(change);
       if (message.type === 'TRUST_ALL' && !timetableReady) {
         timetableReady = true;
-        void pollAbbey();
+        if (stations.size) void pollAbbey();
       }
       if (areaData && board.areaTimes[message.area] === upstream) {
         transport = 'Connected';

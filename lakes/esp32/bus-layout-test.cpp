@@ -31,6 +31,15 @@ int main() {
         bool oldRoof = heading >= 315 || heading <= 45 || (heading >= 135 && heading <= 205);
         assert(vehicleView(heading, 10) == (oldRoof ? View::Roof : View::Side));
     }
+    for (auto name : {"Avanti West Coast","VT","TransPennine Express","TP"}) {
+        int side = railSideAsset(name,operatorAtlasFrames);
+        assert(side == (std::string_view(name)=="VT" || std::string_view(name)=="Avanti West Coast" ? 16 : 20));
+        assert(vehicleSprite(side,90,24).asset == side);
+        assert(vehicleSprite(side,0,24).asset == side+1);
+        assert(vehicleSprite(side,45,24).asset == side+2);
+        assert(vehicleSprite(side,-1,24).asset == side+3);
+        assert(railSideAsset(name,16) == 3);
+    }
     assert(vehicleSprite(3, -1, railAtlasFrames).asset == 15);
     assert(vehicleSprite(3, NAN, railAtlasFrames).view == View::Front);
 

@@ -1,0 +1,26 @@
+{
+  "id": "crewe-birmingham",
+  "name": "Crewe to Birmingham International",
+  "version": "0.9.0",
+  "minCore": 9010,
+  "adapter": "hemel-corridor/1",
+  "presentation": "regional",
+  "viewport": [
+    1024,
+    600
+  ],
+  "defaultView": "sector",
+  "defaultRecording": "sector",
+  "solar": [
+    "Wolverhampton",
+    52.585,
+    -2.12
+  ],
+  "data": [
+    "corridor.json",
+    "replay.json",
+    "EASM-LICENSE.txt"
+  ],
+  "description": "Live WCML train movements from Crewe to Birmingham International via Stafford, Wolverhampton and Birmingham New Street.",
+  "credits": "Train descriptions and service running information from Signal Maps and Network Rail. Reporting locations from Network Rail SMART via VailData. Contains public sector information licensed under the Open Government Licence v3.0. Birmingham signal indications use EASMData (GPLv3)."
+}

@@ -87,13 +87,13 @@ bool loadLakes() {
     if (atlas.size < artHeader) return false;
     const size_t artBytes = atlas.size - artHeader;
     const size_t pairedBytes = spriteBytes + 3 * nightSide * nightSide;
-    const bool hasNight = artBytes == 13 * pairedBytes || artBytes == bus::railAtlasFrames * pairedBytes;
+    const bool hasNight = artBytes == 13 * pairedBytes || artBytes == bus::railAtlasFrames * pairedBytes || artBytes == bus::operatorAtlasFrames * pairedBytes;
     const size_t frameBytes = hasNight ? pairedBytes : spriteBytes;
     if (artBytes % frameBytes) return false;
     spriteCount = artBytes / frameBytes;
     const size_t dayEnd = artHeader + spriteCount * spriteBytes;
     const size_t nightPixels = spriteCount * nightSide * nightSide;
-    if (spriteCount == 10 || spriteCount == 13 || (hasNight && spriteCount == bus::railAtlasFrames)) {
+    if (spriteCount == 10 || spriteCount == 13 || (hasNight && (spriteCount == bus::railAtlasFrames || spriteCount == bus::operatorAtlasFrames))) {
         auto raw = unpack("native/bus-paths.bin");
         if (raw.size < 4) return false;
         unsigned pathCount = little(raw.data);

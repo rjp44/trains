@@ -45,7 +45,7 @@ export function buildApp(id) {
   manifest.versionName = manifest.version;
   manifest.version = versionCode(manifest.versionName);
   const parts = new Map([['manifest.json', Buffer.from(JSON.stringify(manifest))]]);
-  const inputs = join(root, manifest.adapter === 'hemel-corridor/1' ? 'public/data' : 'lakes/public/data');
+  const inputs = manifest.presentation === 'regional' ? join(root,'apps',id,'data') : join(root, manifest.adapter === 'hemel-corridor/1' ? 'public/data' : 'lakes/public/data');
   for (const name of manifest.data) {
     if (!/^[a-zA-Z0-9-]+\.(json|txt|webp)$/.test(name)) throw Error('Invalid data asset');
     parts.set('data/' + name.toLowerCase(), fs.readFileSync(join(inputs, name)));
@@ -56,7 +56,7 @@ export function buildApp(id) {
     table = join(temp, 'tables.json');
   try {
     if (manifest.adapter === 'hemel-corridor/1')
-      execFileSync(process.execPath, ['esp32/pack.mjs', '1024', '600', table, '--tables'], { cwd: root });
+      execFileSync(process.execPath, ['esp32/pack.mjs', '1024', '600', table, '--tables', inputs], { cwd: root });
     else {
       execFileSync(process.execPath, ['lakes/esp32/pack.mjs', table], { cwd: root });
       execFileSync(process.env.ART_PYTHON || 'python3', ['lakes/esp32/pack-art.py', '--output-dir', temp], {

@@ -21,7 +21,9 @@ async function start() {
       return urls.get(key);
     },
   };
-  if (app.manifest.adapter === 'hemel-corridor/1') {
+  if (app.manifest.presentation === 'regional') {
+    await import('./app.mjs');
+  } else if (app.manifest.adapter === 'hemel-corridor/1') {
     document.querySelector('a[href="/data/EASM-LICENSE.txt"]').href = await transportApp.asset(
       'data/easm-license.txt',
       'text/plain',

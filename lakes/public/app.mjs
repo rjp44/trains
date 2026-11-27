@@ -1,3 +1,4 @@
+import { railIcon } from './model.mjs';
 import {panelSettings, settingGroup} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
 import {readSetting, saveSetting} from './panel/appearance.mjs';
@@ -895,7 +896,7 @@ function drawMarkers() {
     const angle = known ? bearing - 90 : 0;
     const flip = known && view !== 'roof' && bearing > 180 ? -1 : 1;
     const icon = rail
-      ? (view === 'side' ? 'northern-carriage' : 'northern-carriage-' + view)
+      ? railIcon(v.agency, view)
       : routes[v.route].icon + '-' + view;
     const transform = `translate(${x} ${y}) scale(${drawUnit}) rotate(${angle}) scale(1 ${flip})`;
     // The vector body continues to anchor journey cards and receive taps in either theme.

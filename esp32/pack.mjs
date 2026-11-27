@@ -1,3 +1,5 @@
+import { regionalScene } from './regional-scene.mjs';
+import { resolve } from 'node:path';
 // Build-time only. The device consumes const geometry and timestamped marker changes.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Corridor, berthDiagram, fitStationNames, junctionPathSlots } from '../rail.mjs';
@@ -6,10 +8,11 @@ import { createProjection } from './projection.mjs';
 const [width, height] = process.argv.slice(2, 4).map(Number);
 if (![width, height].every(Number.isInteger) || width < 480 || height < 272 || width > 4096 || height > 2160)
   throw Error('Choose a width of 480–4096 and a height of 272–2160 pixels.');
-const data = (file) => JSON.parse(readFileSync(new URL('../public/data/' + file + '.json', import.meta.url)));
+const data = (file) => JSON.parse(readFileSync(process.argv[6] ? resolve(process.argv[6], file + '.json') : new URL('../public/data/' + file + '.json', import.meta.url)));
 const layout = data('corridor'),
-  diagram = berthDiagram(layout);
-const home = diagram.columns.get('HML'),
+  regional = layout.profile === 'regional',
+  diagram = regional ? null : berthDiagram(layout);
+const home = diagram?.columns.get('HML'),
   round = Math.round;
 const { markers, project, fingerprint } = createProjection(layout);
 const tables = { layoutFingerprint: fingerprint };
@@ -38,7 +41,7 @@ out.push(
 );
 out.push('static constexpr uint32_t layoutFingerprint = ' + fingerprint + 'u;');
 const stationsByCode = new Map(
-  [...layout.stations, ...layout.branches.flatMap((b) => b.stations)].map((s) => [s.code, s.name]),
+  [...(layout.stations || []), ...layout.branches.flatMap((b) => b.stations)].map((s) => [s.code, s.name]),
 );
 array(
   'MarkerInfo',
@@ -303,7 +306,16 @@ function compileView(view) {
       '};',
   );
 }
-for (const view of ['sector', 'hemel', 'watford']) compileView(view);
+for (const [i,view] of ['sector','hemel','watford'].entries()) {
+  if (regional) {
+    for (const [key,value] of Object.entries(regionalScene(layout,markers,i))) tables[view+key]=value;
+  } else compileView(view);
+}
+if (regional) {
+  tables.viewNames=layout.views;
+  tables.locationBerths=layout.tracks.map(t => [t.name,markers.findIndex(m=>m.track.id===t.id && m.id===t.berths[0].id),t.berths.length]);
+  tables.solar=JSON.parse(readFileSync(resolve(process.argv[6],'../app.json'))).solar;
+}
 
 const cards = [['', '', '', '', 0]],
   details = [['', '', '']];
@@ -322,7 +334,7 @@ for (const [name, file] of [
   ['hemel', 'hemel-replay'],
   ['watford', 'watford-replay'],
 ]) {
-  const recording = data(file),
+  const recording = data(regional ? 'replay' : file),
     board = new Corridor(layout);
   const start = recording.startTime ?? recording.frames[0].time;
   const changes = [],

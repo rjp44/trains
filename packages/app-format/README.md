@@ -2,7 +2,7 @@
 
 A `.tda` file starts with the four ASCII bytes `TDA2`, a little-endian 32-bit section count and a directory of 96-byte entries. Each entry contains a zero-padded 48-byte section name, four little-endian 32-bit fields (offset, stored length, decoded length and codec), and a 32-byte SHA-256 of the stored section. Codec 0 stores raw bytes and codec 1 uses zlib deflate. The readers check names, contiguous offsets, bounds, checksums and decoded lengths. Packages hold up to 32 sections and fit in a single 0x270000-byte tablet app partition.
 
-The compiler reads `apps/<id>/app.json` and `credits.md`, adds the project licence, then bundles the app's browser data and native assets. Hemel uses the `hemel-corridor/1` adapter and Lakes uses `lakes-map/1`. The manifest carries the ID, display name, description, adapter, defaults and version. [App compiler](../compiler/app.mjs) · [Browser archive reader](archive.mjs) · [Tablet package reader](../../firmware/core/main/package.cpp)
+The compiler reads `apps/<id>/app.json` and `credits.md`, adds the project licence, then bundles the app's browser data and native assets. Hemel and the two regional WCML panels use the `hemel-corridor/1` adapter and Lakes uses `lakes-map/1`. The manifest carries the ID, display name, description, adapter, defaults and version. [App compiler](../compiler/app.mjs) · [Browser archive reader](archive.mjs) · [Tablet package reader](../../firmware/core/main/package.cpp)
 
 ## Versions and verification
 

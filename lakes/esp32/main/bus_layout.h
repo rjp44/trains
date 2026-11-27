@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include <string_view>
 
 namespace lakes::bus {
 struct Vertex {
@@ -70,11 +71,23 @@ inline View vehicleView(float heading, unsigned spriteCount = 13) {
     return View::Oblique;
 }
 inline constexpr unsigned railAtlasFrames = 16;
+inline constexpr unsigned operatorAtlasFrames = 24;
+inline int railSideAsset(std::string_view agency, unsigned frames) {
+    if (frames < operatorAtlasFrames) return 3;
+    if (agency == "Avanti West Coast" || agency == "VT" || agency == "AWC") return 16;
+    if (agency == "TransPennine Express" || agency == "TP" || agency == "TPE") return 20;
+    return 3;
+}
 struct Sprite {
     int asset;
     View view;
 };
 inline Sprite vehicleSprite(int sideAsset, float heading, unsigned frames) {
+    if (sideAsset == 16 || sideAsset == 20) {
+        const auto view = vehicleView(heading, frames);
+        const int offset = view == View::Roof ? 1 : view == View::Oblique ? 2 : view == View::Front ? 3 : 0;
+        return {sideAsset + offset, view};
+    }
     if (sideAsset != 3) {
         View view = vehicleView(heading, frames);
         return {sideAsset + static_cast<int>(view), view};

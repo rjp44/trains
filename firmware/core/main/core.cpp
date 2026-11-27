@@ -30,24 +30,23 @@ uint32_t replayStart, holdStart;
 bool held;
 uint32_t now() { return esp_timer_get_time() / 1000; }
 void hemelOptions(lv_obj_t *parent) {
-    constexpr const char *views[] = {"15-mile sector", "Hemel Hempstead", "Watford Junction"};
     auto row = panel::optionRow(parent, "View");
     for (unsigned i = 0; i < 3; ++i)
-        panel::option(row, views[i], [](lv_event_t *e) {
+        panel::option(row, hemel::viewName(static_cast<hemel::View>(i)), [](lv_event_t *e) {
             hemel::view(static_cast<hemel::View>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             panel::refreshAppPage();
         }, i, i == static_cast<unsigned>(hemel::currentView()));
     row = panel::optionRow(parent, "Data source");
     constexpr const char *sources[] = {"Live", "Sector replay", "Hemel replay", "Watford replay"};
-    for (int i = 0; i < 4; ++i) {
-        panel::option(row, sources[i], [](lv_event_t *e) {
+    for (int i = 0; i < (hemel::regionalLayout() ? 2 : 4); ++i) {
+        panel::option(row, hemel::regionalLayout() && i == 1 ? "Recorded movements" : sources[i], [](lv_event_t *e) {
             int selected = int(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))) - 1;
             if (selected == replaySelection) return;
             replaySelection = selected;
             setManualReplay(selected >= 0);
             if (selected >= 0) {
                 hemel::replay(static_cast<hemel::Sample>(selected));
-                hemel::view(static_cast<hemel::View>(selected));
+                if (!hemel::regionalLayout()) hemel::view(static_cast<hemel::View>(selected));
                 replayStart = now();
             }
             panel::refreshAppPage();
@@ -60,7 +59,7 @@ void drawLakes() {
 }
 void settings() {
     if (isLakes) lakes::openPanelSettings(lakes::portraitView());
-    else panel::openSettings(nullptr, isHemel ? "Stopping at Hemel only" : "Stopping trains only");
+    else panel::openSettings(nullptr, isHemel && !hemel::regionalLayout() ? "Stopping at Hemel only" : "Stopping trains only");
 }
 void contacts(const TouchFrame &frame) {
     using namespace transport;

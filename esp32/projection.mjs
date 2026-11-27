@@ -1,3 +1,4 @@
+import { regionalMarkers, regionalRows } from '../public/regional.mjs';
 // The asset packer and live bridge must agree on the marker index and its meaning.
 import { crc32 } from 'node:zlib';
 import { corridorTracks, withStationReports } from '../rail.mjs';
@@ -38,6 +39,17 @@ function detail(service) {
 }
 
 export function createProjection(layout) {
+  if (layout.profile === 'regional') {
+    const markers = regionalMarkers(layout);
+    const fingerprint = crc32(JSON.stringify(layout.tracks));
+    const project = (board, lookup, live=false) => ({
+      rows: regionalRows(layout, board, live).map(([aspect, kind, head, service, route, info]) =>
+        [aspect, kind, plain(head,12), plain(service,24), plain(route), plain(info)]),
+      cards:Array.from({length:4},()=>['','','','',0]),
+      observed:Math.floor((board.observed || 0)/1000),
+    });
+    return {markers,fingerprint,project};
+  }
   const markers = corridorTracks(layout).flatMap((track) => track.berths.map((b) => ({ ...b, track })));
   const fingerprint = crc32(markers.map((b) => [b.id, b.bit || ''].join('/')).join(','));
   const berths = hemelBerths(layout);

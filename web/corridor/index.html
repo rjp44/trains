@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#132a29" />
+    <title>WCML rail monitor</title>
+    <link rel="icon" href="./icons/rail-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="./panel/settings.css" />
+  </head>
+  <body>
+    <header id="toolbar"></header>
+    <main>
+      <header class="board-heading">
+        <h1></h1>
+        <p id="readout"></p>
+      </header>
+      <div id="tracks" aria-label="Train describer locations"></div>
+    </main>
+    <dialog id="detail">
+      <button type="button" aria-label="Close details">×</button><small></small>
+      <h2></h2>
+      <div></div>
+    </dialog>
+  </body>
+</html>

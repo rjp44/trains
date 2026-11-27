@@ -62,6 +62,8 @@ ids += ['single-roof', 'closed-decker-roof', 'open-decker-roof']
 ids += ['single-oblique', 'closed-decker-oblique', 'open-decker-oblique']
 # Keep the side carriage at frame 3 and append the new rail elevations.
 ids += ['northern-carriage-roof', 'northern-carriage-oblique', 'northern-carriage-front']
+for operator in ('avanti','tpe'):
+    ids += [operator + '-carriage' + suffix for suffix in ('','-roof','-oblique','-front')]
 sprites=[]
 for icon in ids:
     svg=f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="48" height="48" viewBox="-22 -22 44 44">{defs}<use xlink:href="#{icon}" color="#25434c"/></svg>'

@@ -16,6 +16,8 @@ void view(View value);
 #ifdef TRANSPORT_CORE
 void restoreView(View fallback);
 View currentView();
+const char *viewName(View value);
+bool regionalLayout();
 bool isLight();
 void pinchView(bool closer, int x);
 #endif

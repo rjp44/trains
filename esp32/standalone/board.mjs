@@ -1,3 +1,4 @@
+import { locationArrivals } from '../../public/regional.mjs';
 import { parseHTML } from 'linkedom/worker';
 import layout from '../../public/data/corridor.json';
 import { createLiveFeed } from '../../live.mjs';
@@ -13,7 +14,8 @@ Object.assign(globalThis, {
   AbortController: platform.Controller, AbortSignal: platform.Signal,
 });
 export const { opened, message, closed, tick, request, response } = platform;
-const arrivals = stationArrivals(layout);
+const regional = layout.profile === 'regional';
+const arrivals = regional ? locationArrivals(layout) : stationArrivals(layout);
 // The native binding formats the UK civil date with the GMT/BST timezone rule.
 const formatDay = (time) => globalThis.londonDate(time);
 function abbeyURL(service) {
@@ -36,7 +38,7 @@ let visibleHeads = '';
 export const cardHeads = () => visibleHeads;
 export function packet(force) {
   const raw = feed.snapshot(), now = Date.now();
-  const entries = arrivals.take(raw.areaStatus.R1 === 'Live', now,
+  const entries = arrivals.take(regional ? Object.values(raw.areaStatus).includes('Live') : raw.areaStatus.R1 === 'Live', now,
     head => schedules.lookup(raw.services['R1/' + head], false)?.booked);
   if (!raw.observed) return '';
   schedules.expire(now);

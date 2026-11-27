@@ -437,11 +437,11 @@ void vehicles(uint32_t now) {
         int k = v.route, x = sx(m.point.x), y = sy(m.point.y);
         double direction = m.bearing;
         int64_t age = clockMs(now) - v.time;
-        int asset = k >= 8                                     ? 3
+        int asset = k >= 8                                     ? bus::railSideAsset(v.agency, spriteCount)
                     : !strcmp(routes[k].icon, "open-decker")   ? 2
                     : !strcmp(routes[k].icon, "closed-decker") ? 1
                                                                : 0;
-        auto sprite = bus::vehicleSprite(asset, direction, asset == 3 || m.path >= 0 ? spriteCount : 7);
+        auto sprite = bus::vehicleSprite(asset, direction, k >= 8 || m.path >= 0 ? spriteCount : 7);
         double angle = sprite.view == bus::View::Front || direction < 0 ? 0 : (direction - 90) * M_PI / 180;
         int flip = sprite.view != bus::View::Roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);

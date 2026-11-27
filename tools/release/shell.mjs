@@ -5,10 +5,11 @@ import { root } from '../../packages/compiler/app.mjs';
 const digest = (b) => createHash('sha256').update(b).digest('hex');
 export function writeAppShell(dir, id, entry, signedEntry, publicKey) {
   const appDir = path.join(dir, 'apps', id),
-    src = path.join(root, entry.adapter === 'hemel-corridor/1' ? 'public' : 'lakes/public');
+    regional = entry.presentation === 'regional',
+    src = regional ? path.join(root,'web/corridor') : path.join(root, entry.adapter === 'hemel-corridor/1' ? 'public' : 'lakes/public');
   fs.mkdirSync(appDir, { recursive: true });
   for (const name of fs.readdirSync(src)) {
-    if (name === 'data' || name.startsWith('_')) continue;
+    if (name === 'data' || name === 'README.md' || name.startsWith('_')) continue;
     fs.cpSync(path.join(src, name), path.join(appDir, name), { recursive: true });
   }
   fs.cpSync(path.join(root, 'web/panel'), path.join(appDir, 'panel'), {recursive:true});
@@ -17,7 +18,10 @@ export function writeAppShell(dir, id, entry, signedEntry, publicKey) {
   if (entry.adapter === 'hemel-corridor/1') {
     for (const n of ['rail.mjs', 'live.mjs', 'abbey.mjs'])
       fs.copyFileSync(path.join(root, n), path.join(appDir, n));
-    write('app.js', read('app.js').replaceAll("from '/", "from './"));
+    if (regional) {
+      for (const name of ['icons','manifest.webmanifest','hemel.mjs','regional.mjs'])
+        fs.cpSync(path.join(root,'public',name),path.join(appDir,name),{recursive:true});
+    } else write('app.js', read('app.js').replaceAll("from '/", "from './"));
   } else
     write(
       'install.mjs',

@@ -127,3 +127,10 @@ export function confirmedRailStop(fix, reports) {
   return reports.some(({id, last}) => 'rail-' + id === fix.id && last?.stop === true &&
     last.crs === fix.lastCode && last.name === fix.last && last.time === fix.lastTime);
 }
+
+// The feed identifies the operator, not the diagrammed rolling-stock class.
+export function railIcon(agency, view) {
+  const livery = ['Avanti West Coast','VT','AWC'].includes(agency) ? 'avanti'
+    : ['TransPennine Express','TP','TPE'].includes(agency) ? 'tpe' : 'northern';
+  return livery + '-carriage' + (view === 'side' ? '' : '-' + view);
+}

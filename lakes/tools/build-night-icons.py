@@ -84,5 +84,6 @@ def render(name, lamps=()):
 for bus in ('single', 'closed-decker', 'open-decker'):
     for view in ('side', 'oblique', 'roof', 'front'):
         render(bus + '-' + view, bus_lamps[view])
-for name in ('northern-carriage', 'northern-carriage-roof', 'northern-carriage-oblique', 'northern-carriage-front'):
-    render(name)
+for operator in ('northern', 'avanti', 'tpe'):
+    for suffix in ('', '-roof', '-oblique', '-front'):
+        render(operator + '-carriage' + suffix)

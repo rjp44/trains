@@ -1,17 +1,19 @@
 # Transport Display
 
-Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The tablet core runs two independently installable apps, Hemel and Lakes. The signed directory lists the versions available for download.
+Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and in a browser. The tablet core runs four independently installable apps. The signed directory lists the versions available for download.
 
 [created by rjp44](https://github.com/rjp44/trains)
 
 | App | What it shows |
 | --- | --- |
 | [Hemel rail monitor](https://transport.pickering.org/apps/hemel/) | Live trains, signals and booked calls around Hemel Hempstead and Watford Junction, with three recorded journeys through the diagram. |
-| [Lakes Transit](https://transport.pickering.org/apps/lakes/) | Lake District buses and trains on a relief map, with route filters, stop timetables and recorded journeys. |
+| [Lakes Transit](https://transport.pickering.org/apps/lakes/) | Lake District buses, coastal trains and the Lancaster–Carlisle WCML on a relief map. Avanti and TransPennine Express trains have their own liveries. |
+| [Crewe to Birmingham International](https://transport.pickering.org/apps/crewe-birmingham/) | WCML train-describer panel via Stafford, Wolverhampton and Birmingham New Street. Includes mapped signal indications around Birmingham. |
+| [Preston to Crewe](https://transport.pickering.org/apps/preston-crewe/) | WCML train-describer panel via Wigan North Western, Warrington Bank Quay and Winsford. |
 
 ## Get the apps
 
-The public site opens the app directory. Choose **Open in browser** for Hemel or Lakes. Each map has Settings at the top left and a sun/moon button at the top right. **App** holds views, filters and replay controls. **Downloads** lets you search the directory, save another app for offline use, check for updates and remove a saved copy. Both recordings work offline after the browser finishes downloading the app.
+The public site opens the app directory. Choose **Open in browser** for any route. Each map has Settings at the top left and a sun/moon button at the top right. **App** holds views, filters and replay controls. **Downloads** lets you search the directory, save another app for offline use, check for updates and remove a saved copy. The bundled recordings work offline after the browser finishes downloading the app.
 
 In **Display**, choose **Sunrise / sunset** to follow the active map’s UK location or adjust map brightness. **Sound** controls train horns, **Wi-Fi** reports browser connectivity, and **About** credits the data sources. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
 
@@ -29,7 +31,7 @@ node server.mjs
 node lakes/server.mjs
 ```
 
-Hemel listens on port 8174. Lakes listens on port 8186 and uses Python for its local bus-data reader. For a static build of the public app directory and signed PWAs, run `node build-preview.mjs`. Netlify publishes the resulting `dist/` and proxies the live HTTP endpoints. [Hemel guide](apps/hemel/README.md) · [Lakes guide](lakes/README.md) · [Tests and simulator](tests/conformance/README.md)
+Hemel listens on port 8174. Lakes listens on port 8186 and uses Python for its local bus-data reader. Both new corridor apps are included in the static build. For the public app directory and signed PWAs, run `node build-preview.mjs`. Netlify publishes the resulting `dist/` and proxies the live HTTP endpoints. [Hemel guide](apps/hemel/README.md) · [Lakes guide](lakes/README.md) · [WCML panels](web/corridor/README.md) · [Tests and simulator](tests/conformance/README.md)
 
 ## How a release works
 

@@ -1,4 +1,5 @@
 #include "appearance.h"
+#include "package.h"
 #include "sunlight.h"
 #include "view-settings.h"
 #include "panel.h"
@@ -27,7 +28,8 @@ enum class Fetch { Idle, Running, Ready, Failed };
 std::atomic<Fetch> fetch{Fetch::Idle};
 int64_t nextPoll, nextAttempt;
 lv_obj_t *info;
-const char *cacheKey() { return lakesApp ? "sun_windermere" : "sun_hemel"; }
+std::string solarPlace, solarCoords, solarKey;
+const char *cacheKey() { return solarKey.c_str(); }
 bool light() { return lakesApp ? lakes::isLight() : hemel::isLight(); }
 void apply(bool value) {
     if (light() == value) return;
@@ -36,7 +38,7 @@ void apply(bool value) {
 }
 bool getWeek(SunWeek &result) {
     std::string url = "https://api.open-meteo.com/v1/forecast?";
-    url += lakesApp ? "latitude=54.38&longitude=-2.90" : "latitude=51.75&longitude=-0.47";
+    url += solarCoords;
     url += "&timezone=Europe%2FLondon&daily=sunrise,sunset&timeformat=unixtime&forecast_days=7";
     esp_http_client_config_t config{};
     config.url = url.c_str();
@@ -80,7 +82,7 @@ void describe(time_t now, const SunDay *day) {
     if (!info) return;
     std::string msg;
     if (automatic) {
-        msg = lakesApp ? "Windermere" : "Hemel Hempstead";
+        msg = solarPlace;
         if (day) {
             auto clock = [](time_t t) {
                 tm local{}; localtime_r(&t, &local);
@@ -107,6 +109,18 @@ void setAuto(bool value) {
 void initAppearance(bool lakes) {
     enabled = true;
     lakesApp = lakes;
+    solarPlace = lakes ? "Windermere" : "Hemel Hempstead";
+    solarKey = lakes ? "sun_windermere" : "sun_hemel";
+    solarCoords = lakes ? "latitude=54.38&longitude=-2.90" : "latitude=51.75&longitude=-0.47";
+    auto site = cJSON_GetObjectItemCaseSensitive(tables, "solar");
+    auto place = cJSON_GetStringValue(cJSON_GetArrayItem(site,0));
+    double lat = cJSON_GetNumberValue(cJSON_GetArrayItem(site,1));
+    double lon = cJSON_GetNumberValue(cJSON_GetArrayItem(site,2));
+    if (place && std::abs(lat)<=90 && std::abs(lon)<=180) {
+        solarPlace = place;
+        solarCoords = "latitude="+std::to_string(lat)+"&longitude="+std::to_string(lon);
+        solarKey = "sun"+std::to_string(unsigned((lat+90)*10000))+"_"+std::to_string(int(lon*100));
+    }
     uint8_t mode{};
     automatic = loadView("sun_auto", mode) && mode == 1;
     if (!loadView(cacheKey(), week) || !week.valid()) week = {};

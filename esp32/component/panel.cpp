@@ -9,6 +9,8 @@
 
 #ifdef TRANSPORT_CORE
 #include "rows.h"
+#include "core.h"
+#include "esp_rom_crc.h"
 #include "view-settings.h"
 #include "toolbar.h"
 #endif
@@ -255,6 +257,9 @@ template <class Visitor> void visitBadges(Visitor visit) {
     // Marker coordinates are ordered by lane, then column. Size a badge to
     // the closest occupied neighbour on either side, preserving its centre.
     for (const Marker &m : scene->markers) {
+#ifdef TRANSPORT_CORE
+        if (m.radius && regionalLayout()) continue;
+#endif
         if (!current[m.id].kind)
             continue;
         int w = scene->badgeWidth;
@@ -316,10 +321,14 @@ void follow() {
         selected.running = info.running;
     }
 }
+#ifdef TRANSPORT_CORE
+void chooseTrain(int id, int x, int y);
+#include "berth-register.inc"
+#endif
 void drawControls(lv_layer_t *layer) {
 #ifdef TRANSPORT_CORE
     box(layer, 0, 0, panelWidth, transport::toolbarHeight, Board);
-    const char *viewName = scene == &hemelScene ? "Hemel Hempstead" : scene == &watfordScene ? "Watford Junction" : "15-mile sector";
+    const char *viewName = hemel::viewName(currentView());
     text(layer, 60, transport::toolbarHeight / 2, panelWidth - 120, viewName, 16, Text);
 #else
     const char *viewName = scene == &hemelScene ? "Hemel" : scene == &watfordScene ? "Watford" : "15 miles";
@@ -344,6 +353,9 @@ void drawControls(lv_layer_t *layer) {
             text(layer, 2, panelHeight - 8, button(0).w, time, 10, Muted);
         }
     }
+#ifdef TRANSPORT_CORE
+    drawRegister(layer);
+#endif
     if (selected.index < 0)
         return;
     const auto r = popup();
@@ -351,7 +363,11 @@ void drawControls(lv_layer_t *layer) {
     const int x = r.x + 9, w = r.w - 18;
     box(layer, r.x, r.y, r.w, r.h, Board, HemelEdge, 5);
     text(layer, r.x + r.w - 34, r.y + 16, 28, "X", 14, Text);
-    const std::string where = std::string(m.track) + " | " + m.id;
+    std::string where = m.track;
+#ifdef TRANSPORT_CORE
+    if (selected.signal || !regionalLayout())
+#endif
+        where += std::string(" | ") + m.id;
     if (selected.signal) {
         const unsigned aspect = offline ? 0 : current[selected.index].aspect;
         text(layer, x, r.y + 17, w - 35, m.signal, 16, Text, false);
@@ -394,7 +410,13 @@ void tap(int x, int y) {
             return;
         }
         dismiss();
+#ifdef TRANSPORT_CORE
+        if (registerIndex>=0) return;
+#endif
     }
+#ifdef TRANSPORT_CORE
+    if (registerTap(x,y)) return;
+#endif
 #ifndef TRANSPORT_CORE
     if (button(0).contains(x, y)) {
         view(scene == &sectorScene ? View::Hemel : scene == &hemelScene ? View::Watford : View::Sector);
@@ -455,7 +477,11 @@ void tap(int x, int y) {
         return;
     }
     for (const auto &label : scene->labels)
-        if (label.preset && std::abs(x - label.x) <= label.width / 2 && std::abs(y - label.y) <= 12) {
+        if (std::abs(x - label.x) <= label.width / 2 && std::abs(y - label.y) <= 12) {
+#ifdef TRANSPORT_CORE
+            if (openRegister(label.text)) return;
+#endif
+            if (!label.preset) continue;
             view(label.preset == 1 ? View::Hemel : View::Watford);
             return;
         }
@@ -515,7 +541,7 @@ void reset() {
 } // namespace
 #ifdef TRANSPORT_CORE
 bool mountPackage(){
-    if(!loadHemel()) return false;
+    if(!loadHemel() || !loadRegister()) return false;
     current.resize(markerCount);liveText.resize(markerCount);return true;
 }
 #endif
@@ -588,18 +614,33 @@ void pinchView(bool closer, int x) {
     }
     view(target);
 }
+bool regionalLayout() { return transport::field(transport::tables,"viewNames") != nullptr; }
+const char *viewName(View value) {
+    const char *fallback[] = {"15-mile sector","Hemel Hempstead","Watford Junction"};
+    unsigned i = static_cast<unsigned>(value);
+    auto label = cJSON_GetStringValue(cJSON_GetArrayItem(transport::field(transport::tables,"viewNames"),i));
+    return label ? label : fallback[i];
+}
+static std::string viewKey() {
+    if (!regionalLayout()) return "hemel_view";
+    const char *id = transport::activeApp();
+    return "rv" + std::to_string(esp_rom_crc32_le(0,reinterpret_cast<const uint8_t*>(id),strlen(id)));
+}
 struct SchematicSettings {uint32_t view,light;};
 static bool restoringView;
 static void saveSchematic(){
-    if(!restoringView)transport::saveView("hemel_view",SchematicSettings{scene==&hemelScene?1u:scene==&watfordScene?2u:0u,palette==lightPalette});
+    if(!restoringView)transport::saveView(viewKey().c_str(),SchematicSettings{scene==&hemelScene?1u:scene==&watfordScene?2u:0u,palette==lightPalette});
 }
 void restoreView(View fallback){
     SchematicSettings s{static_cast<unsigned>(fallback),0};
-    transport::loadView("hemel_view",s);restoringView=true;
+    transport::loadView(viewKey().c_str(),s);restoringView=true;
     view(s.view<=2?static_cast<View>(s.view):fallback);light(s.light==1);restoringView=false;
 }
 #endif
 void view(View value) {
+#ifdef TRANSPORT_CORE
+    registerIndex=-1;
+#endif
     dismiss();
     scene = value == View::Hemel ? &hemelScene : value == View::Watford ? &watfordScene : &sectorScene;
 #ifdef TRANSPORT_CORE
