@@ -14,9 +14,9 @@ Drag horizontally to follow the line. On the tablet, tap the bottom scroll bar o
 
 Both panels show mapped signal indications at the Crewe end. The Birmingham panel also covers New Street and the line east to International. A filled red lamp means the most restrictive indication, an open green ring means a less restrictive indication, and a grey ring means the state is unknown. A berth without an identified signal address has no lamp. Tap a lamp for its signal number, address and reported state. A disconnected area keeps the last-known train positions and clears its indications.
 
-The full route fits twice as much track across the screen as a sectional view. On the tablet, spread two fingers over a station to open its detailed section. Pinch together to return to the full route at that station.
+On the tablet, the full route fits twice as much track across the screen as a sectional view. Spread two fingers over a station to open its detailed section. Pinch together to return to the full route at that station.
 
-In the browser, use **−** and **+** beside **Location** to adjust the horizontal spacing. Click the percentage to reset. A two-finger pinch or Ctrl/⌘ + mouse wheel zooms around the point on the map. With the diagram focused, **−**, **+** and **0** also work. Each map remembers its own web zoom.
+In the browser, **−** removes unused track space and **+** spreads it out. Station names, train badges and signals keep their size and shape. Zooming out stops when the labels, junctions and trains on screen need the remaining space. This limit adjusts as trains move. Click the percentage beside **Location** to reset. A two-finger pinch or Ctrl/⌘ + mouse wheel zooms around the point on the map. With the diagram focused, **−**, **+** and **0** also work. Each map remembers its own web zoom.
 
 Settings → App selects the full route, either section or seven minutes of recorded movements. The tablet and browser read the same diagram and recording from the signed app package. The automatic theme follows Wolverhampton or Warrington.
 

@@ -291,6 +291,3 @@ button {
   border-inline: 1px solid var(--edge);
 }
 .map-zoom button:disabled { color: var(--muted); opacity: 0.5; }
-.line-board .map-label { transform: scaleX(var(--label-scale)); }
-.line-board .train-symbol { transform: scaleX(min(var(--label-scale), var(--badge-fit, 1))); }
-.line-board .signal-symbol { transform: scaleX(var(--symbol-scale)); }
