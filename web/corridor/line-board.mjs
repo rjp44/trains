@@ -1,4 +1,6 @@
 import { corridorSpacing } from './spacing.mjs';
+import { stationLabelSpans, placeStationLabels } from './station-labels.mjs';
+import { stationApproaches } from './station-approaches.mjs';
 import { isTrainCode } from './hemel.mjs';
 import { drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainHeight, trainWidth } from './rail-symbols.mjs';
 import { readSetting, saveSetting } from './panel/appearance.mjs';
@@ -47,6 +49,8 @@ function action(el, description, callback) {
 export function lineBoard(container, layout, tables, id, open) {
   const inks = installPalette(container, tables);
   const stations = new Map(layout.tracks.map((t) => [t.name, t]));
+  const approaches = new Set(layout.tracks.flatMap(t => Object.values(stationApproaches(t.id)).map(z => z.name)));
+  const sectionNames = new Set(layout.slowSections.flatMap(s => [s.entry, s.exit]).filter(Boolean));
   const byId = new Map(layout.tracks.flatMap((t) => t.berths.map((b) => [b.id, { t, b }])));
   const offsets = [];
   const controls = document.querySelector('.map-controls');
@@ -73,7 +77,7 @@ export function lineBoard(container, layout, tables, id, open) {
     scale = 1,
     requestedZoom = Number.isFinite(savedZoom) ? Math.max(0, Math.min(maxZoom, savedZoom)) : 1,
     spacing, axis, selectedJump,
-    rails = [], labels = [], spans = [],
+    rails = [], labels = [], header = [], spans = [],
     saveTimer,
     width;
   function stationAt(x) {
@@ -143,7 +147,17 @@ export function lineBoard(container, layout, tables, id, open) {
         line.setAttribute('x2', axis.project(x2));
       }
     }
-    for (const { group, x, y } of labels) translate(group, axis.project(x), y);
+    const rows = placeStationLabels(axis, header);
+    for (const label of labels) {
+      const { group, x, kind, band } = label;
+      const y = kind ? rows.get(label) : label.y;
+      group.style.display = y === undefined ? 'none' : '';
+      if (y !== undefined) translate(group, axis.project(x), y);
+      if (band) {
+        band.setAttribute('tabindex', y === undefined ? 0 : -1);
+        band.setAttribute('aria-hidden', y !== undefined);
+      }
+    }
     for (const p of points) {
       const x = axis.project(p.x);
       translate(p.berth, x, p.y);
@@ -155,7 +169,7 @@ export function lineBoard(container, layout, tables, id, open) {
     const jumpId = selectedJump && Math.abs(container.scrollLeft - selectedJump.left) < 1
       ? selectedJump.id : null;
     const centre = axis?.unproject((container.scrollLeft + mapHalfWidth()) / scale);
-    const boxes = labels.map(l => l.bounds);
+    const boxes = labels.filter(l => !l.kind).map(l => l.bounds);
     const clearanceSpans = spans.slice();
     for (const p of points) {
       if (!p.occupied) continue;
@@ -271,6 +285,7 @@ export function lineBoard(container, layout, tables, id, open) {
     select.replaceChildren(...locations.map(([id, name]) => new Option(name, id)));
     drawing.replaceChildren();
     stationPaint = [];
+    const bands = new Map();
     rails = [];
     labels = [];
     // Station bands on the same rails need separation even when their names
@@ -288,8 +303,10 @@ export function lineBoard(container, layout, tables, id, open) {
         spans.push([x1, x2, Math.min(x2 - x1, y1 === y2 ? 14 : 14 + Math.abs(y2 - y1) * 0.32)]);
       }
       if (station) {
-        const id = tables.watchStations[station - 1][0];
+        const [id, name] = tables.watchStations[station - 1];
         line.dataset.stationBand = id;
+        bands.set(id, line);
+        action(line, 'Berth register for ' + name, () => open(stations.get(name)));
         stationPaint.push({ id, band: line, ink });
       }
     }
@@ -313,14 +330,19 @@ export function lineBoard(container, layout, tables, id, open) {
         { 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': size, fill: inks[ink] },
         text,
       );
-      labels.push({ group: label, el, box, x, y });
+      const item = { group: label, el, box, x, y };
+      labels.push(item);
       if (preset) {
         const station = stations.get(text);
+        item.kind = /\b(?:Jn|Junction)$/i.test(text) && !station.berths.some(b => b.platform) ? 'junction' : 'station';
+        item.band = bands.get(station.id);
         el.classList.add('station');
         el.dataset.station = station.id;
         stationPaint.push({ id: station.id, box, label: el });
         action(el, 'Berth register for ' + text, () => open(station));
-      }
+      } else if (approaches.has(text)) item.kind = 'approach';
+      else if (sectionNames.has(text)) item.kind = 'section';
+      if (item.kind) label.dataset.labelKind = item.kind;
     }
     // Measure in SVG units after the station font has been applied. Station
     // plates take their width from the name, including padding on both sides.
@@ -328,6 +350,8 @@ export function lineBoard(container, layout, tables, id, open) {
     labels.forEach((l, i) => {
       const b = sizes[i];
       const half = Math.max(-b.x, b.x + b.width) + (l.box ? 8 : 0);
+      l.left = -half;
+      l.right = half;
       if (l.box) {
         l.box.setAttribute('x', -half);
         l.box.setAttribute('width', 2 * half);
@@ -336,6 +360,8 @@ export function lineBoard(container, layout, tables, id, open) {
       l.bounds = { x: l.x, left: -half, right: half,
         top: l.y + Math.min(-h, b.y), bottom: l.y + Math.max(h, b.y + b.height) };
     });
+    header = labels.filter(l => l.kind);
+    spans.push(...stationLabelSpans(width, header));
     const badgeWidth = tables[key + 'Space'][2], unit = badgeWidth / trainWidth;
     points = tables[key + 'Markers'].map(([index, x, y, sy, r]) => {
       const { t, b } = byId.get(tables.markerInfo[index][0]);

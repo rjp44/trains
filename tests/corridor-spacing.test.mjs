@@ -1,8 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { corridorSpacing } from '../web/corridor/spacing.mjs';
+import { placeStationLabels, stationLabelSpans } from '../web/corridor/station-labels.mjs';
 
 const badge = (x, y, half = 30) => ({ x, left: -half, right: half, top: y - 10, bottom: y + 10 });
+
+test('only colliding station names change rows, and zooming in restores the shared row', () => {
+  const names = [120, 180, 305, 650].map(x => ({ kind: 'station', x, left: -50, right: 50 }));
+  const identity = { width: 1000, project: x => x };
+  const rows = placeStationLabels(identity, names);
+  assert.notEqual(rows.get(names[0]), rows.get(names[1]));
+  assert.equal(rows.get(names[0]), rows.get(names[2]));
+  assert.equal(rows.get(names[0]), rows.get(names[3]));
+  assert.equal(new Set(placeStationLabels({ width: 2000, project: x => 2 * x }, names).values()).size, 1);
+  const tight = corridorSpacing(1000, [], stationLabelSpans(1000, names)).at(0);
+  assert.equal(placeStationLabels(tight, names).size, names.length);
+});
+
+test('a junction caption that cannot fit hides all junction names, including reporting junctions', () => {
+  const names = ['station', 'junction', 'approach', 'approach', 'section'].map((kind, i) => ({
+    kind, x: [90, 200, 320, 340, 720][i], left: -25, right: 25,
+  }));
+  assert.deepEqual([...placeStationLabels({ width: 900, project: x => x }, names).keys()], [names[0]]);
+  assert.equal(placeStationLabels({ width: 2700, project: x => 3 * x }, names).size, names.length);
+  assert.deepEqual(stationLabelSpans(900, names), stationLabelSpans(900, [names[0]]));
+});
 
 test('tight spacing is set by occupied rows, including the outer edges', () => {
   const features = [badge(100, 20), badge(140, 20), badge(510, 100, 72)];
