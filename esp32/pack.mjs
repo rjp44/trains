@@ -141,9 +141,10 @@ function compileView(view) {
   const segments = [],
     labels = [],
     placed = [];
-  function line(x1, y1, x2, y2, ink, weight = 2) {
+  const packageTables = process.argv[5] === '--tables';
+  function line(x1, y1, x2, y2, ink, weight = 2, station) {
     // Clip diagonals and horizontal tracks at the reserved track-name margin.
-    if (x1 > x2) return line(x2, y2, x1, y1, ink, weight);
+    if (x1 > x2) return line(x2, y2, x1, y1, ink, weight, station);
     if (x2 < left || x1 > right) return;
     const slope = x2 === x1 ? 0 : (y2 - y1) / (x2 - x1);
     if (x1 < left) {
@@ -161,6 +162,7 @@ function compileView(view) {
       round(y2),
       colour(ink),
       Math.max(1, round(weight * scale)),
+      ...(station && packageTables ? [stationNumber.get(station) + 1] : []),
     ]);
   }
   function label(cx, cy, text, pixels, boxWidth, fg = 'board-text', bg = null, preset = 0) {
@@ -175,7 +177,7 @@ function compileView(view) {
     const measure = (text, size) => (text.length * Math.max(8, round((size * scale) / 2) * 2) * 0.63) / scale;
     for (const item of fitStationNames(items, 105, mapWidth - 4, measure)) {
       const cy = y + rowStep * item.row - (item.size * scale) / 2;
-      const bg = item.station.code === 'HML' ? 'hemel-band' : 'board';
+      const bg = !packageTables && item.station.code === 'HML' ? 'hemel-band' : 'board';
       label(
         item.labelX * scale,
         cy,
@@ -206,9 +208,19 @@ function compileView(view) {
       junction ? 50 * vertical : (shared ? lane(2) : mainY(0)) - 26 * scale,
       at,
       (junction ? lane(10) : mainY(3)) + 24 * scale,
-      junction ? 'junction-band' : s.code === 'HML' ? 'hemel-band' : 'station-band',
+      junction ? 'junction-band' : !packageTables && s.code === 'HML' ? 'hemel-band' : 'station-band',
       junction ? 1.5 * pitch : 24,
+      s.code,
     );
+  }
+  // Branch-only stops have no station stripe until they are being watched.
+  if (merged && packageTables) {
+    for (const branch of [dc, abbey]) for (const stop of branch.stations) {
+      if (layout.stations.some(s => s.code === stop.code)) continue;
+      const at = x(diagram.columns.get(stop.code));
+      if (visible(at)) line(at, lane(branch === dc ? 2 : 10) - 20*scale,
+        at, lane(branch === dc ? 3 : 10) + 20*scale, 'board', 24, stop.code);
+    }
   }
   names(topStations, 20 * vertical, Math.max(22 * scale, 21 * vertical));
   const stationLabelBottom = Math.max(0, ...labels.map(([, y, , font]) => y + font / 2 + 3));

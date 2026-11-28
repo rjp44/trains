@@ -25,7 +25,29 @@ export function watchPanel(app, stations, fallback, host, change) {
   cancel.textContent = 'Stop following';
   card.append(caption, heading, running, cancel);
   host.append(card);
+  let placement;
+  function placeFollowCard() {
+    placement = undefined;
+    const marker = host.querySelector('.followed .ring, .followed-train');
+    const target = marker?.getBoundingClientRect();
+    const box = card.getBoundingClientRect(),
+      bottom = innerHeight - 14;
+    const overlaps =
+      target &&
+      target.width &&
+      target.left < box.right &&
+      target.right > box.left &&
+      target.bottom >= bottom - box.height - 4 &&
+      target.top <= bottom + 4;
+    card.style.bottom = overlaps ? innerHeight - target.top + 8 + 'px' : '';
+  }
   function show(info, stop) {
+    if (stop && !placement) placement = requestAnimationFrame(placeFollowCard);
+    if (!stop) {
+      if (placement !== undefined) cancelAnimationFrame(placement);
+      placement = undefined;
+      card.style.bottom = '';
+    }
     card.hidden = !info;
     if (!info) return;
     for (const [el, value] of [

@@ -820,6 +820,7 @@ function drawMarkers() {
   placeVehicles(positions, iconUnit, (x, y) =>
     Math.abs(x - cx) <= svg.clientWidth * unit / 2 && Math.abs(y - cy) <= svg.clientHeight * unit / 2);
   const occupied = [...labelBoxes, ...positions.map(m => m.box)];
+  let followedRing;
   for (const { v, x, y, bearing, size } of positions) {
     const drawUnit = iconUnit * size;
     const rail = railways[v.route], fill = routes[v.route].colour;
@@ -829,7 +830,7 @@ function drawMarkers() {
         role: 'button',
         tabindex: 0,
         'data-vehicle': v.id,
-        'aria-label': v.route + ' ' + v.label,
+        'aria-label': v.route + ' ' + v.label + (v.id === following ? ' · Following' : ''),
         style: 'cursor:pointer',
         opacity: v.stale ? 0.55 : 1,
       },
@@ -917,7 +918,12 @@ function drawMarkers() {
       x: -nightWidth / 2, y: -nightWidth / 2, width: nightWidth, height: nightWidth,
       'pointer-events': 'none',
     }, g);
-    if (selection === v.id) shape('circle', { cx:x, cy:y, r:21*drawUnit, fill:'none',
+    if (v.id === following) {
+      // Draw above other vehicles, even when two trains occupy the same map position.
+      followedRing = shape('circle', {cx:x, cy:y, r:24*drawUnit, class:'followed-train',
+        fill:'none', stroke:'var(--follow-outline)', 'stroke-width':3*unit, 'pointer-events':'none'}, markers);
+      followedRing.dataset.followed = v.id;
+    } else if (selection === v.id) shape('circle', { cx:x, cy:y, r:21*drawUnit, fill:'none',
       stroke:fill, 'stroke-width':1.6*unit, 'pointer-events':'none' },g);
     shape('circle', { cx: x, cy: y, r: 17 * drawUnit, fill: 'transparent' }, g);
     g.onclick = () => inspect(v.id);
@@ -929,6 +935,7 @@ function drawMarkers() {
     };
     if (v.id === currentFocus) g.focus({ preventScroll: true });
   }
+  if (followedRing) markers.append(followedRing);
 }
 function render() {
   const now = recorded() ? snapshot?.time : Date.now();

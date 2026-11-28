@@ -19,6 +19,7 @@ export function railMonitor({
     arrivals = watchArrivals(),
     schedules = new Map();
   let target,
+    matchedBerth,
     lastInfo,
     generation = 0;
   const panel = watchPanel(id, stations, defaultStation, host, () => {
@@ -27,7 +28,7 @@ export function railMonitor({
     draw();
   });
   function reset() {
-    target = lastInfo = null;
+    target = matchedBerth = lastInfo = null;
     generation++;
     arrivals.reset();
     panel.show(null);
@@ -62,6 +63,7 @@ export function railMonitor({
     if (!board) return;
     if (target) {
       const match = locateFollow(target, ids, board);
+      matchedBerth = match?.berth;
       if (match) {
         focus(match.berth);
         lastInfo = trainSummary(match, 'Following' + (fresh(match.berth.slice(0, 2)) ? '' : ' · last known'));
@@ -102,6 +104,12 @@ export function railMonitor({
     follow,
     reset,
     update,
+    get followedBerth() {
+      return matchedBerth;
+    },
+    get watchedStation() {
+      return target ? undefined : panel.station?.id;
+    },
     get hemel() {
       return !target && panel.station?.id === 'HML';
     },

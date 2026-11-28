@@ -26,6 +26,35 @@ Recording sectorRecording{}, hemelRecording{}, watfordRecording{};
 template <class T> List<T> span(const std::vector<T> &v) { return {v.data(), v.size()}; }
 struct WatchStation { const char *id, *name; std::vector<unsigned> markers; };
 std::vector<WatchStation> watchStations;
+int watchNumber(const char *id);
+void indexStationPaint(ViewTables &view, bool regional) {
+    if (watchStations.empty()) return;
+    for (auto &label : view.labels) {
+        if (!label.preset) continue;
+        if (regional) {
+            for (size_t i = 0; i < watchStations.size(); ++i)
+                if (!strcmp(label.text, watchStations[i].name)) { label.station = i + 1; break; }
+        } else {
+            label.station = label.preset < 3 ? 1 + watchNumber(label.preset == 1 ? "HML" : "WFJ") : label.preset - 2;
+        }
+        if (label.station && label.background == HemelBand) label.background = Board;
+    }
+    // Older packages stored the default station colour in the geometry.
+    // Link their named WCML stripes and the identifiable Hemel/Junction stripes at mount.
+    for (auto &line : view.lines) {
+        if (line.station || line.x1 != line.x2) continue;
+        if (line.ink != StationBand && line.ink != HemelBand && line.ink != JunctionBand) continue;
+        if (regional && line.width < 24) continue; // Junction throats have separate shading.
+        if (!regional && line.ink == HemelBand) line.station = 1 + watchNumber("HML");
+        else if (!regional && line.ink == JunctionBand) line.station = 1 + watchNumber("WFJ");
+        else for (const auto &label : view.labels)
+            if (label.station && label.x == line.x1) { line.station = label.station; break; }
+        if (line.ink == HemelBand) {
+            line.ink = StationBand;
+            if (regional) line.width = 24;
+        }
+    }
+}
 int stationCentre(const ViewTables &v,const StationOffset &s) {
     for(const auto &label:v.labels) if(label.preset && !strcmp(label.text,s.name)) return label.x;
     return s.x;
@@ -80,6 +109,10 @@ bool loadHemel() {
         auto key = [&](const char *suffix) { return std::string(names[i]) + suffix; };
         if (!load(key("Lines").c_str(), v.lines,
                   [](auto p, Segment &a) {
+                      if (cJSON_GetArraySize(p) == 7)
+                          return row(p, a.x1, a.y1, a.x2, a.y2, a.ink, a.width, a.station) &&
+                                 a.ink < 20 && a.station && a.station <= watchStations.size();
+                      a.station = 0;
                       return row(p, a.x1, a.y1, a.x2, a.y2, a.ink, a.width) && a.ink < 20;
                   }) ||
             !load(key("Labels").c_str(), v.labels,
@@ -121,6 +154,7 @@ bool loadHemel() {
                     }, 1024)) return false;
             }
         }
+        indexStationPaint(v, regionalLayout());
         if(!v.stations.empty()) v.pan=std::clamp(stationCentre(v,v.stations.front())-v.viewportWidth()/2,0,v.width-v.viewportWidth());
         auto space = field(tables, key("Space").c_str());
         auto rect = [&](int j, CardSpace &a) {

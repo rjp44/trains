@@ -303,6 +303,10 @@ function drawTrains(trainsLayer, occupied, values, services) {
       head + ' · ' + m.track.name + ' · ' + markerLocation(m),
       head,
     );
+    if (monitor.followedBerth === m.id) {
+      train.classList.add('followed');
+      train.setAttribute('aria-label', train.getAttribute('aria-label') + ' · Following');
+    }
     const selected = trainSelection?.head === head && trainSelection?.berth === m.id;
     const friendly = labels.friendly ? trainLabel(services[m.id.slice(0, 2) + '/' + head]) : '';
     showHeadcode(drawHeadcode(shape, train, 0, 0, width, selected), head, stale ? 3 : 1, friendly);
@@ -350,10 +354,10 @@ function stationLabels(plot, stations, y, rowOffset) {
 function stationLabel(plot, { station, column, labelX, width, size, label }, y) {
   const name = station.name;
   const button = shape(plot, 'g', {
-    class: 'station-target',
+    class: 'station-target' + (station.code === monitor.watchedStation ? ' watched' : ''),
     role: 'button',
     tabindex: 0,
-    'aria-label': name + ' station options',
+    'aria-label': name + ' station options' + (station.code === monitor.watchedStation ? ' · Watching' : ''),
     'data-station': station.code,
   });
   shape(button, 'title', {}, name + ' · ' + station.code);
@@ -508,6 +512,16 @@ function drawMap(values, services) {
       inView(position(diagram.columns.get(s.code))) &&
       (zoom < 1 || centre !== home || ['APS', 'HML', 'BKM'].includes(s.code)),
   );
+  if (merged) {
+    for (const branch of [dc, abbey]) {
+      const stop = branch.stations.find(s => s.code === monitor.watchedStation);
+      if (!stop || layout.stations.some(s => s.code === stop.code)) continue;
+      const x = position(diagram.columns.get(stop.code)), isDC = branch === dc;
+      if (inView(x)) shape(plot, 'line', {x1:x, x2:x, y1:laneY(isDC ? 2 : 10)-20,
+        y2:laneY(isDC ? 3 : 10)+20, stroke:'var(--hemel-band)', 'stroke-width':24,
+        'data-station-band':stop.code, 'pointer-events':'none'});
+    }
+  }
   const occupied = [];
   const mainY = (i) => (merged ? laneY(5 + i) : (97 + i * 66) * verticalScale);
   const upperLabels = [], wcmlLabels = [];
@@ -523,11 +537,9 @@ function drawMap(values, services) {
     shape(plot, 'path', {
       d,
       fill: 'none',
-      stroke: atJunction
-        ? 'var(--junction-band)'
-        : s.code === 'HML'
-          ? 'var(--hemel-band)'
-          : 'var(--station-band)',
+      stroke: s.code === monitor.watchedStation ? 'var(--hemel-band)'
+        : atJunction ? 'var(--junction-band)' : 'var(--station-band)',
+      'data-station-band': s.code,
       'stroke-width': atJunction ? 1.5 * slotPitch() : 24,
       'stroke-linejoin': 'round',
       'pointer-events': 'none',
@@ -885,6 +897,8 @@ function render(force = false) {
     board.events[0],
     selection,
     trainSelection?.head,
+    monitor.watchedStation,
+    monitor.followedBerth,
     board.services,
     mode,
     stale,

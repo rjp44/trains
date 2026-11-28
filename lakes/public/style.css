@@ -11,6 +11,7 @@
   --road: #a4a99a;
   --town: #203d34;
   --halo: #f2f3e6;
+  --follow-outline: #263c91;
   --active: #244e40;
   --pressed: #fff;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -32,6 +33,7 @@
   --road: #677669;
   --town: #edf1db;
   --halo: #25392e;
+  --follow-outline: #66e4ff;
   --active: #a9d5ac;
   --pressed: #183527;
 }

@@ -42,6 +42,12 @@ for (const id of ['crewe-birmingham', 'preston-crewe']) {
       const scene = directionalScene(layout, markers, view);
       const ids = scene.Markers.map(([i]) => markers[i].id);
       const stops = new Set(scene.Stations.map(([id]) => id));
+      const bands = scene.Lines.filter(line => line[6]);
+      assert.deepEqual(bands.map(line => layout.tracks[line[6] - 1].id), [...stops]);
+      for (const [x,,,, ink,, station] of bands) {
+        assert.equal(ink, 8);
+        assert(scene.Labels.some(label => label[0] === x && label[6] === layout.tracks[station - 1].name));
+      }
       const expected = full.Markers.map(([i]) => markers[i]).filter((m) => stops.has(m.track.id)).map((m) => m.id);
       assert.deepEqual(ids.sort(), expected.sort());
       assert.equal(new Set(ids).size, ids.length);

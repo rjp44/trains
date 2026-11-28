@@ -62,6 +62,7 @@ export function lineBoard(container, layout, tables, open) {
     points = [],
     locations = [],
     legendRows = [],
+    stationPaint = [],
     legendWidth = 0,
     scale = 1,
     width;
@@ -143,11 +144,19 @@ export function lineBoard(container, layout, tables, open) {
     select.replaceChildren(...locations.map(([id, name]) => new Option(name, id)));
     drawing.replaceChildren();
     drawing.setAttribute('viewBox', '0 0 ' + width + ' 570');
-    for (const [x1, y1, x2, y2, ink, weight] of tables[key + 'Lines'])
-      svg(drawing, 'line', { x1, y1, x2, y2, stroke: inks[ink], 'stroke-width': weight });
+    stationPaint = [];
+    for (const [x1, y1, x2, y2, ink, weight, station] of tables[key + 'Lines']) {
+      const line = svg(drawing, 'line', { x1, y1, x2, y2, stroke: inks[ink], 'stroke-width': weight });
+      if (station) {
+        const id = tables.watchStations[station - 1][0];
+        line.dataset.stationBand = id;
+        stationPaint.push({ id, band: line, ink });
+      }
+    }
     for (const [x, y, width, size, ink, background, text, preset] of tables[key + 'Labels']) {
+      let box;
       if (background >= 0)
-        svg(drawing, 'rect', {
+        box = svg(drawing, 'rect', {
           x: x - width / 2,
           y: y - size / 2 - 3,
           width,
@@ -166,6 +175,8 @@ export function lineBoard(container, layout, tables, open) {
       if (preset) {
         const station = stations.get(text);
         el.classList.add('station');
+        el.dataset.station = station.id;
+        stationPaint.push({ id: station.id, box, label: el });
         action(el, 'Berth register for ' + text, () => open(station));
       }
     }
@@ -194,12 +205,27 @@ export function lineBoard(container, layout, tables, open) {
     else container.scrollLeft = offsets[next] * scale;
     sync();
   }
-  function update(rows, friendly) {
+  function update(rows, friendly, watchedStation, followedBerth) {
+    for (const { id, band, ink, box, label } of stationPaint) {
+      const watched = id === watchedStation;
+      if (band) band.setAttribute('stroke', inks[watched ? 9 : ink]);
+      if (box) {
+        box.setAttribute('fill', inks[watched ? 9 : 0]);
+        box.setAttribute('stroke', inks[watched ? 12 : 11]);
+      }
+      if (label)
+        label.setAttribute(
+          'aria-label',
+          'Berth register for ' + label.textContent + (watched ? ' · Watching' : ''),
+        );
+    }
     for (const { index, berth, head, signal, lamp } of points) {
       const [aspect, kind, text] = rows[index];
       const visible = !!kind && isTrainCode(text);
       berth.style.display = visible ? '' : 'none';
-      if (visible) berth.setAttribute('aria-label', 'Train ' + text);
+      const followed = visible && followedBerth === berth.dataset.berth;
+      berth.classList.toggle('followed', followed);
+      if (visible) berth.setAttribute('aria-label', 'Train ' + text + (followed ? ' · Following' : ''));
       showHeadcode(head, visible ? text : '', visible ? kind : 0, visible && friendly ? rows[index][6] : '');
       berth.classList.toggle('head', visible);
       berth.classList.toggle('stale', kind === 3);

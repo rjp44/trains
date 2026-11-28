@@ -240,6 +240,15 @@ button {
   stroke: var(--marker-focus);
   stroke-width: 1.5;
 }
+.line-board .berth.followed .ring {
+  stroke: var(--follow-outline);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+:root { --follow-outline: #66e4ff; }
+:root[data-theme='light'] { --follow-outline: #263c91; }
+.location .head.followed { outline: 3px solid var(--follow-outline); }
+.location .station.watched { background: var(--rail); color: var(--bg); }
 .jump {
   display: inline-flex;
   align-items: center;

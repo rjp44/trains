@@ -187,8 +187,8 @@ export function directionalScene(layout, markers, view) {
     Stations = [];
   // Clip the world before writing native int16 coordinates. Endpoints on
   // either side of a station remain exactly coincident in every named view.
-  function line(x1, y1, x2, y2, ink, weight = 2) {
-    if (x1 > x2) return line(x2, y2, x1, y1, ink, weight);
+  function line(x1, y1, x2, y2, ink, weight = 2, station = 0) {
+    if (x1 > x2) return line(x2, y2, x1, y1, ink, weight, station);
     if (x2 < left || x1 > right) return;
     const slope = x2 === x1 ? 0 : (y2 - y1) / (x2 - x1);
     const a = Math.max(left, x1),
@@ -200,6 +200,7 @@ export function directionalScene(layout, markers, view) {
       Math.round(y2 - (x2 - z) * slope),
       ink,
       weight,
+      ...(station ? [station] : []),
     ]);
   }
   function label(x, y, width, size, ink, title, preset = 0, bg = -1) {
@@ -207,9 +208,8 @@ export function directionalScene(layout, markers, view) {
   }
   // Station stripes sit behind the uninterrupted rails, as in the Hemel panel.
   for (const p of visible) {
-    const x = p.left + p.centre,
-      emphasis = p.station.id === layout.focus;
-    line(x, 110, x, p.rows ? p.rows.at(-1).y + 18 : 342, emphasis ? 9 : 8, emphasis ? 38 : 24);
+    const x = p.left + p.centre;
+    line(x, 110, x, p.rows ? p.rows.at(-1).y + 18 : 342, 8, 24, stopIndex.get(p.station.id) + 1);
     Stations.push([p.station.id, p.station.name, p.left - left]);
     label(
       x,
@@ -219,7 +219,7 @@ export function directionalScene(layout, markers, view) {
       1,
       p.station.name,
       stopIndex.get(p.station.id) < focus ? 1 : 2,
-      emphasis ? 9 : 0,
+      0,
     );
   }
   // Across a large station the actual platform and passing roads replace

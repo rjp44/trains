@@ -1,5 +1,4 @@
 // The watched station is an app preference. The followed service lasts only for this feed session.
-Selection tracked;
 int watching=-1, watchMarker=-1;
 bool expandedSector=false;
 int lastFocus=-1;
@@ -108,11 +107,24 @@ void updateWatch(uint32_t wall) {
     }
     if(watchMarker!=next){watchMarker=next;invalidate();}
 }
-constexpr Rect watchBox{288,491,448,72}, promptBox{338,189,348,95};
+constexpr Rect promptBox{338,189,348,95};
+Rect watchBounds() {
+    Rect box{288,491,448,72};
+    if (!tracked.present) return box;
+    for (const auto &marker : scene->markers) {
+        if (marker.id != tracked.index) continue;
+        const int halfWidth = scene->badgeWidth / 2 + 3, halfHeight = scene->badgeHeight / 2 + 3;
+        if (marker.x + halfWidth >= box.x && marker.x - halfWidth < box.x + box.w &&
+            marker.y + halfHeight >= box.y && marker.y - halfHeight < box.y + box.h)
+            box.y = marker.y - halfHeight - 8 - box.h;
+        break;
+    }
+    return box;
+}
 void drawWatch(lv_layer_t *layer) {
     bool follow=tracked.index>=0;
     if(follow || watchMarker>=0) {
-        const auto &b=watchBox;
+        const auto b=watchBounds();
         auto r=follow ? tracked.route.c_str():current[watchMarker].detail.route;
         auto state=follow ? tracked.running.c_str():current[watchMarker].detail.running;
         box(layer,b.x,b.y,b.w,b.h,HemelBand,HemelEdge,5);
@@ -141,8 +153,9 @@ bool watchTap(int x,int y) {
         }
         invalidate(); return true;
     }
-    if((tracked.index>=0 || watchMarker>=0) && watchBox.contains(x,y)){
-        if(tracked.index>=0 && x>watchBox.x+watchBox.w-137 && y<watchBox.y+34) stopFollow();
+    const auto b=watchBounds();
+    if((tracked.index>=0 || watchMarker>=0) && b.contains(x,y)){
+        if(tracked.index>=0 && x>b.x+b.w-137 && y<b.y+34) stopFollow();
         else if(watchMarker>=0) chooseTrain(watchMarker,x,y);
         return true;
     }

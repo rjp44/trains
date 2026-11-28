@@ -220,6 +220,7 @@ h1 {
   --stale-description: #99a49e;
   --selection: #d8e7b3;
   --marker-focus: #fff;
+  --follow-outline: #66e4ff;
   background: var(--board);
   color: var(--board-heading);
   border-radius: 10px;
@@ -256,6 +257,7 @@ h1 {
   --stale-description: #b0bcb3;
   --selection: #675019;
   --marker-focus: #122f32;
+  --follow-outline: #263c91;
 }
 .sectionhead h2 {
   font-size: 19px;
@@ -372,6 +374,11 @@ svg text {
 .marker:hover .ring {
   stroke: var(--marker-focus);
   stroke-width: 1.5;
+}
+.marker.followed .ring {
+  stroke: var(--follow-outline);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
 }
 #notice {
   margin: 11px 0;
@@ -562,7 +569,7 @@ button:disabled {
   stroke: var(--control-edge);
   stroke-width: 1;
 }
-.station-target[data-station='HML'] rect {
+.station-target.watched rect {
   fill: var(--hemel-band);
   stroke: var(--hemel-edge);
 }

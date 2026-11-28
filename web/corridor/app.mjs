@@ -236,7 +236,7 @@ function draw() {
   monitor.update(state);
   const visible = [layout.tracks, layout.tracks.slice(0, focus + 1), layout.tracks.slice(focus)][view];
   const rows = regionalRows(directional ? layout : { ...layout, tracks: visible }, state, !recorded);
-  const key = JSON.stringify([view, rows]);
+  const key = JSON.stringify([view, rows, monitor.watchedStation, monitor.followedBerth]);
   $('h1').textContent = layout.views[view];
   $('#readout').textContent =
     visible.length +
@@ -247,7 +247,7 @@ function draw() {
   if (key === last) return;
   last = key;
   if (board) {
-    board.update(rows, labels.friendly);
+    board.update(rows, labels.friendly, monitor.watchedStation, monitor.followedBerth);
     details();
     return;
   }
@@ -266,7 +266,7 @@ function draw() {
     const location = document.createElement('section');
     location.className = 'location';
     const station = button(t.name, () => show(t));
-    station.className = 'station';
+    station.className = 'station' + (monitor.watchedStation === t.id ? ' watched' : '');
     location.append(station);
     const heads = document.createElement('div');
     heads.className = 'heads';
@@ -274,6 +274,8 @@ function draw() {
       if (row[1]) {
         const b = button(row[2], () => show(t, row[2].startsWith('+') ? '' : row[2]));
         b.className = 'head' + (row[1] === 3 ? ' stale' : '');
+        if (t.berths.some((berth) => berth.id === monitor.followedBerth && state.values[berth.id] === row[2]))
+          b.classList.add('followed');
         heads.append(b);
       }
     location.append(heads);

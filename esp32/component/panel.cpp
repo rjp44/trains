@@ -52,12 +52,13 @@ struct Segment {
     int16_t x1, y1, x2, y2;
     uint8_t ink;
     uint16_t width;
+    uint8_t station = 0; // One-based index in the package watch directory.
 };
 struct Label {
     int16_t x, y, width;
     int8_t font, ink, background;
     const char *text;
-    uint8_t preset;
+    uint8_t preset, station = 0;
 };
 struct Marker {
     uint16_t id;
@@ -140,6 +141,9 @@ struct Selection {
     std::string head, service, route, running;
 };
 Selection selected;
+#ifdef TRANSPORT_CORE
+Selection tracked;
+#endif
 size_t nextFrame = 0, nextChange = 0;
 uint32_t cursor = 0;
 struct Rotation {
@@ -211,6 +215,11 @@ void badge(lv_layer_t *layer, const Marker &m, int width) {
     const auto &train = current[m.id];
     const int h = scene->badgeHeight;
     int x = m.x - width / 2;
+#ifdef TRANSPORT_CORE
+    if (tracked.present && tracked.index == m.id)
+        box(layer, x - 2, m.y - h / 2 - 2, width + 4, h + 4, Board, -1, 5,
+            palette == darkPalette ? 0x66e4ff : 0x263c91);
+#endif
     box(layer, x, m.y - h / 2, width, h,
         offline           ? Stale
         : train.kind == 1 ? TrainFill
@@ -565,21 +574,35 @@ void touch(lv_event_t *e) {
 }
 void draw(lv_event_t *event) {
     auto *layer = lv_event_get_layer(event);
+#ifdef TRANSPORT_CORE
+    const int activeStation = tracked.index < 0 ? watching + 1 : 0;
+#endif
     for (const auto &s : scene->lines) {
+        int ink = s.ink;
+#ifdef TRANSPORT_CORE
+        if (s.station) {
+            if (s.station == activeStation) ink = HemelBand;
+            else if (ink == Board) continue;
+        }
+#endif
         lv_draw_line_dsc_t d;
         lv_draw_line_dsc_init(&d);
         d.p1.x = s.x1;
         d.p1.y = s.y1;
         d.p2.x = s.x2;
         d.p2.y = s.y2;
-        d.color = colour(s.ink);
+        d.color = colour(ink);
         d.width = s.width;
         lv_draw_line(layer, &d);
     }
     for (const auto &l : scene->labels) {
         const int x = l.x - l.width / 2, h = font(l.font)->line_height + 2;
-        if (l.background >= 0)
-            box(layer, x, l.y - h / 2, l.width, h, l.background, l.background == HemelBand ? HemelEdge : Edge,
+        int background = l.background;
+#ifdef TRANSPORT_CORE
+        if (l.station && l.station == activeStation) background = HemelBand;
+#endif
+        if (background >= 0)
+            box(layer, x, l.y - h / 2, l.width, h, background, background == HemelBand ? HemelEdge : Edge,
                 3);
         text(layer, x, l.y, l.width, l.text, l.font, l.ink);
     }

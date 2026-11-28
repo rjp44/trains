@@ -433,6 +433,7 @@ void vehicles(uint32_t now) {
         occupied.push_back({left, up, sx(box.x + box.w) - left + 1, sy(box.y + box.h) - up + 1});
     }
     bus::restoreOrder(markers);
+    int followX = 0, followY = 0, followRadius = 0;
     // In exceptional crowds the fixed train also gets the final draw and hit-test priority.
     for (auto it = markers.rbegin(); it != markers.rend(); ++it) {
         const auto &m = *it;
@@ -451,6 +452,7 @@ void vehicles(uint32_t now) {
         int flip = sprite.view != bus::View::Roof && direction > 180 ? -1 : 1;
         bool stale = age >= 120000 || (!replaying() && liveFailed) || !(k >= 8 ? data.railOk : data.busOk);
         int radius = int(24 * size);
+        if (v.id == followedId) { followX = x; followY = y; followRadius = radius; }
         if (v.id == selection) anchor = {x - radius, y - radius, 2 * radius, 2 * radius};
         drawVehicleSprite(x, y, sprite.asset, size, angle, flip, stale);
         std::string badge = routes[k].name;
@@ -469,6 +471,16 @@ void vehicles(uint32_t now) {
             break;
         }
         hits.push_back({hit, Marker, int(i)});
+    }
+    if (followRadius) {
+        const auto outline = color(dark ? 0x66e4ff : 0x263c91);
+        const int inner = (followRadius-2)*(followRadius-2), outer = (followRadius+1)*(followRadius+1);
+        for (int dy=-followRadius-1; dy<=followRadius+1; ++dy) {
+            for (int dx=-followRadius-1; dx<=followRadius+1; ++dx) {
+                int d = dx*dx + dy*dy;
+                if (d >= inner && d <= outer) pixel(followX+dx, followY+dy, outline);
+            }
+        }
     }
 }
 int dayNumber(int y, int m, int d) {
