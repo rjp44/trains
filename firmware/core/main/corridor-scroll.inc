@@ -49,12 +49,13 @@ void drawScrollBar(lv_layer_t *layer) {
 bool scrollBarTap(int x,int y) {
     if(!directionalLayout() || y<scrollY-4 || x<94) return false;
     auto &v=activeCorridor();
-    auto i=stationAt(v.pan+1);
+    auto i=stationAt(v.pan+v.viewportWidth()/2);
     if(x<scrollLeft) {
-        if(v.pan<=v.stations[i].x+3 && i>0) --i;
-        panTo(v.stations[i].x);
+        if(v.pan+v.viewportWidth()/2<=stationCentre(v,v.stations[i])+3 && i>0) --i;
+        panTo(stationCentre(v,v.stations[i])-v.viewportWidth()/2);
     } else if(x>scrollLeft+scrollWidth) {
-        panTo(i+1<v.stations.size()?v.stations[i+1].x:v.width-v.viewportWidth());
+        if(v.pan+v.viewportWidth()/2>=stationCentre(v,v.stations[i])-3 && i+1<v.stations.size()) ++i;
+        panTo(stationCentre(v,v.stations[i])-v.viewportWidth()/2);
     } else {
         panTo((x-scrollLeft)*v.width/scrollWidth-v.viewportWidth()/2);
     }

@@ -10,7 +10,7 @@ At major stations the diagram opens out into individual platform roads, through 
 
 In **Settings → App → Train labels**, choose **Headcode** or **Operator + destination**. The latter pairs a coloured operator tag with the three-letter destination code. Tap a train for its headcode and service details. An unidentified service or destination keeps its headcode. The three signalling maps share this preference on the same tablet or browser.
 
-Drag horizontally to follow the line. On the tablet, tap the bottom scroll bar or either Stop control to jump. In the browser use the Location selector, scroll bar or arrow keys. Tap a location name for its berth register, or a train for its service and running information when available. The same headcode can occupy adjacent berths during a movement.
+Drag horizontally to follow the line. On the tablet, tap the bottom scroll bar or either Stop control to jump. In the browser use the Location selector, scroll bar or arrow keys. The station jumps centre the named location, including both endpoints. Tap a location name for **Watch** and its berth register, or a train for its service and running information when available. The same headcode can occupy adjacent berths during a movement.
 
 Both panels show mapped signal indications at the Crewe end. The Birmingham panel also covers New Street and the line east to International. A filled red lamp means the most restrictive indication, an open green ring means a less restrictive indication, and a grey ring means the state is unknown. A berth without an identified signal address has no lamp. Tap a lamp for its signal number, address and reported state. A disconnected area keeps the last-known train positions and clears its indications.
 

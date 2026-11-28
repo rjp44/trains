@@ -2,10 +2,10 @@ import { schedulePath, readHemelScheduleRoot } from '../public/hemel.mjs';
 
 export function scheduleCache(root, formatDay) {
   const schedules = new Map();
-  function lookup(service, canRequest) {
+  function lookup(service, canRequest, location) {
     const path = service && schedulePath(service, undefined, formatDay);
     if (!path) return null;
-    const key = service.id + path;
+    const key = service.id + path + (location || "");
     let entry = schedules.get(key);
     if (!entry && canRequest) {
       entry = { retry: 0 };
@@ -21,7 +21,7 @@ export function scheduleCache(root, formatDay) {
       })
         .then(async (res) =>
           res.ok
-            ? readHemelScheduleRoot(root(await res.text()), service, path)
+            ? readHemelScheduleRoot(root(await res.text()), service, path, location)
             : null,
         )
         .then((call) => {

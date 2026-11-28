@@ -14,6 +14,9 @@ int height();
 bool attach(lv_display_t *display);
 void view(View value);
 #ifdef TRANSPORT_CORE
+void watchOptions(lv_obj_t *parent);
+const char *watchedStation();
+void setLiveAreas(const char *areas);
 void restoreView(View fallback);
 bool friendlyLabels();
 void setFriendlyLabels(bool enabled);

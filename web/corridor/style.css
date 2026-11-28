@@ -156,7 +156,7 @@ button {
   padding: 20px;
   box-shadow: 0 12px 50px #0005;
 }
-#detail > button {
+#detail > button[aria-label] {
   float: right;
   border: 0;
   background: none;

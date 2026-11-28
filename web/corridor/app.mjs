@@ -1,7 +1,9 @@
+import { railMonitor } from './rail-monitor.mjs';
+import { watchAction } from './panel/watch.mjs';
 import { lineBoard } from './line-board.mjs';
 import { Corridor } from './rail.mjs';
 import { createLiveFeed } from './live.mjs';
-import { regionalRows, locationArrivals, slots } from './regional.mjs';
+import { regionalRows, slots } from './regional.mjs';
 import { panelSettings, settingGroup, trainLabelControl } from './panel/settings.mjs';
 import { readSetting, saveSetting } from './panel/appearance.mjs';
 import { mapGestures } from './panel/gestures.mjs';
@@ -18,8 +20,7 @@ const board = directional
   : null;
 const physical = new Map(layout.tracks.flatMap((t) => t.berths).map((b, i) => [b.id, i]));
 const focus = layout.tracks.findIndex((t) => t.id === layout.focus);
-const arrivals = locationArrivals(layout),
-  feed = createLiveFeed(layout, { onFrame: arrivals.accept, onReset: arrivals.reset });
+const feed = createLiveFeed(layout);
 const replay = new Corridor(layout);
 let frame = 0,
   started = 0,
@@ -57,7 +58,7 @@ const views = options('View', layout.views, setView);
 const sources = options('Data source', ['Live', 'Recorded movements'], (i) => {
   recorded = !!i;
   sources.mark(i);
-  arrivals.reset();
+  monitor.reset();
   frame = 0;
   started = Date.now();
   last = '';
@@ -65,7 +66,38 @@ const sources = options('Data source', ['Live', 'Recorded movements'], (i) => {
   else feed.start();
   draw();
 });
-const labels = trainLabelControl(() => { last = ''; draw(); });
+const labels = trainLabelControl(() => {
+  last = '';
+  draw();
+});
+function camera(method, key) {
+  if (!key || !board) return false;
+  if (board[method](key)) return true;
+  if (view) {
+    view = 0;
+    views.mark(0);
+    board.paint(0);
+    last = '';
+    return board[method](key);
+  }
+  return false;
+}
+const monitor = railMonitor({
+  id,
+  layout,
+  host: $('main'),
+  ids: [...physical.keys()],
+  defaultStation: layout.focus,
+  fresh: (area) => recorded || state?.areaStatus?.[area] === 'Live',
+  live: () => !recorded,
+  play: { mode: () => ui.sound.mode, sound: (down, stop) => ui.sound.play(down, stop) },
+  focus: (key) => {
+    if (!camera('focus', key))
+      camera('jump', layout.tracks.find((t) => t.berths.some((b) => b.id === key))?.id);
+  },
+  stationFocus: (s) => camera('jump', s?.id),
+  draw,
+});
 const ui = panelSettings({
   id,
   name: manifest.name,
@@ -74,7 +106,7 @@ const ui = panelSettings({
   map: $('main'),
   initialTheme: 'dark',
   applyTheme: (v) => (document.documentElement.dataset.theme = v),
-  appControls: [views.group, labels.group, sources.group],
+  appControls: [views.group, monitor.group, labels.group, sources.group],
 });
 views.mark(view);
 board?.paint(view);
@@ -93,6 +125,26 @@ function rowDetails(title, location, lines) {
 }
 function show(t, head = '', signal = null, berth = null) {
   selected = { t, head, signal, berth };
+  dialog.querySelector('.watch-action')?.remove();
+  const code = (berth && state.values[berth.id]) || head;
+  if (!signal && !berth && !head)
+    dialog.querySelector('button').after(
+      watchAction('Watch', () => {
+        dialog.close();
+        monitor.watch(t.id);
+      }),
+    );
+  else if (!signal && /^[0-9][A-Z][0-9]{2}$|^[A-Z][0-9]{3}$/.test(code)) {
+    const key = berth?.id || t.berths.find((b) => state.values[b.id] === code)?.id;
+    const service = key && state.services[key.slice(0, 2) + '/' + code];
+    if (key)
+      dialog.querySelector('button').after(
+        watchAction('Follow', () => {
+          dialog.close();
+          monitor.follow(key, code, service);
+        }),
+      );
+  }
   details();
   if (!dialog.open) dialog.showModal();
 }
@@ -181,9 +233,7 @@ function draw() {
     state = replay;
   } else state = feed.snapshot();
   status.textContent = recorded ? 'Replay' : state.status;
-  if (!recorded)
-    for (const direction of arrivals.take(['Live', 'Partial'].includes(state.status)))
-      ui.sound.play(direction === 'D', false);
+  monitor.update(state);
   const visible = [layout.tracks, layout.tracks.slice(0, focus + 1), layout.tracks.slice(focus)][view];
   const rows = regionalRows(directional ? layout : { ...layout, tracks: visible }, state, !recorded);
   const key = JSON.stringify([view, rows]);

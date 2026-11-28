@@ -151,7 +151,7 @@ export function panelSettings({
     'Train horn',
     [
       ['off', 'Off'],
-      ['stops', id === 'hemel' ? 'Stopping at Hemel' : 'Stopping trains'],
+      ['stops', 'Stopping trains'],
       ['all', 'All trains'],
     ],
     (v) => {

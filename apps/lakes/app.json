@@ -1,8 +1,8 @@
 {
   "id": "lakes",
   "name": "Lakes Transit",
-  "version": "0.9.10",
-  "minCore": 9011,
+  "version": "0.9.11",
+  "minCore": 9014,
   "adapter": "lakes-map/1",
   "viewport": [
     600,

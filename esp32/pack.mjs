@@ -1,3 +1,4 @@
+import { watchStations } from '../public/rail-watch.mjs';
 import { operatorTags } from '../public/train-label.mjs';
 import { approachRoadName } from './station-approaches.mjs';
 import { laneName } from './directional-scene.mjs';
@@ -19,7 +20,11 @@ const layout = data('corridor'),
 const home = diagram?.columns.get('HML'),
   round = Math.round;
 const { markers, project, fingerprint } = createProjection(layout);
+const stations = watchStations(layout);
+const markerIds = new Map(markers.map((b,i)=>[b.id,i]));
 const tables = {
+  watchDefault:layout.focus || 'HML',
+  watchStations:stations.map(s=>[s.id,s.name,s.berths.map(([id])=>markerIds.get(id))]),
   layoutFingerprint: fingerprint,
   operatorTags: Object.entries(operatorTags).map(([code, tag]) => [code, ...tag]),
 };
@@ -117,6 +122,7 @@ for (const [name, selector] of [
 
 // Match the browser's diagram-only coordinate system. Fonts are quantised to the
 // native sizes; the shared label fitter still prefers the full station names.
+const stationNumber = new Map(stations.map((s,i)=>[s.id,i]));
 function compileView(view) {
   const merged = view !== 'hemel',
     natural = merged ? 592 : 368;
@@ -178,7 +184,7 @@ function compileView(view) {
         item.width * scale,
         'board-text',
         bg,
-        { HML: 1, WFJ: 2 }[item.station.code] ?? 0,
+        { HML: 1, WFJ: 2 }[item.station.code] ?? 3 + stationNumber.get(item.station.code),
       );
       top = Math.min(top, cy - ((item.size + 4) * scale) / 2);
     }
@@ -239,7 +245,8 @@ function compileView(view) {
         for (const n of lanes)
           line(at - 5 * scale, lane(n) + 5 * scale, at + 5 * scale, lane(n) + 5 * scale, ink, 3);
       }
-      if (branch === abbey) names(stops, Math.max(lane(10) + 41 * scale, 536 * vertical), 0);
+      const extra = branch.stations.filter(s=>!layout.stations.some(main=>main.code===s.code));
+      names(extra, branch === abbey ? Math.max(lane(10) + 41 * scale, 536 * vertical) : 72*vertical, 19*vertical);
     }
     layout.junction.platforms.forEach((p, i) => {
       if (!visible(x(0))) return;

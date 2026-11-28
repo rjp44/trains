@@ -28,6 +28,7 @@ void drawRegister(lv_layer_t *layer) {
     box(layer, 32, 51, 960, 510, Board, HemelEdge, 7);
     text(layer, 55, 79, 720, loc.name, 16, Text, false);
     text(layer, 54, 102, 760, "Berth register   |   Train descriptions and mapped signal indications", 12, Muted, false);
+    if (!watchStations.empty()) text(layer,805,79,90,"Watch",16,Text);
     text(layer, 933, 79, 40, "X", 16, Text);
     unsigned first = registerPage * berthsPerPage;
     for (unsigned n=0; n<berthsPerPage && first+n<loc.count; ++n) {
@@ -57,6 +58,7 @@ bool registerTap(int x, int y) {
     if (registerIndex<0) return false;
     const auto &loc=registerLocations[registerIndex];
     if(x<32 || x>=992 || y<51 || y>=561 || (x>908 && y<106)) registerIndex=-1;
+    else if(y<104 && x>=785 && x<=908 && !watchStations.empty()) { watchLocation(loc.name); registerIndex=-1; }
     else if(y>=494 && x<210 && registerPage>0) --registerPage;
     else if(y>=494 && x>815 && unsigned(registerPage+1)*berthsPerPage<loc.count) ++registerPage;
     else if(x>=registerX && y>=registerY && x<registerX+registerColumns*registerPitchX && y<registerY+registerRows*registerPitchY) {

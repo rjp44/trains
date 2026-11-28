@@ -43,7 +43,7 @@ export function lineBoard(container, layout, tables, open) {
   const inks = installPalette(container, tables);
   const stations = new Map(layout.tracks.map((t) => [t.name, t]));
   const byId = new Map(layout.tracks.flatMap((t) => t.berths.map((b) => [b.id, { t, b }])));
-  const offsets = [0, 0, 0];
+  const offsets = [];
   const nav = document.createElement('label'),
     select = document.createElement('select');
   nav.className = 'jump';
@@ -68,6 +68,14 @@ export function lineBoard(container, layout, tables, open) {
   function stationAt(x) {
     return locations.findLast((s) => s[2] <= x) || locations[0];
   }
+  function centre(x) {
+    container.scrollLeft = (x + legendWidth / 2) * scale - container.clientWidth / 2;
+  }
+  function jump(id) {
+    const stop = locations.find((s) => s[0] === id);
+    if (stop) centre(stop[3]);
+    return !!stop;
+  }
   function sync() {
     if (!locations.length) return;
     const left = container.scrollLeft / scale;
@@ -77,11 +85,13 @@ export function lineBoard(container, layout, tables, open) {
     }
     const atEnd =
       container.scrollLeft > 0 && container.scrollLeft + container.clientWidth >= container.scrollWidth - 2;
-    select.value = (atEnd ? locations.at(-1) : stationAt((container.scrollLeft + 2) / scale))[0];
+    select.value = (
+      atEnd ? locations.at(-1) : stationAt(left + container.clientWidth / (2 * scale) - legendWidth / 2)
+    )[0];
   }
   select.onchange = () => {
     const stop = locations.find((s) => s[0] === select.value);
-    if (stop) container.scrollLeft = stop[2] * scale;
+    if (stop) jump(stop[0]);
     sync();
   };
   container.addEventListener('scroll', sync, { passive: true });
@@ -108,7 +118,10 @@ export function lineBoard(container, layout, tables, open) {
     view = next;
     const key = keys[view];
     width = tables[key + 'Width'];
-    locations = tables[key + 'Stations'];
+    locations = tables[key + 'Stations'].map((s) => [
+      ...s,
+      tables[key + 'Labels'].find((l) => l[7] && l[6] === s[1])?.[0] ?? s[2],
+    ]);
     legendWidth = tables[key + 'LegendWidth'] || 0;
     const intervals = tables[key + 'Legend'] || [];
     legend.replaceChildren();
@@ -161,7 +174,9 @@ export function lineBoard(container, layout, tables, open) {
       const berth = svg(drawing, 'g', { 'data-berth': b.id, class: 'berth' });
       action(berth, 'Train', () => open(t, b));
       const unitScale = tables[key + 'Space'][2] / trainWidth;
-      const centre = svg(berth, 'g', { transform: 'translate(' + x + ' ' + y + ') scale(' + unitScale + ')' });
+      const centre = svg(berth, 'g', {
+        transform: 'translate(' + x + ' ' + y + ') scale(' + unitScale + ')',
+      });
       const head = drawHeadcode(svg, centre, 0, 0, trainWidth);
       let signal, lamp;
       if (r) {
@@ -171,11 +186,12 @@ export function lineBoard(container, layout, tables, open) {
         lamp = drawSignalLamp(svg, signal, x, sy, r < 4);
         lamp.setAttribute('r', r);
       }
-      return { index, berth, head, signal, lamp };
+      return { index, x, berth, head, signal, lamp };
     });
     resize();
     const target = locations.find((s) => s[0] === anchor);
-    container.scrollLeft = (target ? target[2] : offsets[next]) * scale;
+    if (target || offsets[next] == null) jump((target || locations[0])[0]);
+    else container.scrollLeft = offsets[next] * scale;
     sync();
   }
   function update(rows, friendly) {
@@ -197,6 +213,12 @@ export function lineBoard(container, layout, tables, open) {
     }
   }
   return {
+    jump,
+    focus(id) {
+      const marker = points.find((p) => tables.markerInfo[p.index][0] === id);
+      if (marker) centre(marker.x);
+      return !!marker;
+    },
     paint,
     update,
     resize,

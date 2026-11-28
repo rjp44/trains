@@ -84,14 +84,14 @@ const clockTime = /^(?:[01]\d|2[0-3]):[0-5]\d½?$/;
 function minutes(time) {
   return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) + (time.endsWith('½') ? 0.5 : 0);
 }
-export function readHemelSchedule(html, service, path) {
+export function readHemelSchedule(html, service, path, location) {
   // A template keeps upstream scripts and subresources inert. Only plain text leaves this parser.
   const template = document.createElement('template');
   template.innerHTML = html;
-  return readHemelScheduleRoot(template.content, service, path);
+  return readHemelScheduleRoot(template.content, service, path, location);
 }
 
-export function readHemelScheduleRoot(root, service, path) {
+export function readHemelScheduleRoot(root, service, path, location) {
   if (!root.querySelector('h2')?.textContent.includes('(' + service.uid + ')')) return null;
   const activations = [...root.textContent.matchAll(/Train ID = "([A-Z0-9]+)"/g)];
   if (!activations.length || activations.some((entry) => entry[1] !== service.id)) return null;
@@ -113,12 +113,12 @@ export function readHemelScheduleRoot(root, service, path) {
       departure: { working: cells[7], public: cells[8], actual: cells[9] },
     });
   }
-  return hemelCall(rows);
+  return hemelCall(rows, location);
 }
 
-export function hemelCall(rows) {
+export function hemelCall(rows, location = 'HEMLHMP') {
   if (!rows[0]?.activity.includes('Train begins') || !rows.at(-1)?.activity.includes('Train finishes')) return null;
-  const calls = rows.filter((row) => row.location === 'HEMLHMP');
+  const calls = rows.filter((row) => row.location === location);
   if (!calls.length) return { passing: true };
   if (calls.length !== 1) return null;
   const { departure, arrival, pass } = calls[0];

@@ -36,6 +36,7 @@ void hemelOptions(lv_obj_t *parent) {
             hemel::view(static_cast<hemel::View>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             panel::refreshAppPage();
         }, i, i == static_cast<unsigned>(hemel::currentView()));
+    hemel::watchOptions(parent);
     row = panel::optionRow(parent, "Train labels");
     for (unsigned i = 0; i < 2; ++i)
         panel::option(row, i ? "Operator + destination" : "Headcode", [](lv_event_t *e) {
@@ -65,7 +66,7 @@ void drawLakes() {
 }
 void settings() {
     if (isLakes) lakes::openPanelSettings(lakes::portraitView());
-    else panel::openSettings(nullptr, isHemel && !hemel::regionalLayout() ? "Stopping at Hemel only" : "Stopping trains only");
+    else panel::openSettings(nullptr, "Stopping trains only");
 }
 void contacts(const TouchFrame &frame) {
     using namespace transport;
@@ -258,7 +259,7 @@ extern "C" void app_main() {
             hemel::restoreView(static_cast<hemel::View>(transport::defaultView));
             hemel::seek(5000, now());
             hemel::setArrivalHandler([](hemel::Direction d, bool stops) {
-                panel::trainHorn(d == hemel::Direction::Down, stops);
+                if(*hemel::watchedStation()) panel::trainHorn(d == hemel::Direction::Down, stops);
             });
         } else {
             auto l = lv_label_create(lv_screen_active());

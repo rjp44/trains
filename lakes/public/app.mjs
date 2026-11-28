@@ -1,3 +1,4 @@
+import {watchPanel, watchAction, stationPrompt} from './panel/watch.mjs';
 import { railIcon, railOperatorName } from './model.mjs';
 import {panelSettings, settingGroup} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
@@ -277,7 +278,7 @@ const townLabels = [];
 let labelBoxes = [];
 const collides = (a, b) =>
   a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
-function place(name, point, dx, dy, major = false, station = false, railRoute = null, minZoom = 1) {
+function place(name, point, dx, dy, major = false, station = false, railRoute = null, minZoom = 1, code) {
   const [x, y] = point;
   const dot = shape(
     station ? 'rect' : 'circle',
@@ -306,6 +307,13 @@ function place(name, point, dx, dy, major = false, station = false, railRoute = 
     labels,
     name,
   );
+  if (code) for (const el of [dot,label]) {
+    el.style.pointerEvents='auto'; el.style.cursor='pointer'; el.setAttribute('role','button');
+    el.setAttribute('aria-label',name+' station options'); el.setAttribute('tabindex','0');
+    const open=()=>stationPrompt(name,()=>watch.watch(code));
+    el.onclick=open;
+    el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};
+  }
   townLabels.push({ label, dot, x, y, dx, dy, major, railRoute, minZoom });
 }
 for (const [name, lon, lat, dx, dy, major] of positions)
@@ -335,7 +343,7 @@ for (const [key, line] of Object.entries(railways)) {
       major,
       true,
       hub ? null : key,
-      key === 'coast' && !hub ? 2 : 1,
+      key === 'coast' && !hub ? 2 : 1, s.code,
     );
   }
 }
@@ -745,7 +753,9 @@ function detail() {
     );
     body.append(header, text('strong', town || v.destination ? 'To ' + (town || v.destination) : v.label));
     if (rail) {
-      body.append(text('h3', 'Rail position estimate'));
+      body.append(watchAction('Follow',()=>{
+        watchGeneration++; following=v.id; zoom=Math.max(2,zoom); dismissDetail(false); if(recorded()) runReplay(true); render();
+      }),text('h3', 'Rail position estimate'));
       const list = text('div', '', 'schedule-list journey-list');
       body.append(list);
       journeyRow(list, v.last || 'Unavailable', v.lastTime || '—', 'Last reported');
@@ -923,7 +933,21 @@ function drawMarkers() {
 function render() {
   const now = recorded() ? snapshot?.time : Date.now();
   const vehicles = visibleFixes(snapshot, now).filter(v => Object.hasOwn(routes, v.route));
-  fixes = vehicles.filter((v) => routeVisible(v.route));
+  fixes = vehicles.filter((v) => routeVisible(v.route) || v.id===following);
+  const station = watch.station;
+  let train = following && vehicles.find(v=>v.id===following);
+  if (following && !train && snapshot?.rail.ok && !fetchFailed) endFollow();
+  if (train) {
+    [cx,cy]=project(train.point,frame); fitOnResize=false; viewport();
+  } else if (!following && station) {
+    const near=vehicles.filter(v=>railways[v.route] && !v.stale && (v.lastCode===station.id || v.nextCode===station.id));
+    train=near[Math.floor(now/5000)%near.length];
+  }
+  watch.show(train ? {head:railOperatorName(train.agency),route:train.destination ? 'To '+train.destination : train.label,
+    context:following ? 'Following' : station.name,
+    running:[train.last && 'Last '+train.last,train.next && 'Next '+train.next,train.stale && 'Last known'].filter(Boolean).join(' · ')}
+    : following ? {context:'Following · awaiting rail report',route:lastDestination} : null,following ? ()=>{endFollow();render();} : null);
+  if(train && following) lastDestination=train.destination || train.label;
   if (!fixes.some((v) => v.id === selection)) selection = null;
   drawMarkers();
   detail();
@@ -981,8 +1005,11 @@ function render() {
   }
 }
 async function soundReports(token, trains) {
+  const station=watch.station?.id, change=watchGeneration;
+  if(!station || following) return;
   const unknown = [];
   for (const v of trains) {
+    if(v.lastCode!==station) continue;
     if (settings.sound.mode === 'stops' && typeof v.lastStop !== 'boolean') unknown.push(v);
     else settings.sound.play(v.direction > 0, v.lastStop === true);
   }
@@ -990,8 +1017,8 @@ async function soundReports(token, trains) {
   // Some live feed editions omit the stop flag. Match the same Railinfo report as the tablet.
   try {
     const raw = await get('/api/rail-reports');
-    if (token !== generation || !Array.isArray(raw.trains)) return;
-    for (const v of unknown) if (routeVisible(v.route) && Date.now() - v.time < freshMs && confirmedRailStop(v, raw.trains))
+    if (token !== generation || following || change!==watchGeneration || !Array.isArray(raw.trains)) return;
+    for (const v of unknown) if (Date.now() - v.time < freshMs && confirmedRailStop(v, raw.trains))
       settings.sound.play(v.direction > 0, true);
   } catch { /* An unconfirmed report stays silent. */ }
 }
@@ -1002,7 +1029,8 @@ async function poll(token) {
     if (token !== generation) return;
     if ((!snapshot || previewing) && !s.rail?.ok && !s.bus?.ok) throw Error('Waiting for live reports');
     if (!previewing && !fetchFailed && settings.sound.mode !== 'off')
-      soundReports(token, railTransitions(snapshot?.rail, s.rail, Date.now()).filter(v => routeVisible(v.route)));
+      soundReports(token, railTransitions(snapshot?.rail, s.rail, Date.now()));
+    if(previewing) {following=null;watchGeneration++;}
     previewing = false;
     snapshot = s;
     fetchFailed = false;
@@ -1044,6 +1072,7 @@ async function setMode(next) {
   clearTimeout(polling);
   runReplay(false);
   const token = ++generation;
+  following=null; watchGeneration++;
   mode = next;
   previewing = false;
   selectedStop = null;
@@ -1091,13 +1120,20 @@ try { if (localStorage.getItem('lakes.theme') === 'dark') initialTheme = 'dark';
 const nextFrame = document.createElement('button'); nextFrame.textContent = 'Next frame';
 nextFrame.onclick = () => { if (replay) { runReplay(false); showFrame((frameIndex+1)%replay.frames.length); } };
 $('play').after(nextFrame);
+const stations=[...new Map(Object.values(railways).flatMap(line=>line.stations.map(s=>[s.code,{id:s.code,name:s.name,point:s.point}]))).values()];
+let following=null,lastDestination='',watchGeneration=0;
+function endFollow() {
+  following=null; lastDestination=''; watchGeneration++;
+  if(watch.station) { [cx,cy]=watch.station.point; fitOnResize=false; viewport(); }
+}
+const watch=watchPanel('lakes',stations,'WDM',document.querySelector('.lakes-surface'),()=>{endFollow();render();});
 const settings = panelSettings({
   id:'lakes', name:'Lakes Transit', toolbar:$('lakes-toolbar'), status:$('map-status'), map:document.querySelector('.lakes-surface'),
   initialTheme, applyTheme(value) {
     document.documentElement.dataset.theme = value;
     document.querySelector('meta[name=theme-color]').content = value === 'dark' ? '#182822' : '#f6f7f1';
   },
-  appControls:[settingGroup('Data source',$('live'),$('replay')), $('playback'),
+  appControls:[watch.group,settingGroup('Data source',$('live'),$('replay')), $('playback'),
     settingGroup('Map zoom',$('minus'),$('plus'),$('reset')), settingGroup('Routes',$('routes')),
     document.querySelector('.stop-finder'), settingGroup('Layout',$('view-toggle'))],
   installHelp:$('install-help'), credits:'OpenStreetMap, OpenFreeMap, OpenMapTiles, Mapzen, Stagecoach, BODS, NaPTAN and Railinfo.'

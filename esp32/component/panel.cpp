@@ -9,6 +9,7 @@
 
 #ifdef TRANSPORT_CORE
 #include "rows.h"
+#include "watch-picker.h"
 #include "core.h"
 #include "esp_rom_crc.h"
 #include "view-settings.h"
@@ -326,7 +327,7 @@ Rect popup() {
             std::clamp(selected.y > h + 20 ? selected.y - h - 14 : selected.y + 14, minY, panelHeight - h - 4),
             w, h};
 }
-void follow() {
+void trackSelection(Selection &selected, bool followService = false) {
     if (selected.index < 0 || selected.signal)
         return;
     const auto compatible = [&](int i) {
@@ -342,6 +343,7 @@ void follow() {
         index = -1;
         for (int i = 0; i < markerCount; ++i)
             if (compatible(i)) {
+                if (index >= 0 && followService && !selected.service.empty() && selected.service == current[index].detail.service && selected.service == current[i].detail.service) continue;
                 if (index >= 0) {
                     index = -1;
                     break;
@@ -362,8 +364,11 @@ void follow() {
 }
 #ifdef TRANSPORT_CORE
 void chooseTrain(int id, int x, int y);
+void watchLocation(const char *name);
+int promptStation=-1;
 #include "berth-register.inc"
 #include "corridor-scroll.inc"
+#include "rail-watch.inc"
 #endif
 void drawControls(lv_layer_t *layer) {
 #ifdef TRANSPORT_CORE
@@ -396,6 +401,7 @@ void drawControls(lv_layer_t *layer) {
     }
 #ifdef TRANSPORT_CORE
     if (directionalLayout()) drawScrollBar(layer);
+    drawWatch(layer);
     drawRegister(layer);
 #endif
     if (selected.index < 0)
@@ -407,6 +413,8 @@ void drawControls(lv_layer_t *layer) {
     text(layer, r.x + r.w - 34, r.y + 16, 28, "X", 14, Text);
     std::string where = m.track;
 #ifdef TRANSPORT_CORE
+    if (!selected.signal && selected.present && passengerMapDescription(current[selected.index]))
+        text(layer,r.x+r.w-112,r.y+16,67,"Follow",14,Text);
     if (selected.signal || !regionalLayout())
 #endif
         where += std::string(" | ") + m.id;
@@ -436,17 +444,23 @@ void drawControls(lv_layer_t *layer) {
     }
 }
 void chooseTrain(int id, int x, int y) {
+    selected = {};
     selected.index = id;
     selected.x = x;
     selected.y = y;
     selected.head = current[id].head;
-    follow();
+    trackSelection(selected);
     invalidate();
 }
 void tap(int x, int y) {
     if (selected.index >= 0) {
         const auto r = popup();
         if (r.contains(x, y)) {
+#ifdef TRANSPORT_CORE
+            if (x>=r.x+r.w-120 && x<r.x+r.w-40 && y<r.y+36 && !selected.signal && selected.present && passengerMapDescription(current[selected.index])) {
+                watchChanged=true; tracked=selected; registerIndex=-1; dismiss(); updateWatch(lv_tick_get()); return;
+            }
+#endif
             if (x >= r.x + r.w - 40 && y < r.y + 36)
                 dismiss();
             return;
@@ -457,7 +471,7 @@ void tap(int x, int y) {
 #endif
     }
 #ifdef TRANSPORT_CORE
-    if (registerTap(x,y) || scrollBarTap(x,y)) return;
+    if (registerTap(x,y) || watchTap(x,y) || scrollBarTap(x,y)) return;
     if (x < activeCorridor().legendWidth) return;
 #endif
 #ifndef TRANSPORT_CORE
@@ -471,6 +485,9 @@ void tap(int x, int y) {
     }
 #endif
     for (int line = 0; line < 2; ++line) {
+#ifdef TRANSPORT_CORE
+        if (!defaultCards()) break;
+#endif
         auto *c = rotation[line].shown;
         if (offline || !c || !cardLayout(line, *c).bounds.contains(x, y))
             continue;
@@ -523,6 +540,10 @@ void tap(int x, int y) {
         if (std::abs(x - label.x) <= label.width / 2 && std::abs(y - label.y) <= 12) {
 #ifdef TRANSPORT_CORE
             if (openRegister(label.text)) return;
+            if (label.preset && !watchStations.empty()) {
+                promptStation=label.preset>=3 ? label.preset-3 : watchNumber(label.preset==1?"HML":"WFJ");
+                invalidate(); return;
+            }
 #endif
             if (!label.preset) continue;
             view(label.preset == 1 ? View::Hemel : View::Watford);
@@ -568,7 +589,11 @@ void draw(lv_event_t *event) {
     }
     visitBadges([&](const Marker &m, int w) { badge(layer, m, w); });
     for (int i = 0; i < 2; ++i)
-        if (rotation[i].shown && !offline)
+        if (rotation[i].shown && !offline
+#ifdef TRANSPORT_CORE
+            && defaultCards()
+#endif
+        )
             card(layer, i, *rotation[i].shown);
     drawControls(layer);
 }
@@ -577,6 +602,9 @@ void reset() {
     nextFrame = nextChange = cursor = 0;
     std::fill_n(choices, 4, nullptr);
     selected = {};
+#ifdef TRANSPORT_CORE
+    watchChanged=true; restoreSector(); tracked={}; lastFocus=-1; watchMarker=-1; promptStation=-1;
+#endif
     rotation[0] = {};
     rotation[1] = {};
     invalidate();
@@ -653,7 +681,7 @@ void pinchView(bool closer, int x) {
         }
         view(target);
         auto &next=activeCorridor();
-        for (const auto &s:next.stations) if(!strcmp(s.id,stop.id)) { panTo(s.x); break; }
+        for (const auto &s:next.stations) if(!strcmp(s.id,stop.id)) { panTo(stationCentre(next,s)-next.viewportWidth()/2); break; }
         return;
     }
     if (!closer) {
@@ -703,7 +731,24 @@ void setFriendlyLabels(bool enabled) {
     transport::saveView("rail_labels", labelMode);
     invalidate();
 }
+void setLiveAreas(const char *areas) {freshAreas=" "+std::string(areas)+" ";}
+const char *watchedStation() {
+    if(tracked.index>=0) return "";
+    if(watchStations.empty()) return regionalLayout() ? "@legacy" : "HML";
+    return watching<0 ? "" : watchStations[watching].id;
+}
+void watchOptions(lv_obj_t *parent) {
+    if(watchStations.empty()) return;
+    std::string options="Off";
+    for(const auto &s:watchStations) options+="\n"+std::string(s.name);
+    transport::watchPicker(parent,options,watching+1,[](lv_event_t *e){
+        selectWatch(int(lv_dropdown_get_selected((lv_obj_t*)lv_event_get_target(e)))-1);
+    });
+}
 void restoreView(View fallback){
+    const char *id=cJSON_GetStringValue(transport::field(transport::tables,"watchDefault"));
+    char saved[16]={};
+    watching=watchNumber(transport::loadView(watchKey().c_str(),saved) ? saved : id);
     transport::loadView("rail_labels", labelMode);
     SchematicSettings s{static_cast<unsigned>(fallback),0};
     transport::loadView(viewKey().c_str(),s);restoringView=true;
@@ -757,12 +802,18 @@ void seek(uint32_t position, uint32_t wall) {
         changed = true;
     }
     if (changed) {
-        follow();
+#ifdef TRANSPORT_CORE
+        watchChanged=true;
+#endif
+        trackSelection(selected);
         invalidate();
     }
     refreshCards(wall);
 }
 void refreshCards(uint32_t wall) {
+#ifdef TRANSPORT_CORE
+    updateWatch(wall);
+#endif
     for (int i = 0; i < 2; ++i) {
         auto &r = rotation[i];
         const auto *first = choices[2 * i], *second = choices[2 * i + 1];
@@ -827,9 +878,12 @@ void card(unsigned i, const Field *fields, uint32_t identity) {
 }
 void finishFrame(unsigned status, uint32_t observed, uint32_t now) {
     if (frameDirty || feedStatus != status || observedAt / 60 != observed / 60 || offline) {
-        follow();
+        trackSelection(selected);
         invalidate();
     }
+    #ifdef TRANSPORT_CORE
+    watchChanged=true;
+    #endif
     feedStatus = status;
     observedAt = observed;
     offline = false;
@@ -838,6 +892,9 @@ void finishFrame(unsigned status, uint32_t observed, uint32_t now) {
 void stale() {
     if (!offline) {
         offline = true;
+#ifdef TRANSPORT_CORE
+        watchChanged=true;
+#endif
         invalidate();
     }
 }

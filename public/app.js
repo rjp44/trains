@@ -1,3 +1,5 @@
+import {railMonitor} from './rail-monitor.mjs';
+import {watchAction, stationPrompt} from './panel/watch.mjs';
 import {panelSettings, settingGroup, trainLabelControl} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
 import {readSetting, saveSetting} from './panel/appearance.mjs';
@@ -351,14 +353,14 @@ function stationLabel(plot, { station, column, labelX, width, size, label }, y) 
     class: 'station-target',
     role: 'button',
     tabindex: 0,
-    'aria-label': 'Zoom to ' + name,
+    'aria-label': name + ' station options',
     'data-station': station.code,
   });
   shape(button, 'title', {}, name + ' · ' + station.code);
-  const visit = () => {
+  const visit = () => stationPrompt(name,()=>monitor.watch(station.code),()=>{
     centre = column;
     setZoom(station.code === 'WFJ' ? 2 : 1.5);
-  };
+  });
   button.addEventListener('click', visit);
   button.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -673,6 +675,9 @@ function trainDetails(board) {
     ),
   );
   box.append(title);
+  if (current && isTrainCode(t.head)) box.append(watchAction('Follow',()=> {
+    monitor.follow(t.berth,t.head,service); closeTrain();
+  }));
   const hhmm = (s) =>
     s && /^\d{4}H?$/.test(s) ? s.slice(0, 2) + ':' + s.slice(2, 4) + (s.endsWith('H') ? '½' : '') : '—';
   if (service) {
@@ -798,7 +803,7 @@ function scheduleFor(service, canRequest) {
 }
 
 function updateHemelCards(board) {
-  const groups = fresh('R1') ? hemelTrains(hemel, board, fresh) : { fast: [], slow: [] };
+  const groups = monitor.hemel && fresh('R1') ? hemelTrains(hemel, board, fresh) : { fast: [], slow: [] };
   for (const [line, trains] of Object.entries(groups)) {
     const card = $('hemel-' + line);
     const train = rotateCard[line](cardCandidates(trains, scheduleFor), performance.now());
@@ -839,10 +844,11 @@ function render(force = false) {
   if (markerPressed && !force) return;
   const board = state(),
     stale = mode === 'live' && !['Live', 'Partial'].includes(board.status);
+  monitor.update(board);
   updateHemelCards(board);
   if (mode === 'live') {
     const incoming = arrivals.take(fresh('R1'), Date.now(), head => scheduleFor(board.services['R1/' + head], false)?.booked);
-    for (const d of incoming) settings.sound.play(d.toUpperCase() === 'D', d === d.toLowerCase());
+    if (monitor.hemel) for (const d of incoming) settings.sound.play(d.toUpperCase() === 'D', d === d.toLowerCase());
   }
   const label = mode === 'preview' ? (navigator.onLine ? 'Replay · awaiting live' : 'Offline replay')
     : mode === 'replay' ? 'Recorded replay' : board.status;
@@ -1002,6 +1008,7 @@ async function switchMode(next, fitRecording = false) {
     }
   }
   if (requestId !== modeRequest) return;
+  monitor.reset();
   mode = next;
   inspectedSignal = false;
   if (popout.open) popout.close();
@@ -1106,13 +1113,23 @@ window.addEventListener('popstate', updateDisplay);
 let initialTheme = 'dark';
 try { if (localStorage.getItem('traintimes.diagramTheme') === 'light') initialTheme = 'light'; } catch {}
 const labels = trainLabelControl(() => render(true));
+function followColumn(column) {
+  if (!Number.isFinite(column)) return;
+  const before=centre;
+  centre=column; clampCentre();
+  if(centre!==before) lastDraw='';
+}
+const monitor=railMonitor({id:'hemel',layout,host:drawing,ids:[...byBerth.keys()],defaultStation:'HML',
+  live:()=>mode==='live',fresh,play:{mode:()=>settings.sound.mode,sound:(down,stop)=>settings.sound.play(down,stop)},
+  focus:key=>{if(zoom<1){zoom=1;lastDraw="";} followColumn(byBerth.get(key)?.x);},stationFocus:s=>followColumn(diagram.columns.get(s?.id)),
+  draw:()=>render(true)});
 const settings = panelSettings({
   id:'hemel', name:'Hemel rail monitor', toolbar:document.querySelector('.diagram-tools'),
   status:document.querySelector('.source-status'), map:drawing, initialTheme,
   applyTheme(value) { panel.dataset.theme = value; },
   appControls:[
     settingGroup('Diagram view', $('sector'), $('home'), $('junction')),
-    labels.group,
+    monitor.group, labels.group,
     settingGroup('Zoom', $('zoomout'), $('zoomin')),
     settingGroup('Data source', $('live'), $('replay')), $('replaybar'),
     settingGroup('Layout', viewLink), $('areas'), $('notice'), $('branch-status')

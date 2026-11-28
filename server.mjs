@@ -36,13 +36,15 @@ const feed = createLiveFeed(layout, {
 });
 
 const files = {
-  ...Object.fromEntries(['settings.mjs','settings.css','appearance.mjs','downloads.mjs','gestures.mjs','horn.mjs'].map(name =>
+  ...Object.fromEntries(['settings.mjs','settings.css','appearance.mjs','downloads.mjs','gestures.mjs','horn.mjs','watch.mjs'].map(name =>
     ['/panel/'+name, ['../web/panel/'+name, name.endsWith('.css') ? 'text/css' : 'text/javascript']])),
   '/': ['index.html', 'text/html'],
   '/app.js': ['app.js', 'text/javascript'],
   '/hemel.mjs': ['hemel.mjs', 'text/javascript'],
   '/train-label.mjs': ['train-label.mjs', 'text/javascript'],
   '/station-codes.mjs': ['station-codes.mjs', 'text/javascript'],
+  '/rail-monitor.mjs': ['rail-monitor.mjs','text/javascript'],
+  '/rail-watch.mjs': ['rail-watch.mjs', 'text/javascript'],
   '/rail-symbols.mjs': ['rail-symbols.mjs', 'text/javascript'],
   '/style.css': ['style.css', 'text/css'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],

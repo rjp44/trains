@@ -1,6 +1,7 @@
 #include "wifi.h"
 #include "source.h"
 #include "feed_vm.h"
+#include "panel.h"
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -180,8 +181,11 @@ void run(FeedVM &vm, Socket &s, unsigned session) {
             drawn = now;
             lvgl_port_lock(0);
             bool full = wifi_needs_snapshot();
+            std::string watched=hemel::watchedStation();
             lvgl_port_unlock();
+            vm.call("watchStation",&watched);
             const auto packet = vm.call("packet", nullptr, full);
+            const auto areas=vm.call("freshAreas");
             const auto status = vm.call("status");
             if (status != previousStatus) {
                 ESP_LOGI("feed", "Panel feed %s", status.c_str());
@@ -193,7 +197,12 @@ void run(FeedVM &vm, Socket &s, unsigned session) {
             }
             if (!packet.empty()) {
                 lvgl_port_lock(0);
-                if (full || !wifi_needs_snapshot()) wifi_packet(packet.data(), packet.size(), esp_timer_get_time()/1000);
+                if (full || !wifi_needs_snapshot()) {
+                    hemel::setLiveAreas(areas.c_str());
+                    // A touch can change the watch while the worker builds this frame.
+                    const auto end=watched==hemel::watchedStation() ? packet.size() : packet.rfind("\nA1\t");
+                    wifi_packet(packet.data(),end==std::string::npos || end==packet.size()?packet.size():end+1,esp_timer_get_time()/1000);
+                }
                 lvgl_port_unlock();
             }
             auto url = vm.call("request");

@@ -1,6 +1,7 @@
 #include "map.h"
 #include "settings_display.h"
 #include "settings_ui.h"
+#include "watch-picker.h"
 #include "toolbar.h"
 #include "esp_timer.h"
 #include "preferences.h"
@@ -85,6 +86,7 @@ enum Action {
     BusStop,
     Close,
     CardBody,
+    RailStation, WatchStation, FollowTrain, StopFollowing,
     ToggleStops
 };
 struct Rect {
@@ -278,6 +280,7 @@ void geography() {
         if (x < 0 || x >= W || y < top + 3 || y >= bottom - 3)
             continue;
         rect(x - 2, y - 2, 5, 5, ink);
+        if(p.route>=8) hits.push_back({{x-10,y-10,21,21},RailStation,int(&p-places.data())});
         std::string name = p.name;
         int width = textWidth(name);
         for (int sign : {1, -1}) {
@@ -290,6 +293,7 @@ void geography() {
             text(b.x + 1, b.y, name, paper);
             text(b.x, b.y + 1, name, paper);
             text(b.x, b.y, name, ink);
+            if(p.route>=8) hits.push_back({b,RailStation,int(&p-places.data())});
             occupied.push_back(b);
             break;
         }
@@ -314,6 +318,7 @@ void geography() {
 const Snapshot &active() { return manualReplay || !haveLive ? recorded : latest; }
 bool replaying() { return manualReplay || !haveLive; }
 int64_t clockMs(uint32_t now) { return active().time + (replaying() ? 0 : uint32_t(now - updated)); }
+#include "rail_watch.inc"
 double railAngle(const Vehicle &v) {
     const Place *from = nullptr, *to = nullptr;
     for (const auto &p : places)
@@ -395,7 +400,7 @@ void vehicles(uint32_t now) {
         const auto &v = data.vehicles[i];
         int k = v.route;
         int64_t age = clockMs(now) - v.time;
-        if (!visible(k) || age >= 600000 || age < -60000)
+        if ((!visible(k) && v.id!=followedId) || age >= 600000 || age < -60000)
             continue;
         count++;
         int x = sx(v.x), y = sy(v.y);
@@ -568,6 +573,7 @@ std::vector<DetailRow> details;
 std::string title, subtitle, badge, section;
 uint16_t accent;
 void closeDetail() {
+    promptPlace=-1;
     selection.clear();
     stopSelection = -1;
     expanded = -1;
@@ -774,6 +780,7 @@ void drawOptions(lv_obj_t *parent) {
             closeDetail();
         }
         if (id <= Step) {
+            if(id!=Step && manualReplay!=(id==Replay)) followedId.clear();
             if (id == Step) {
                 replayFrame = (replayFrame + 1) % std::size(recordings);
                 loadFrame();
@@ -794,6 +801,15 @@ void drawOptions(lv_obj_t *parent) {
         dirty = true;
         panel::refreshAppPage();
     };
+    std::string stations="Off";
+    unsigned selected=0;
+    for(int n:stationPlaces){stations+="\n"+std::string(places[n].name); }
+    auto it=std::find(stationPlaces.begin(),stationPlaces.end(),watchedPlace);
+    if(it!=stationPlaces.end()) selected=1+(it-stationPlaces.begin());
+    transport::watchPicker(parent,stations,selected,[](lv_event_t *e){
+        unsigned i=lv_dropdown_get_selected((lv_obj_t*)lv_event_get_target(e));
+        selectStation(i?stationPlaces[i-1]:-1);
+    });
     auto row = panel::optionRow(parent, "Data source");
     panel::option(row, "Live", choose, Live, !manualReplay);
     panel::option(row, "Replay", choose, Replay, manualReplay);
@@ -813,6 +829,7 @@ void drawOptions(lv_obj_t *parent) {
         panel::option(row, routes[i].name, choose, Route + i, mask & (1u << i));
 }
 void init() {
+    loadStation();
     cx=mapW*.5f; cy=mapH*.5f;
     zoom=transport::defaultZoom;
     MapSettings s{};
@@ -828,10 +845,11 @@ void init() {
 void receive(Snapshot data, uint32_t now) {
     if (haveLive && data.time < latest.time)
         return;
-    if (haveLive && !liveFailed && !manualReplay) {
+    if(!haveLive && !manualReplay) followedId.clear();
+    if (haveLive && !liveFailed && !manualReplay && followedId.empty() && watchedPlace>=0) {
         const int64_t wall = int64_t(time(nullptr)) * 1000;
         for (const auto &v : data.vehicles)
-            if (visible(v.route) && newRailReport(latest, data, v, wall))
+            if (v.lastCode==places[watchedPlace].code && newRailReport(latest, data, v, wall))
                 panel::trainHorn(v.direction > 0, v.lastStop == 1);
     }
     locateBuses(data);
@@ -876,10 +894,12 @@ void render(uint16_t *target, uint32_t now) {
         auto p = groups[stopSelection].point;
         anchor = {sx(p.x / 8.f) - 4, sy(p.y / 8.f) - 4, 8, 8};
     }
+    auto train=watchTrain(now);
     baseMap();
     network();
     geography();
     vehicles(now);
+    watchCard(train,now);
     if (!selection.empty() || stopSelection >= 0) {
         if (!anchor.w || !overlaps(anchor, {0, top, W, bottom-top})) closeDetail();
         else {
@@ -908,6 +928,9 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
         }
         return;
     }
+    if(promptPlace>=0 && !std::any_of(hits.begin(),hits.end(),[&](auto &hit){
+        return (hit.action==WatchStation || hit.action==Close) && inside(hit.box,x,y);
+    })) {promptPlace=-1;dirty=true;return;}
     if (opened && !inside(cardBox, x, y)) {
         closeDetail(); replayAt = now; dirty = true; return;
     }
@@ -918,6 +941,10 @@ void gesture(int px, int py, int pdx, int pdy, uint32_t now) {
         int i = it->index;
         Action a = it->action;
         switch (a) {
+        case WatchStation: selectStation(i); break;
+        case RailStation: closeDetail(); promptPlace=i; break;
+        case FollowTrain: zoom=std::max(2.f,zoom); followedId=selection; closeDetail(); replayAt=now;break;
+        case StopFollowing: returnToStation();break;
         case Marker:
             if (unsigned(i) < active().vehicles.size()) { closeDetail(); selection = active().vehicles[i].id; }
             break;

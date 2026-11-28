@@ -112,7 +112,8 @@ void card() {
     constexpr float caption = .81f, heading = 1.20f;
     int badgeW = cardWidth(badge, .9f) + 16;
     int w = std::max(badgeW + cardWidth(subtitle, caption) + 59, cardWidth(title, heading) + 2 * pad);
-    w = std::max(w, cardWidth(section, caption) + 2 * pad);
+    const bool canFollow=section=="Rail position estimate";
+    w = std::max(w, cardWidth(section, caption) + 2 * pad + (canFollow?75:0));
     for (const auto &r : details) {
         int fixed = 2 * pad + (r.time.empty() ? 0 : timeCol) + (r.hidden ? toggleCol : 0);
         w = std::max(w, fixed + std::max(cardWidth(r.name, 1), cardWidth(r.note, caption)));
@@ -193,6 +194,10 @@ void card() {
     cardRect(x + pad, listY - 1, w - 2 * pad, 1, blend(surface, edge, 165));
     hits.push_back({cardBox, CardBody, -1});
     hits.push_back({{x + w - 40, y + 2, 38, 38}, Close, -1});
+    if(canFollow) {
+        cardLabel(x+w-pad-54,ty+3,"Follow",ink,.87f,true);
+        hits.push_back({{x+w-pad-70,ty-6,75,34},FollowTrain,-1});
+    }
     clipTop = listY;
     clipBottom = endY;
     maxScroll = std::max(0, contentH - (endY - listY));

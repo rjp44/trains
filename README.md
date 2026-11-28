@@ -17,6 +17,8 @@ The public site opens the app directory. Choose **Open in browser** for any rout
 
 In **Settings → App → Train labels**, choose **Headcode** or **Operator + destination**. The latter pairs a coloured operator tag with the three-letter destination code. Tap a train for its headcode and service details. An unidentified service or destination keeps its headcode. The three signalling maps share this preference on the same tablet or browser.
 
+Tap a station and choose **Watch**, or use **Settings → App → Watch station**. Each map remembers its own station. Reported trains bring up a service card. **Sound** can play a horn for every arrival or only confirmed stopping trains. **Follow** in a train’s detail card keeps the service in view and pauses station cards and horns. **Stop following** or the train leaving the map restores the station watch.
+
 In **Display**, choose **Sunrise / sunset** to follow the active map’s UK location or adjust map brightness. **Sound** controls train horns, **Wi-Fi** reports browser connectivity, and **About** credits the data sources. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
 
 On a commissioned tablet, connect to Wi-Fi in **Settings**, then open **Downloads** (**Apps** on core 0.9.5 and earlier). From core 0.9.6, opening Downloads checks both firmware and app versions in the background. **Directory** shows each app's download size and flash space, and the header shows remaining capacity. **Installed** lets you open or delete apps offline. **About** shows versions, data credits and a QR link to this repository. [Hardware, commissioning and OTA](firmware/core/README.md)

@@ -24,6 +24,12 @@ ViewTables viewTables[3];
 Scene sectorScene{}, hemelScene{}, watfordScene{};
 Recording sectorRecording{}, hemelRecording{}, watfordRecording{};
 template <class T> List<T> span(const std::vector<T> &v) { return {v.data(), v.size()}; }
+struct WatchStation { const char *id, *name; std::vector<unsigned> markers; };
+std::vector<WatchStation> watchStations;
+int stationCentre(const ViewTables &v,const StationOffset &s) {
+    for(const auto &label:v.labels) if(label.preset && !strcmp(label.text,s.name)) return label.x;
+    return s.x;
+}
 bool loadHemel() {
     using namespace transport;
     if (!value(field(tables, "layoutFingerprint"), layoutFingerprint) ||
@@ -45,6 +51,17 @@ bool loadHemel() {
                    tag.background <= 0xffffff && tag.foreground <= 0xffffff;
         }, 128)) return false;
     markerCount = markerInfo.size();
+    watchStations.clear();
+    if(field(tables,"watchStations") && !load("watchStations",watchStations,[](auto row,WatchStation &s){
+        auto list=cJSON_GetArrayItem(row,2);
+        if(!value(cJSON_GetArrayItem(row,0),s.id) || !value(cJSON_GetArrayItem(row,1),s.name) || !cJSON_IsArray(list)) return false;
+        for(auto item=list->child;item;item=item->next) {
+            unsigned i;
+            if(!value(item,i) || i>=markerInfo.size()) return false;
+            s.markers.push_back(i);
+        }
+        return true;
+    },250)) return false;
     for (int i = 0; i < 2; i++) {
         auto a = field(tables, i ? "lightPalette" : "darkPalette");
         if (cJSON_GetArraySize(a) != 20)
@@ -104,6 +121,7 @@ bool loadHemel() {
                     }, 1024)) return false;
             }
         }
+        if(!v.stations.empty()) v.pan=std::clamp(stationCentre(v,v.stations.front())-v.viewportWidth()/2,0,v.width-v.viewportWidth());
         auto space = field(tables, key("Space").c_str());
         auto rect = [&](int j, CardSpace &a) {
             return row(cJSON_GetArrayItem(space, j), a.centre, a.left, a.top, a.bottom) && a.left >= 0 &&

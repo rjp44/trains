@@ -13,7 +13,7 @@ template <class T> bool loadView(const char *space, T &value) {
     nvs_close(h);
     if (result != ESP_OK || n != sizeof tmp)
         return false;
-    value = tmp;
+    std::memcpy(&value, &tmp, sizeof(T));
     return true;
 }
 template <class T> void saveView(const char *space, const T &value) {
