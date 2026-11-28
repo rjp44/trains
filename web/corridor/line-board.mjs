@@ -2,7 +2,7 @@ import { corridorSpacing } from './rail-spacing.mjs';
 import { stationLabelSpans, placeStationLabels } from './station-labels.mjs';
 import { stationApproaches } from './station-approaches.mjs';
 import { isTrainCode } from './hemel.mjs';
-import { drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainHeight, trainWidth } from './rail-symbols.mjs';
+import { drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainWidth } from './rail-symbols.mjs';
 import { readSetting, saveSetting } from './panel/appearance.mjs';
 
 // Draw the same package geometry and physical marker indices as the CrowPanel.
@@ -72,7 +72,7 @@ export function lineBoard(container, layout, tables, id, open) {
     points = [],
     locations = [],
     legendRows = [],
-    stationPaint = [],
+    stationPaint = [], paintedWatch,
     legendWidth = 0,
     scale = 1,
     requestedZoom = Number.isFinite(savedZoom) ? Math.max(0, Math.min(maxZoom, savedZoom)) : 1,
@@ -165,25 +165,12 @@ export function lineBoard(container, layout, tables, id, open) {
     }
     sizeDiagram();
   }
-  function reflow() {
-    const jumpId = selectedJump && Math.abs(container.scrollLeft - selectedJump.left) < 1
-      ? selectedJump.id : null;
-    const centre = axis?.unproject((container.scrollLeft + mapHalfWidth()) / scale);
+  function buildSpacing() {
     const boxes = labels.filter(l => !l.kind).map(l => l.bounds);
-    const clearanceSpans = spans.slice();
-    for (const p of points) {
-      if (!p.occupied) continue;
-      const w = p.badgeWidth / 2 + 2, h = p.badgeHeight / 2 + 2;
-      boxes.push({ x: p.x, left: -w, right: w, top: p.y - h, bottom: p.y + h });
-      if (p.track) {
-        clearanceSpans.push([p.track.x1, p.x, w + 3], [p.x, p.track.x2, w + 3]);
-      }
-    }
     for (const p of points) {
       if (!p.signal) continue;
       const radius = 9, top = p.sy - radius, bottom = p.sy + radius;
-      // In a station fan a signal and a badge on the next road can share an
-      // exact column. Give the lamp a clear spot beside that column.
+      // Reserve a fixed position for the lamp beside infrastructure at its column.
       let dx = 0;
       for (const box of boxes) {
         if (box.x === p.x && box.top < bottom && box.bottom > top &&
@@ -193,11 +180,7 @@ export function lineBoard(container, layout, tables, id, open) {
       p.signalOffset = dx;
       boxes.push({ x: p.x, left: dx - radius, right: dx + radius, top, bottom });
     }
-    spacing = corridorSpacing(width, boxes, clearanceSpans);
-    place();
-    if (jumpId) jump(jumpId);
-    else if (centre !== undefined) container.scrollLeft = axis.project(centre) * scale - mapHalfWidth();
-    sync();
+    spacing = corridorSpacing(width, boxes, spans);
   }
   function saveZoom() {
     clearTimeout(saveTimer);
@@ -212,7 +195,7 @@ export function lineBoard(container, layout, tables, id, open) {
     const railLeft = rect.left + legendWidth * scale;
     const offset = (x) => x == null ? (container.clientWidth - legendWidth * scale) / 2 : Math.max(0, x - railLeft);
     const world = axis.unproject((container.scrollLeft + offset(from)) / scale);
-    // Zero remembers the tightest layout, including when live occupancy changes.
+    // Zero remembers the tightest layout, even after choosing another named view.
     const request = next <= spacing.minZoom ? 0 : Math.min(maxZoom, next);
     if (requestedZoom !== request) {
       requestedZoom = request;
@@ -285,6 +268,10 @@ export function lineBoard(container, layout, tables, id, open) {
     select.replaceChildren(...locations.map(([id, name]) => new Option(name, id)));
     drawing.replaceChildren();
     stationPaint = [];
+    paintedWatch = null;
+    const infrastructure = svg(drawing, 'g', {'data-layer':'infrastructure'});
+    const signals = svg(drawing, 'g', {'data-layer':'signals'});
+    const trains = svg(drawing, 'g', {'data-layer':'trains'});
     const bands = new Map();
     rails = [];
     labels = [];
@@ -292,9 +279,9 @@ export function lineBoard(container, layout, tables, id, open) {
     // occupy staggered label rows above the track.
     spans = locations.slice(1).map((s, i) => [locations[i][3], s[3], 44]);
     for (const [x1, y1, x2, y2, ink, weight, station] of tables[key + 'Lines']) {
-      const line = svg(drawing, 'line', { x1, y1, x2, y2, stroke: inks[ink], 'stroke-width': weight });
+      const line = svg(infrastructure, 'line', { x1, y1, x2, y2, stroke: inks[ink], 'stroke-width': weight });
       const platform = ink === 4 && y1 === y2 && x2 > x1;
-      rails.push({ line, x1, x2, y1, y2, ink, platform });
+      rails.push({ line, x1, x2, platform });
       if (platform) {
         const half = (x2 - x1) / 2;
         spans.push([x1, x1 + half, half], [x1 + half, x2, half]);
@@ -311,7 +298,7 @@ export function lineBoard(container, layout, tables, id, open) {
       }
     }
     for (const [x, y, width, size, ink, background, text, preset] of tables[key + 'Labels']) {
-      const label = svg(drawing, 'g', { class: 'map-label' });
+      const label = svg(infrastructure, 'g', { class: 'map-label' });
       let box;
       if (background >= 0)
         box = svg(label, 'rect', {
@@ -365,23 +352,22 @@ export function lineBoard(container, layout, tables, id, open) {
     const badgeWidth = tables[key + 'Space'][2], unit = badgeWidth / trainWidth;
     points = tables[key + 'Markers'].map(([index, x, y, sy, r]) => {
       const { t, b } = byId.get(tables.markerInfo[index][0]);
-      const berth = svg(drawing, 'g', { 'data-berth': b.id, class: 'berth' });
+      const berth = svg(trains, 'g', { 'data-berth': b.id, class: 'berth' });
       action(berth, 'Train', () => open(t, b));
       const symbol = svg(berth, 'g', { transform: 'scale(' + unit + ')' });
       const head = drawHeadcode(svg, symbol, 0, 0, trainWidth);
       let signal, lamp;
       if (r) {
-        signal = svg(drawing, 'g', { class: 'signal', 'data-signal': b.signal });
+        signal = svg(signals, 'g', { class: 'signal', 'data-signal': b.signal });
         action(signal, b.signal, () => open(t, b, true));
         svg(signal, 'circle', { r: 9, fill: 'transparent' });
         lamp = drawSignalLamp(svg, signal, 0, 0, r < 4);
         lamp.setAttribute('r', r);
       }
-      const track = rails.find(l => l.ink === 3 && l.y1 === y && l.y2 === y && l.x1 <= x && l.x2 >= x);
-      return { index, x, y, sy, berth, head, signal, lamp, track, badgeWidth,
-        badgeHeight: trainHeight * unit, occupied: false };
+      return { index, x, y, sy, berth, head, signal, lamp };
     });
-    reflow();
+    buildSpacing();
+    place();
     resize();
     const target = locations.find((s) => s[0] === anchor);
     if (target || offsets[next] == null) jump((target || locations[0])[0]);
@@ -389,6 +375,13 @@ export function lineBoard(container, layout, tables, id, open) {
     sync();
   }
   function update(rows, friendly, watchedStation, followedBerth) {
+    if (paintedWatch !== watchedStation) {
+      paintedWatch = watchedStation;
+      paintStationWatch(watchedStation);
+    }
+    paintTrains(rows, friendly, followedBerth);
+  }
+  function paintStationWatch(watchedStation) {
     for (const { id, band, ink, box, label } of stationPaint) {
       const watched = id === watchedStation;
       if (band) band.setAttribute('stroke', inks[watched ? 9 : ink]);
@@ -402,22 +395,13 @@ export function lineBoard(container, layout, tables, id, open) {
           'Berth register for ' + label.textContent + (watched ? ' · Watching' : ''),
         );
     }
-    let occupancyChanged = false;
+  }
+  function paintTrains(rows, friendly, followedBerth) {
     for (const point of points) {
       const { index, berth, head, signal, lamp } = point;
       const [aspect, kind, text] = rows[index];
       const visible = !!kind && isTrainCode(text);
-      if (visible !== point.occupied) {
-        point.occupied = visible;
-        occupancyChanged = true;
-      }
-      berth.style.display = visible ? '' : 'none';
       const followed = visible && followedBerth === berth.dataset.berth;
-      berth.classList.toggle('followed', followed);
-      if (visible) berth.setAttribute('aria-label', 'Train ' + text + (followed ? ' · Following' : ''));
-      showHeadcode(head, visible ? text : '', visible ? kind : 0, visible && friendly ? rows[index][6] : '');
-      berth.classList.toggle('head', visible);
-      berth.classList.toggle('stale', kind === 3);
       if (signal) {
         const value = ['unknown', 'on', 'off'][aspect];
         if (signal.dataset.value !== value) {
@@ -425,8 +409,17 @@ export function lineBoard(container, layout, tables, id, open) {
           showSignalAspect(lamp, value);
         }
       }
+      const tag = visible && friendly ? rows[index][6] : '';
+      const paintKey = visible ? [text, kind, tag, followed].join('/') : '';
+      if (paintKey === point.paintKey) continue;
+      point.paintKey = paintKey;
+      berth.style.display = visible ? '' : 'none';
+      berth.classList.toggle('followed', followed);
+      if (visible) berth.setAttribute('aria-label', 'Train ' + text + (followed ? ' · Following' : ''));
+      showHeadcode(head, visible ? text : '', visible ? kind : 0, tag);
+      berth.classList.toggle('head', visible);
+      berth.classList.toggle('stale', kind === 3);
     }
-    if (occupancyChanged) reflow();
   }
   return {
     jump,

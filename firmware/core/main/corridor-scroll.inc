@@ -11,10 +11,15 @@ size_t stationAt(int x) {
     auto after=std::upper_bound(stops.begin(),stops.end(),x,[](int x,const StationOffset &s){return x<s.x;});
     return after==stops.begin()?0:size_t(after-stops.begin()-1);
 }
-void panTo(int x) {
+void panTo(int x, bool reproject=false) {
+    static const ViewTables *projectedView=nullptr;
     auto &v=activeCorridor();
-    int left=v.pan=std::clamp(x,0,std::max(0,v.drawnWidth()-v.viewportWidth()));
+    int left=std::clamp(x,0,std::max(0,v.drawnWidth()-v.viewportWidth()));
+    if(!reproject && projectedView==&v && left==v.pan) return;
+    projectedView=&v;
+    v.pan=left;
     auto pixel=[&](int x){return v.projected(x)+v.legendWidth-left;};
+    backgroundDirty=true;
     visibleRails.clear();visibleNames.clear();visibleBerths.clear();
     for(auto line:v.lines){
         int a=pixel(line.x1),b=pixel(line.x2);
@@ -33,7 +38,7 @@ void panTo(int x) {
     }
     for(size_t i=0;i<v.labels.size();++i){
         auto l=v.labels[i];int at=pixel(l.x);
-        if(v.camera) l.y=v.labelY[i];
+        if(v.camera) {l.y=v.labelY[i]; at+=v.labelShift[i];}
         if(l.y<0 || at+l.width/2<v.legendWidth || at-l.width/2>panelWidth) continue;
         l.x=at;visibleNames.push_back(l);
     }
@@ -48,14 +53,14 @@ void panTo(int x) {
     s.lines=span(visibleRails);s.labels=span(visibleNames);s.markers=span(visibleBerths);
     invalidate();
 }
-void updateCamera(bool entered=false) {
-    auto &v=activeCorridor();if(!v.camera) return;
+void enterCamera() {
+    auto &v=activeCorridor();
     bool initial=!v.axis.ready();
     float anchor=initial?v.focus:v.axis.unproject(v.pan+v.viewportWidth()/2);
-    if(rebuildCamera(v) || entered){
-        v.axis.setZoom(v.request);
-        arrangeHeaders(v);panTo(std::lround(v.axis.project(anchor))-v.viewportWidth()/2);
-    }
+    if(initial) buildCamera(v);
+    v.axis.setZoom(v.request);
+    arrangeHeaders(v);
+    panTo(std::lround(v.axis.project(anchor))-v.viewportWidth()/2,true);
 }
 void drawCorridorLegend(lv_layer_t *layer) {
     const auto &v=activeCorridor();

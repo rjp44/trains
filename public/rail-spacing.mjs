@@ -118,7 +118,7 @@ export function placeRailSigns(signs, routeWidth) {
 }
 
 // At the sector overview every track must fit. First exhaust empty space at
-// normal symbol size. If traffic still needs more room, shrink uniformly,
+// normal symbol size. If the infrastructure still needs more room, shrink uniformly,
 // including the frozen legend, until the complete drawing fits the panel.
 export function railViewProjection(spacing, request, viewport, margin, fitSector) {
   const tight = spacing.normalWidth * spacing.minZoom;

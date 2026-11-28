@@ -19,8 +19,7 @@ struct ViewTables {
     int focus=0;
     rail::Axis axis;
     std::vector<Header> headers;
-    std::vector<uint8_t> occupied;
-    std::vector<int> signalOffsets, labelY;
+    std::vector<int> signalOffsets, labelY, labelShift;
     int drawnWidth() const { return axis.ready()?axis.width():width; }
     int projected(int x) const { return std::lround(axis.project(x)); }
     int width = panelWidth, pan = 0, legendWidth = 0;
@@ -177,7 +176,7 @@ bool loadHemel() {
                 Header item{};
                 if(!row(h,item.label,item.primary,item.secondary,item.optional) || item.label>=v.labels.size() ||
                     seen[item.label] || item.primary<0 || item.primary>=600 || item.secondary<0 || item.secondary>=600 ||
-                    (item.optional!=0 && item.optional!=1)) return false;
+                    (item.optional<0 || item.optional>2)) return false;
                 seen[item.label]=true;
                 v.headers.push_back(item);
             }

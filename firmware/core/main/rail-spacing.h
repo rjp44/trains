@@ -8,7 +8,7 @@ struct Gap { int from, to, width; };
 struct Footprint { int x, left, right, top, bottom; };
 
 // The ordered constraints use the same two passes as the browser. Solve only
-// when occupation changes. A pinch then interpolates the cached coordinates.
+// the infrastructure once per view. A pinch interpolates the cached coordinates.
 class Axis {
     std::vector<int> source;
     std::vector<float> tight, spare, placed;

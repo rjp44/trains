@@ -42,7 +42,7 @@ test('optional branch signs yield both rows to required signs and return as trac
   assert.ok(expanded.every(s => s.row === 0));
 });
 
-test('sector fits both endpoints even when trains need more space than the viewport', () => {
+test('sector fits both endpoints even when fixed symbols need more space than the viewport', () => {
   const plan = corridorSpacing(1200, [badge(100, 20, 100), badge(200, 20, 100), badge(300, 20, 100)], []);
   const margin = 107;
   for (const viewport of [350, 600, 840, 1140]) {

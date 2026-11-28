@@ -16,7 +16,7 @@ import {
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
-import { stationArrivals, isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, describeCard, stationName, operators } from '/hemel.mjs';
+import { optionalHemelStops, stationArrivals, isTrainCode, hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, readHemelSchedule, describeCard, stationName, operators } from '/hemel.mjs';
 
 const $ = (id) => document.getElementById(id);
 const panel = document.querySelector('.panel');
@@ -109,13 +109,7 @@ const stationBands = {
   dc: dc.stations.filter(s => !layout.stations.some(main => main.code === s.code)),
   abbey: abbey.stations.filter(s => !layout.stations.some(main => main.code === s.code)),
 };
-// Branch stops omitted by the original compact Hemel diagram. Shared WCML
-// stations and the Abbey terminus keep their labels at every spacing.
-const optionalStops = new Set([
-  'KNT', 'HDL', 'HTE', 'CPK', 'WFH', // Watford DC
-  'WFN', 'GSN', 'BWO', 'HWW', 'PKT', // Abbey line
-]);
-const optionalSign = s => optionalStops.has(s.code) && s.code !== monitor.watchedStation;
+const optionalSign = s => optionalHemelStops.has(s.code) && s.code !== monitor.configuredStation;
 function node(tag, text, cls) {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -260,7 +254,7 @@ function fresh(area) {
 function visible(m) {
   return (!m.track.branch || showBranches()) && inView(position(m.x));
 }
-function activate(parent, xy, key, label, shownHead) {
+function activate(parent, xy, key, label) {
   const el = shape(parent, 'g', {
     transform: xy,
     class: 'marker',
@@ -270,11 +264,11 @@ function activate(parent, xy, key, label, shownHead) {
     'data-key': key,
   });
   shape(el, 'title', {}, label);
-  el.addEventListener('click', () => select(key, el, shownHead));
+  el.addEventListener('click', () => select(key, el));
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      select(key, el, shownHead);
+      select(key, el);
     }
   });
   return el;
@@ -283,56 +277,63 @@ function markerLocation(m) {
   if (m.kind === 'station-report') return m.location;
   return (m.platform ? 'Platform ' + m.platform + ' · ' : '') + 'berth ' + m.id.slice(2);
 }
-function drawSignal(plot, m, x, y, values, small) {
-  const indication = !fresh(m.id.slice(0, 2)) ? null : values[m.bit];
-  const sy = y - (small ? 15 : 17);
-  if (m.bit) {
-    const signal = activate(
-      plot,
-      'translate(' + x + ' ' + sy + ')',
-      m.bit,
-      m.signal + ' · ' + m.track.name + ' · ' + (indication || 'unknown'),
-    );
-    const selected = selection === m.bit || selection === m.id;
-    shape(signal, 'rect', {
-      x: small ? -4 : -13,
-      y: small ? -7 : -13,
-      width: small ? 8 : 26,
-      height: small ? 14 : 26,
-      fill: 'transparent',
-      class: 'ring',
-      rx: 4,
-      stroke: selected && !small ? 'var(--selection)' : 'transparent',
-      'stroke-dasharray': selected ? '3 2' : '',
-    });
-    showSignalAspect(drawSignalLamp(shape, signal, 0, 0, small), indication);
-    if (!small && !m.platform && (zoom >= 3 || selected))
-      shape(
-        plot,
-        'text',
-        { x, y: y + 22, 'text-anchor': 'middle', fill: 'var(--board-muted)', 'font-size': 10 },
-        m.signal,
-      );
-  }
+// The camera owns the infrastructure. Feed updates own only these two SVG layers.
+let signalLayer, trainLayer, markerPositions, world, initialOrigin, cameraKey, paintedWatch;
+function addMarker(m, x, y, small) {
+  const point = { m, x, y, small };
+  markerPositions.push(point);
+  if (!m.bit) return;
+  const signal = activate(signalLayer, `translate(${x} ${y - (small ? 15 : 17)})`, m.bit, m.signal);
+  point.signal = signal;
+  point.ring = shape(signal, 'rect', {
+    x: small ? -4 : -13, y: small ? -7 : -13, width: small ? 8 : 26,
+    height: small ? 14 : 26, fill: 'transparent', class: 'ring', rx: 4,
+  });
+  point.lamp = drawSignalLamp(shape, signal, 0, 0, small);
+  if (!small && !m.platform) point.caption = textAt(signalLayer, x, y + 22, m.signal, {'font-size':10, fill:'var(--board-muted)'});
 }
-function drawTrains(trainsLayer, occupied, values, services) {
-  for (const { m, x, y } of occupied) {
-    const stale = !fresh(m.id.slice(0, 2)),
-      head = values[m.id];
-    const train = activate(
-      trainsLayer,
-      'translate(' + x + ' ' + y + ')',
-      m.id,
-      head + ' · ' + m.track.name + ' · ' + markerLocation(m),
-      head,
-    );
-    if (monitor.followedBerth === m.id) {
-      train.classList.add('followed');
-      train.setAttribute('aria-label', train.getAttribute('aria-label') + ' · Following');
+function paintTraffic(values, services) {
+  for (const point of markerPositions) {
+    const {m, x, y, signal, small} = point;
+    const area = m.id.slice(0, 2), current = fresh(area);
+    if (signal) {
+      const aspect = current && values[m.bit] || 'unknown';
+      const selected = selection === m.bit || selection === m.id;
+      if (point.aspect !== aspect) {
+        point.aspect = aspect;
+        const title = m.signal + ' · ' + m.track.name + ' · ' + aspect;
+        signal.setAttribute('aria-label', title);
+        signal.firstChild.textContent = title;
+        showSignalAspect(point.lamp, aspect);
+      }
+      if (point.selected !== selected) {
+        point.selected = selected;
+        point.ring.setAttribute('stroke', selected && !small ? 'var(--selection)' : 'transparent');
+        point.ring.setAttribute('stroke-dasharray', selected ? '3 2' : '');
+        if (point.caption) point.caption.style.display = zoom >= 3 || selected ? '' : 'none';
+      }
     }
+    const head = values[m.id];
+    if (!isTrainCode(head)) {
+      if (point.train) { point.train.remove(); point.train = null; }
+      continue;
+    }
+    const friendly = labels.friendly ? trainLabel(services[area + '/' + head]) : '';
+    const followed = monitor.followedBerth === m.id;
     const selected = trainSelection?.head === head && trainSelection?.berth === m.id;
-    const friendly = labels.friendly ? trainLabel(services[m.id.slice(0, 2) + '/' + head]) : '';
-    showHeadcode(drawHeadcode(shape, train, 0, 0, trainWidth, selected), head, stale ? 3 : 1, friendly);
+    const key = [head, friendly, current, followed, selected].join('/');
+    if (point.train && point.trainKey === key) continue;
+    if (!point.train) {
+      point.train = activate(trainLayer, `translate(${x} ${y})`, m.id, '');
+      point.symbol = drawHeadcode(shape, point.train, 0, 0, trainWidth);
+    }
+    point.trainKey = key;
+    const title = head + ' · ' + m.track.name + ' · ' + markerLocation(m) + (followed ? ' · Following' : '');
+    point.train.setAttribute('aria-label', title);
+    point.train.firstChild.textContent = title;
+    point.train.classList.toggle('followed', followed);
+    point.symbol.badge.setAttribute('stroke', selected ? 'var(--marker-focus)' : 'none');
+    showHeadcode(point.symbol, head, current ? 1 : 3, friendly);
   }
 }
 
@@ -360,10 +361,8 @@ function measureLabel(label, size) {
 }
 const signWidth = s => measureLabel(s.name, 15) + 8;
 const orderedStations = stops => [...stops].sort((a, b) => diagram.columns.get(a.code) - diagram.columns.get(b.code));
-function updateSpacing(values) {
-  const occupied = markers.filter(m => (!m.track.branch || showBranches()) && isTrainCode(values[m.id]));
-  const key = [activeView, monitor.watchedStation, ...occupied.map(m => m.id)].join('/');
-  if (key !== spacingKey) {
+function updateSpacing() {
+  if (activeView !== spacingKey) {
     const boxes = [], spans = [];
     // Use the rendered symbol footprints to find the minimum width at normal size.
     // Strip coordinates identify features on the same track.
@@ -374,12 +373,8 @@ function updateSpacing(values) {
       const halfHeight = small ? 7 : 8;
       boxes.push({x: routeX(m.x), left: -r, right: r, top: y - halfHeight, bottom: y + halfHeight});
     }
-    for (const m of occupied) {
-      const y = strip(m) * 44;
-      boxes.push({x: routeX(m.x), left: -trainWidth/2, right: trainWidth/2, top: y - 11, bottom: y + 11});
-    }
     for (const band of showBranches() ? Object.values(stationBands) : [layout.stations]) {
-      const sorted = orderedStations(band.filter(s => !optionalSign(s)));
+      const sorted = orderedStations(band.filter(s => !optionalHemelStops.has(s.code)));
       for (const [i, s] of sorted.entries()) {
         const x = routeX(diagram.columns.get(s.code)), r = signWidth(s) / 2;
         spans.push([0, x, r + 4], [x, routeWidth, r + 4]);
@@ -398,9 +393,8 @@ function updateSpacing(values) {
       }
     }
     spacing = corridorSpacing(routeWidth, boxes, spans);
-    spacingKey = key;
+    spacingKey = activeView;
   }
-  projectView();
 }
 function stationSigns(stations) {
   const signs = stations.map(station => {
@@ -408,30 +402,24 @@ function stationSigns(stations) {
     return {station, column, x: axis.project(routeX(column)), width: signWidth(station),
       label: station.name, size: 15, optional: optionalSign(station)};
   });
-  if (symbolScale < 1) {
-    // Preserve legible lettering when a narrow overview needs smaller track
-    // symbols. The original Hemel fitter can shift or shorten required signs
-    // within their station columns. Extra stops never force abbreviations.
-    const width = axis.width * symbolScale;
-    const compact = signs.map(s => ({...s, x: s.x * symbolScale}));
-    let placed = placeRailSigns(compact, width);
-    if (!placed) {
-      const required = compact.filter(s => !s.optional);
-      const fitted = fitStationNames(required, 4, width - 4, measureLabel);
-      if (fitted.length === required.length) {
-        placed = placeRailSigns([...fitted.map(s => ({...s, x: s.labelX})), ...compact.filter(s => s.optional)], width);
-      }
-    }
-    if (placed) return placed.map(s => ({...s, x: s.x / symbolScale, width: s.width / symbolScale, size: s.size / symbolScale}));
+  const width = axis.width * symbolScale;
+  const compact = signs.map(s => ({...s, x: s.x * symbolScale}));
+  let placed = placeRailSigns(compact, width);
+  if (!placed) {
+    // A watched branch stop may be close to an endpoint. Move its plate
+    // within its column using the same fitter as the narrow overview.
+    const required = compact.filter(s => !s.optional);
+    const fitted = fitStationNames(required, 4, width - 4, measureLabel);
+    placed = placeRailSigns([...fitted.map(s => ({...s, x: s.labelX})), ...compact.filter(s => s.optional)], width);
+    if (!placed) placed = fitted.map(s => ({...s, x: s.labelX}));
   }
-  return placeRailSigns(signs, axis.width);
+  return placed.map(s => ({...s, x: s.x / symbolScale, width: s.width / symbolScale, size: s.size / symbolScale}));
 }
 function stationLabels(plot, signs, y, rowOffset) {
   const bounds = { top: Infinity, bottom: 0 };
   const rowStep = Math.sign(rowOffset) * Math.max(Math.abs(rowOffset), ...signs.map(s => s.size + 7 / symbolScale));
   for (const sign of signs) {
-    const labelX = railMidpoint() + sign.x - axis.project(routeX(centre));
-    if (labelX + sign.width / 2 < railLeft || labelX - sign.width / 2 > mapWidth - 4) continue;
+    const labelX = railMidpoint() + sign.x - initialOrigin;
     const baseline = y + sign.row * rowStep;
     stationLabel(plot, {...sign, labelX}, baseline);
     bounds.top = Math.min(bounds.top, baseline - sign.size);
@@ -476,7 +464,35 @@ function berthLane(marker) {
   if (marker.track.id === 'harrow') return 2.5;
   return marker.track.id === 'down' ? 2 : 3;
 }
-function drawJunction(plot, values, occupied, upperLabelBottom) {
+let branchLabels, upperBranchBound, branchWatch;
+function paintBranchLabels() {
+  branchLabels.replaceChildren();
+  for (const branch of [dc, abbey]) {
+    const isDC = branch === dc;
+    const signs = stationSigns(stationBands[branch.id]);
+    const labelled = new Set(signs.map(sign => sign.station.code));
+    for (const s of branch.stations) {
+      if (s.code === 'WFJ' || (optionalSign(s) && !labelled.has(s.code))) continue;
+      const x = railMidpoint() + axis.project(routeX(diagram.columns.get(s.code))) - initialOrigin;
+      for (const lane of isDC ? [2, 3] : [10]) {
+        const y = laneY(lane) + 5;
+        shape(branchLabels, 'line', {
+          x1: x - 5,
+          x2: x + 5,
+          y1: y,
+          y2: y,
+          stroke: routeColours[branch.id],
+          'stroke-width': 3,
+        });
+      }
+    }
+    const top = isDC
+      ? Math.max(65 * verticalScale, upperBranchBound + 21 / symbolScale)
+      : Math.max(laneY(10) + 41, 536 * verticalScale);
+    stationLabels(branchLabels, signs, top, Math.max(22, (isDC ? 89 : 556) * verticalScale - top));
+  }
+}
+function drawJunction(plot, upperLabelBottom) {
   const wx = position(junction);
   for (const path of layout.junction.paths) {
     const d = junctionPathSlots(diagram, path)
@@ -493,7 +509,7 @@ function drawJunction(plot, values, occupied, upperLabelBottom) {
     shape(el, 'title', {}, path.name);
   }
   const approachX = position(junction - 1.7);
-  if (zoom >= 1.35 && inView(wx) && approachX - 125 >= railLeft) {
+  if (zoom >= 1.35) {
     const x = approachX;
     textAt(plot, x, laneY(4.15), 'DC connection to P6', {
       'text-anchor': 'end',
@@ -506,36 +522,9 @@ function drawJunction(plot, values, occupied, upperLabelBottom) {
       fill: routeColours.abbey,
     });
   }
-  const labels = shape(plot, 'g', {});
-  for (const branch of [dc, abbey]) {
-    const isDC = branch === dc;
-    const signs = stationSigns(stationBands[branch.id]);
-    const labelled = new Set(signs.map(sign => sign.station.code));
-    for (const s of branch.stations) {
-      if (s.code === 'WFJ' || (optionalSign(s) && !labelled.has(s.code))) continue;
-      const x = position(diagram.columns.get(s.code));
-      if (!inView(x)) continue;
-      for (const lane of isDC ? [2, 3] : [10]) {
-        const y = laneY(lane) + 5;
-        shape(plot, 'line', {
-          x1: x - 5,
-          x2: x + 5,
-          y1: y,
-          y2: y,
-          stroke: routeColours[branch.id],
-          'stroke-width': 3,
-        });
-      }
-    }
-    const top = isDC
-      ? Math.max(65 * verticalScale, upperLabelBottom + 21 / symbolScale)
-      : Math.max(laneY(10) + 41, 536 * verticalScale);
-    stationLabels(labels, signs, top, Math.max(22, (isDC ? 89 : 556) * verticalScale - top));
-  }
   for (const [p, lane] of laneByPlatform) {
     const y = laneY(lane),
       colour = lane < 5 ? routeColours.dc : lane === 10 ? routeColours.abbey : 'var(--platform)';
-    if (!inView(wx)) continue;
     const group = shape(plot, 'g', { 'data-platform': p, 'aria-label': 'Watford Junction platform ' + p });
     shape(group, 'title', {}, 'Watford Junction · platform ' + p);
     shape(group, 'line', {
@@ -568,13 +557,15 @@ function drawJunction(plot, values, occupied, upperLabelBottom) {
     'stroke-width': 2,
   });
   for (const marker of markers) {
-    if (!marker.track.branch || !visible(marker)) continue;
+    if (!marker.track.branch) continue;
     const x = position(marker.x),
       y = laneY(berthLane(marker));
-    drawSignal(plot, marker, x, y, values, activeView !== 'watford');
-    if (isTrainCode(values[marker.id])) occupied.push({ m: marker, x, y });
+    addMarker(marker, x, y, activeView !== 'watford');
   }
-  plot.append(labels);
+  upperBranchBound = upperLabelBottom;
+  branchLabels = shape(plot, 'g', {});
+  paintBranchLabels();
+  branchWatch = monitor.configuredStation;
 }
 function drawMap(values, services) {
   const svg = $('map'),
@@ -596,26 +587,67 @@ function drawMap(values, services) {
       height = h / scale;
     }
   }
-  updateSpacing(values);
-  height /= symbolScale;
-  verticalScale = height / naturalHeight;
+  const key = [activeView, requestedZoom, viewportWidth, height].join('/');
+  if (key !== cameraKey) {
+    updateSpacing();
+    projectView();
+    height /= symbolScale;
+    verticalScale = height / naturalHeight;
+    buildDiagram(svg, merged, height);
+    cameraKey = key;
+  }
+  clampCentre();
+  const shift = initialOrigin - axis.project(routeX(centre));
+  if (world.shift !== shift) {
+    world.setAttribute('transform', `translate(${shift} 0)`);
+    world.shift = shift;
+  }
+  if (merged && branchWatch !== monitor.configuredStation) {
+    branchWatch = monitor.configuredStation;
+    paintBranchLabels();
+  }
+  if (paintedWatch !== monitor.watchedStation) {
+    paintedWatch = monitor.watchedStation;
+    for (const band of world.querySelectorAll('[data-station-band]'))
+      band.setAttribute('stroke', band.dataset.stationBand === paintedWatch ? 'var(--hemel-band)' : band.dataset.ink);
+    for (const target of world.querySelectorAll('.station-target')) {
+      const watching = target.dataset.station === paintedWatch;
+      target.classList.toggle('watched', watching);
+      target.setAttribute('aria-label', target.querySelector('title').textContent.split(' · ')[0] + ' station options' + (watching ? ' · Watching' : ''));
+    }
+  }
+  paintTraffic(values, services);
+  if (focusKey && document.activeElement === document.body)
+    svg.querySelector('[data-key="' + CSS.escape(focusKey) + '"]')?.focus({preventScroll:true});
+  else if (focusStation && document.activeElement === document.body)
+    (svg.querySelector('[data-station="' + CSS.escape(focusStation) + '"]') ?? svg).focus({preventScroll:true});
+  const fanEnd = position(junction + 1);
+  cardSpace.left = merged && fanEnd < mapWidth - 160 ? Math.max(8, fanEnd + 10) : 8;
+  cardSpace.centre = inView(position(home)) ? position(home) : mapWidth / 2;
+  cardSpace.slow.top = (merged ? laneY(8) : 295 * verticalScale) + (zoom >= 3 || inspectedSignal ? 26 : 15);
+  queueCardPosition();
+  updateBranchStatus(merged);
+}
+function buildDiagram(svg, merged, height) {
+  initialOrigin = axis.project(routeX(centre));
+  paintedWatch = null;
+  markerPositions = [];
   svg.setAttribute('viewBox', '0 0 ' + mapWidth + ' ' + height);
   svg.replaceChildren();
   const defs = shape(svg, 'defs', {});
   shape(shape(defs, 'clipPath', { id: 'plot' }), 'rect', { x: 103, y: 0, width: mapWidth - 104, height });
-  const plot = shape(svg, 'g', { 'clip-path': 'url(#plot)' });
-  const stations = layout.stations.filter(s => inView(position(diagram.columns.get(s.code))));
-  if (merged) {
-    for (const branch of [dc, abbey]) {
-      const stop = branch.stations.find(s => s.code === monitor.watchedStation);
-      if (!stop || layout.stations.some(s => s.code === stop.code)) continue;
+  world = shape(shape(svg, 'g', { 'clip-path': 'url(#plot)' }), 'g', {});
+  const plot = shape(world, 'g', {'data-layer':'infrastructure'});
+  signalLayer = shape(world, 'g', {'data-layer':'signals'});
+  trainLayer = shape(world, 'g', {'data-layer':'trains'});
+  const stations = layout.stations;
+  if (merged) for (const branch of [dc, abbey]) {
+    for (const stop of stationBands[branch.id]) {
       const x = position(diagram.columns.get(stop.code)), isDC = branch === dc;
-      if (inView(x)) shape(plot, 'line', {x1:x, x2:x, y1:laneY(isDC ? 2 : 10)-20,
-        y2:laneY(isDC ? 3 : 10)+20, stroke:'var(--hemel-band)', 'stroke-width':24,
-        'data-station-band':stop.code, 'pointer-events':'none'});
+      shape(plot, 'line', {x1:x, x2:x, y1:laneY(isDC ? 2 : 10)-20, y2:laneY(isDC ? 3 : 10)+20,
+        stroke:'none', 'data-ink':'none', 'stroke-width':24, 'data-station-band':stop.code, 'pointer-events':'none'});
     }
   }
-  const occupied = [];
   const mainY = (i) => (merged ? laneY(5 + i) : (97 + i * 66) * verticalScale);
   for (const s of stations) {
     const column = diagram.columns.get(s.code);
@@ -629,6 +661,7 @@ function drawMap(values, services) {
       fill: 'none',
       stroke: s.code === monitor.watchedStation ? 'var(--hemel-band)'
         : atJunction ? 'var(--junction-band)' : 'var(--station-band)',
+      'data-ink': atJunction ? 'var(--junction-band)' : 'var(--station-band)',
       'data-station-band': s.code,
       'stroke-width': atJunction ? position(junction + 0.75) - position(junction - 0.75) : 24,
       'stroke-linejoin': 'round',
@@ -649,22 +682,16 @@ function drawMap(values, services) {
   const wcmlNames = stationLabels(plot, merged ? stationSigns(stationBands.main) : [], signalHitTop - 9, -22);
   // These are empty regions in the existing track geometry, in SVG units.
   // Cards use the right of the junction fan whenever that part of the map is visible.
-  const fanEnd = position(junction + 1);
-  const besideFan = merged && fanEnd < mapWidth - 160;
   cardSpace = {
-    centre: inView(position(home)) ? position(home) : mapWidth / 2,
-    left: besideFan ? Math.max(8, fanEnd + 10) : 8,
     fast: {
       top: upperNames.bottom + 4,
       bottom: Math.min(wcmlNames.top, signalHitTop) - 5,
       aboveNames: merged ? null : upperNames.top,
     },
     slow: {
-      top: mainY(3) + (zoom >= 3 || inspectedSignal ? 26 : 15),
       bottom: merged ? laneY(10) - 13 : height - 5,
     },
   };
-  queueCardPosition();
   for (const [i, t] of layout.tracks.entries()) {
     const y = mainY(i);
     textAt(svg, 17, y - 1, t.name, { 'text-anchor': 'start' });
@@ -696,14 +723,12 @@ function drawMap(values, services) {
     }
     for (const berth of t.berths) {
       const m = byBerth.get(berth.id);
-      if (!visible(m)) continue;
       const x = position(m.x);
-      drawSignal(plot, m, x, y, values, activeView === 'sector');
-      if (isTrainCode(values[m.id])) occupied.push({ m, x, y });
+      addMarker(m, x, y, activeView === 'sector');
     }
   }
   if (merged) {
-    drawJunction(plot, values, occupied, upperNames.bottom);
+    drawJunction(plot, upperNames.bottom);
     for (const [lane, label, colour] of [
       [1, 'Watford DC', routeColours.dc],
       [2, '→ Down DC', routeColours.dc],
@@ -714,7 +739,6 @@ function drawMap(values, services) {
       textAt(svg, 17, laneY(lane) + 3, label, { 'text-anchor': 'start', fill: colour, 'font-size': 12 });
     }
   }
-  drawTrains(shape(plot, 'g', {}), occupied, values, services);
   const y = height - 13;
   textAt(svg, 109, y, '← LONDON EUSTON', {
     'text-anchor': 'start',
@@ -726,20 +750,7 @@ function drawMap(values, services) {
     'font-size': 10,
     fill: 'var(--board-muted)',
   });
-  if (focusKey)
-    svg.querySelector('[data-key="' + CSS.escape(focusKey) + '"]')?.focus({ preventScroll: true });
-  else if (focusStation)
-    (svg.querySelector('[data-station="' + CSS.escape(focusStation) + '"]') ?? svg).focus({preventScroll: true});
-  const reports = (mode === 'live' ? live : replayBoard).abbey;
-  $('branch-status').hidden = !merged;
-  $('branch-status').textContent =
-    mode !== 'live' && !reports
-      ? 'Abbey station reports were not captured in this recording.'
-      : !fresh('AB')
-        ? 'Abbey station reports unavailable · showing any last-known reports.'
-        : reports?.reports.length
-          ? 'Abbey markers show the last reported station call.'
-          : 'Awaiting the next Abbey station report.';
+
   for (const button of document.querySelectorAll('[data-zoom]')) {
     if (button.dataset.zoom === 'reset') button.textContent = Math.round(zoom * 100) + '%';
     if (button.dataset.zoom === 'out') button.disabled = zoom <= minZoom;
@@ -754,6 +765,19 @@ function drawMap(values, services) {
   $('extent').textContent = activeView === 'hemel' ? 'Hemel Hempstead · Four running lines'
     : activeView === 'watford' ? 'Watford Junction · DC, main-line and Abbey platforms'
     : '15 rail miles each way · WCML, Watford DC & Abbey line';
+}
+function updateBranchStatus(merged) {
+  const reports = (mode === 'live' ? live : replayBoard).abbey;
+  $('branch-status').hidden = !merged;
+  $('branch-status').textContent =
+    mode !== 'live' && !reports
+      ? 'Abbey station reports were not captured in this recording.'
+      : !fresh('AB')
+        ? 'Abbey station reports unavailable · showing any last-known reports.'
+        : reports?.reports.length
+          ? 'Abbey markers show the last reported station call.'
+          : 'Awaiting the next Abbey station report.';
+
 }
 
 function trainDetails(board) {

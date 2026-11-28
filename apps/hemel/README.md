@@ -10,7 +10,7 @@ On first use the map opens at **15-mile sector**, showing the WCML, Watford DC a
 
 Open the gear at the top left for **App** settings. Choose a named view, select **Live** or play a recording. On the tablet, pinch to adjust the spacing around your fingers, or use the track-spacing buttons in settings. Drag to pan. Station names move onto a second row only where they would overlap. Each named view remembers its own spacing.
 
-In the browser, **15-mile sector** fits the whole route in the panel. All main-line stations and St Albans Abbey keep their names. Other DC and Abbey stops appear wherever their names fit, and a watched stop keeps its label. Train and signal details remain available at every spacing.
+On the web and tablet, **15-mile sector** fits the whole route in the panel. All main-line stations and St Albans Abbey keep their names. Other DC and Abbey stops appear wherever their names fit, and a watched stop keeps its label. Train labels and signal aspects update over the diagram without moving its tracks, platforms or station signs. Train and signal details remain available at every spacing.
 
 Pinch or use Ctrl/⌘ + mouse wheel to zoom around a point on the track. The toolbar’s **−** and **+** buttons adjust spacing around the centre. Click the percentage to reset to 100%. With the diagram focused, **−**, **+** and **0** also work. The browser remembers the view, spacing and position. Choose **Show dashboard** for the train list and recent changes. Bookmarks can specify the [Hemel close-up](https://transport.pickering.org/apps/hemel/?view=hemel) or [Watford Junction](https://transport.pickering.org/apps/hemel/?view=watford).
 

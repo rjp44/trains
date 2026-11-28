@@ -1,7 +1,7 @@
 {
   "id": "hemel",
   "name": "Hemel rail monitor",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "adapter": "hemel-corridor/1",
   "viewport": [
     1024,
@@ -18,5 +18,5 @@
   ],
   "credits": "Live signalling from Signal Maps and Network Rail. Train schedules from Open Rail and Abbey station reports from Railinfo. Berth mappings adapted from EASMData (GPLv3). Contains public sector information licensed under the Open Government Licence v3.0. Station codes from the Office of Rail and Road.",
   "description": "Live West Coast Main Line signals, train movements and booked calls around Hemel Hempstead and Watford.",
-  "minCore": 9016
+  "minCore": 9017
 }

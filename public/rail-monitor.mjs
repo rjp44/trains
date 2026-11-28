@@ -63,9 +63,10 @@ export function railMonitor({
     if (!board) return;
     if (target) {
       const match = locateFollow(target, ids, board);
+      const moved = matchedBerth !== match?.berth;
       matchedBerth = match?.berth;
       if (match) {
-        focus(match.berth);
+        if (moved) focus(match.berth);
         lastInfo = trainSummary(match, 'Following' + (fresh(match.berth.slice(0, 2)) ? '' : ' · last known'));
       } else if (fresh(target.berth.slice(0, 2))) {
         reset();
@@ -107,6 +108,7 @@ export function railMonitor({
     get followedBerth() {
       return matchedBerth;
     },
+    get configuredStation() { return panel.station?.id; },
     get watchedStation() {
       return target ? undefined : panel.station?.id;
     },

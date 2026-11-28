@@ -3,15 +3,7 @@
 bool platformBar(const Segment &s) {
     return s.ink==Platform && s.y1==s.y2 && s.x2>s.x1;
 }
-bool rebuildCamera(ViewTables &v) {
-    if (!v.camera) return false;
-    bool changed=!v.axis.ready();
-    v.occupied.resize(v.markers.size());
-    for(size_t i=0;i<v.markers.size();++i){
-        bool occupied=passengerMapDescription(current[v.markers[i].id]);
-        if(v.occupied[i]!=occupied){v.occupied[i]=occupied; changed=true;}
-    }
-    if(!changed) return false;
+void buildCamera(ViewTables &v) {
     std::vector<rail::Gap> gaps;
     std::vector<rail::Footprint> boxes;
     auto gap=[&](int x,int z,int distance){if(x<z) gaps.push_back({x,z,distance});};
@@ -32,20 +24,10 @@ bool rebuildCamera(ViewTables &v) {
             boxes.push_back({l.x,-r,r,l.y-h,l.y+h+1});
         }
     }
-    const int bw=(scene->badgeWidth+1)/2+2, bh=(scene->badgeHeight+1)/2+2;
-    for(size_t i=0;i<v.markers.size();++i) if(v.occupied[i]){
-        const auto &m=v.markers[i];
-        boxes.push_back({m.x,-bw,bw,m.y-bh,m.y+bh+1});
-        for(const auto &s:v.lines)
-            if((s.ink==Rail || s.ink==DC || s.ink==Abbey || s.ink==Bay) &&
-                s.y1==m.y && s.y2==m.y && s.x1<=m.x && m.x<=s.x2){
-                gap(s.x1,m.x,bw+3);gap(m.x,s.x2,bw+3);break;
-            }
-    }
     v.signalOffsets.assign(v.markers.size(),0);
     for(size_t i=0;i<v.markers.size();++i){
         const auto &m=v.markers[i];if(!m.radius) continue;
-        int r=std::max(9,int(m.radius)+3), top=m.signalY-r,bottom=m.signalY+r+1,dx=0;
+        int r=regionalLayout()?std::max(9,int(m.radius)+3):int(m.radius)+1, top=m.signalY-r,bottom=m.signalY+r+1,dx=0;
         for(const auto &b:boxes) if(b.x==m.x && b.top<bottom && top<b.bottom &&
             b.left<dx+r+4 && b.right>dx-r-4) dx=std::max(dx,b.right+r+4);
         v.signalOffsets[i]=dx; boxes.push_back({m.x,dx-r,dx+r,top,bottom});
@@ -71,30 +53,38 @@ bool rebuildCamera(ViewTables &v) {
             else gap(l.x,b.x,r-b.left+5);
         }
     }
-    for(size_t i=1;i<v.stations.size();++i)
+    if(regionalLayout()) for(size_t i=1;i<v.stations.size();++i)
         gap(stationCentre(v,v.stations[i-1]),stationCentre(v,v.stations[i]),44);
     v.axis.build(v.width,v.viewportWidth(),boxes,gaps);
-    v.axis.setZoom(v.request);
-    return true;
+
 }
 
 // Colour the intervals in left-edge order. Only a sign that cannot use its
-// first row moves. Optional names succeed or disappear for the entire view.
+// first row moves. The two optional header kinds have distinct admission rules.
 void arrangeHeaders(ViewTables &v) {
     struct Sign { const Header *header; int left,right; };
     std::vector<Sign> signs;
     v.labelY.resize(v.labels.size());
+    v.labelShift.assign(v.labels.size(),0);
     for(size_t i=0;i<v.labels.size();++i) v.labelY[i]=v.labels[i].y;
     for(const auto &h:v.headers){
         auto &l=v.labels[h.label];int x=v.projected(l.x);
+        if(h.optional==2 && l.station==watching+1 && l.width+8<=v.drawnWidth()) {
+            int at=std::clamp(x,4+l.width/2,v.drawnWidth()-4-(l.width+1)/2);
+            v.labelShift[h.label]=at-x;
+            x=at;
+        }
         signs.push_back({&h,x-l.width/2,x+(l.width+1)/2});
     }
     std::sort(signs.begin(),signs.end(),[](auto &a,auto &b){return a.left<b.left;});
-    auto pack=[&](bool optional){
+    // Regional junction captions form one group. Hemel branch stops are
+    // admitted individually wherever either row has space after essential signs.
+    auto place=[&](const std::vector<bool> &keep, std::vector<int> &out) {
         std::vector<std::pair<int,int>> ends;
-        for(auto &s:signs){
-            auto &h=*s.header;auto &y=v.labelY[h.label];y=-1;
-            if(h.optional && !optional) continue;
+        for (size_t i=0;i<signs.size();++i) {
+            auto &s=signs[i]; auto &h=*s.header;
+            int &y=out[h.label]; y=-1;
+            if (!keep[i]) continue;
             if(s.left<3 || s.right>v.drawnWidth()-3) return false;
             for(int row:{h.primary,h.secondary}){
                 auto it=std::find_if(ends.begin(),ends.end(),[&](auto p){return p.first==row;});
@@ -107,5 +97,18 @@ void arrangeHeaders(ViewTables &v) {
         }
         return true;
     };
-    if(!pack(true)) pack(false);
+    std::vector<bool> admitted(signs.size(),true);
+    auto rows=v.labelY;
+    if(place(admitted,rows)){v.labelY.swap(rows);return;}
+    for(size_t i=0;i<signs.size();++i) admitted[i]=!signs[i].header->optional;
+    if(!place(admitted,v.labelY)) return;
+    for(bool preferred : {true,false}) {
+        for(size_t i=0;i<signs.size();++i) {
+            auto &h=*signs[i].header;
+            if(h.optional!=2 || (v.labels[h.label].station==watching+1)!=preferred) continue;
+            admitted[i]=true;
+            if(place(admitted,rows)) v.labelY.swap(rows);
+            else admitted[i]=false;
+        }
+    }
 }

@@ -1,3 +1,4 @@
+import { optionalHemelStops } from '../public/hemel.mjs';
 import { watchStations } from '../public/rail-watch.mjs';
 import { operatorTags } from '../public/train-label.mjs';
 import { stationApproaches, approachRoadName } from './station-approaches.mjs';
@@ -185,7 +186,7 @@ function compileView(view) {
       const primary = Math.max(14, Math.min(582, round(y - 7)));
       const second = Math.max(14, Math.min(584, primary + (rowStep > 0 ? 26 : -26)));
       for (const { station, x: at } of items) {
-        headers.push([labels.length, primary, second, 0]);
+        headers.push([labels.length, primary, second, optionalHemelStops.has(station.code) ? 2 : 0]);
         label(at * scale, primary, station.name, 16, station.name.length * 12 + 16, 'board-text', 'board',
           { HML: 1, WFJ: 2 }[station.code] ?? 3 + stationNumber.get(station.code));
       }
@@ -333,7 +334,7 @@ function compileView(view) {
     tables[view + 'Width'] = worldWidth;
     tables[view + 'LegendWidth'] = round(103 * scale);
     tables[view + 'Legend'] = legend;
-    tables[view + 'Camera'] = { headers, focus: round(x(centre)), zoom: { sector: 0.48, hemel: 1.4, watford: 2.75 }[view] };
+    tables[view + 'Camera'] = { headers, focus: round(x(centre)), zoom: { sector: 0, hemel: 1.4, watford: 2.75 }[view] };
   }
   array('Segment', view + 'Lines', segments);
   array('Label', view + 'Labels', labels);

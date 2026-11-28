@@ -1,5 +1,5 @@
 // The watched station is an app preference. The followed service lasts only for this feed session.
-int watching=-1, watchMarker=-1;
+int watchMarker=-1;
 bool expandedSector=false;
 int lastFocus=-1;
 bool watchChanged=true;
@@ -16,6 +16,7 @@ int watchNumber(const char *id) {
 bool defaultCards() { return tracked.index<0 && (!strcmp(watchedStation(),"HML") || watchStations.empty()); }
 void restoreSector() {
     if (!expandedSector) return;
+    backgroundDirty=true;
     sectorScene.lines=span(viewTables[0].lines); sectorScene.labels=span(viewTables[0].labels);
     sectorScene.markers=span(viewTables[0].markers); expandedSector=false;
 }
@@ -43,7 +44,9 @@ void selectWatch(int n) {
     char saved[16]={};
     if(n>=0) std::snprintf(saved,sizeof(saved),"%s",watchStations[n].id);
     transport::saveView(watchKey().c_str(),saved);
-    centreStation(); invalidate();
+    centreStation();
+    if(n<0 && continuousZoom()) {auto &v=activeCorridor(); arrangeHeaders(v); panTo(v.pan,true);}
+    invalidate();
 }
 void watchLocation(const char *name) {
     for(size_t i=0;i<watchStations.size();++i) if(!strcmp(watchStations[i].name,name)){selectWatch(i);return;}
@@ -83,7 +86,7 @@ void focusTrain(int index) {
     }
     for(auto m:v.markers){m.x=project(m.x);if(m.x>=margin && m.x<panelWidth)visibleBerths.push_back(m);}
     sectorScene.lines=span(visibleRails);sectorScene.labels=span(visibleNames);sectorScene.markers=span(visibleBerths);
-    expandedSector=true;invalidate();
+    backgroundDirty=true;expandedSector=true;invalidate();
 }
 void stopFollow() {watchChanged=true; tracked={};watchMarker=-1;centreStation();invalidate();}
 void updateWatch(uint32_t wall) {

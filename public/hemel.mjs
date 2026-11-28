@@ -1,3 +1,4 @@
+export const optionalHemelStops = new Set(['KNT', 'HDL', 'HTE', 'CPK', 'WFH', 'WFN', 'GSN', 'BWO', 'HWW', 'PKT']);
 export const isTrainCode = (head) => /^(?:[0-9][A-Z][0-9]{2}|[A-Z][0-9]{3})$/.test(head);
 
 export function hemelBerths(layout) {

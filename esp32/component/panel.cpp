@@ -13,6 +13,7 @@
 #include "watch-picker.h"
 #include "core.h"
 #include "esp_rom_crc.h"
+#include "esp_heap_caps.h"
 #include "view-settings.h"
 #include "toolbar.h"
 #endif
@@ -122,6 +123,11 @@ const Recording *recording = &sectorRecording;
 const uint32_t *palette = darkPalette;
 lv_obj_t *screen = nullptr;
 #ifdef TRANSPORT_CORE
+// One RGB565 viewport in PSRAM. Traffic frames composite over this bitmap.
+lv_obj_t *backgroundCanvas = nullptr;
+bool backgroundDirty = true;
+int backgroundWatch = -1;
+int watching = -1;
 std::vector<Reading> current;
 std::vector<std::string> liveText;
 #else
@@ -305,6 +311,11 @@ template <class Visitor> void visitBadges(Visitor visit) {
     // Marker coordinates are ordered by lane, then column. Size a badge to
     // the closest occupied neighbour on either side, preserving its centre.
 #ifdef TRANSPORT_CORE
+    if (continuousZoom()) {
+        for (const auto &m : scene->markers)
+            if (passengerMapDescription(current[m.id])) visit(m, scene->badgeWidth);
+        return;
+    }
     const bool overview = regionalLayout() && !directionalLayout();
 #endif
     for (const Marker &m : scene->markers) {
@@ -582,8 +593,7 @@ void touch(lv_event_t *e) {
             tap(p.x, p.y);
     }
 }
-void draw(lv_event_t *event) {
-    auto *layer = lv_event_get_layer(event);
+void drawInfrastructure(lv_layer_t *layer) {
 #ifdef TRANSPORT_CORE
     const int activeStation = tracked.index < 0 ? watching + 1 : 0;
 #endif
@@ -616,6 +626,32 @@ void draw(lv_event_t *event) {
                 3);
         text(layer, x, l.y, l.width, l.text, l.font, l.ink);
     }
+}
+#ifdef TRANSPORT_CORE
+void prepareBackground(lv_event_t *) {
+    int watch = tracked.index < 0 ? watching + 1 : 0;
+    if (!backgroundCanvas || (!backgroundDirty && backgroundWatch == watch)) return;
+    lv_canvas_fill_bg(backgroundCanvas, colour(Board), LV_OPA_COVER);
+    lv_layer_t layer;
+    lv_canvas_init_layer(backgroundCanvas, &layer);
+    drawInfrastructure(&layer);
+    lv_canvas_finish_layer(backgroundCanvas, &layer);
+    backgroundDirty = false;
+    backgroundWatch = watch;
+}
+#endif
+void draw(lv_event_t *event) {
+    auto *layer = lv_event_get_layer(event);
+#ifdef TRANSPORT_CORE
+    if (backgroundCanvas) {
+        lv_draw_image_dsc_t image;
+        lv_draw_image_dsc_init(&image);
+        image.src = lv_canvas_get_image(backgroundCanvas);
+        lv_area_t bounds{0, 0, panelWidth - 1, panelHeight - 1};
+        lv_draw_image(layer, &image, &bounds);
+    } else
+#endif
+        drawInfrastructure(layer);
     for (const auto &m : scene->markers) {
         if (m.radius)
             signal(layer, m, offline ? 0 : current[m.id].aspect);
@@ -659,6 +695,15 @@ bool attach(lv_display_t *display) {
     lv_obj_remove_style_all(screen);
     lv_obj_set_style_bg_color(screen, colour(Board), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+#ifdef TRANSPORT_CORE
+    const size_t stride = lv_draw_buf_width_to_stride(width(), LV_COLOR_FORMAT_RGB565);
+    if (auto *pixels = heap_caps_aligned_alloc(64, stride * height(), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) {
+        backgroundCanvas = lv_canvas_create(screen);
+        lv_obj_add_flag(backgroundCanvas, LV_OBJ_FLAG_HIDDEN);
+        lv_canvas_set_buffer(backgroundCanvas, pixels, width(), height(), LV_COLOR_FORMAT_RGB565);
+        lv_display_add_event_cb(display, prepareBackground, LV_EVENT_REFR_START, nullptr);
+    }
+#endif
     lv_obj_add_event_cb(screen, draw, LV_EVENT_DRAW_MAIN, nullptr);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
@@ -744,7 +789,7 @@ static void cameraZoom(float request, int fromX, int toX) {
     v.request=request<=v.axis.minZoom?0:std::min(3.f,request);
     v.axis.setZoom(v.request);
     arrangeHeaders(v);
-    panTo(std::lround(v.axis.project(anchor))-std::max(0,toX-v.legendWidth));
+    panTo(std::lround(v.axis.project(anchor))-std::max(0,toX-v.legendWidth),true);
 }
 void pinch(float ratio, int fromX, int toX) {
     if(!cameraBlocked()) cameraZoom(activeCorridor().axis.zoom*ratio,fromX,toX);
@@ -829,13 +874,17 @@ void view(View value) {
     dismiss();
     scene = value == View::Hemel ? &hemelScene : value == View::Watford ? &watfordScene : &sectorScene;
 #ifdef TRANSPORT_CORE
-    if (continuousZoom()) updateCamera(true);
+    backgroundDirty=true;
+    if (continuousZoom()) enterCamera();
     else if (directionalLayout()) panTo(activeCorridor().pan);
     saveSchematic();
 #endif
     invalidate();
 }
 void light(bool enabled) {
+#ifdef TRANSPORT_CORE
+    if (palette != (enabled ? lightPalette : darkPalette)) backgroundDirty = true;
+#endif
     palette = enabled ? lightPalette : darkPalette;
 #ifdef TRANSPORT_CORE
     saveSchematic();
@@ -880,7 +929,6 @@ void seek(uint32_t position, uint32_t wall) {
 }
 void refreshCards(uint32_t wall) {
 #ifdef TRANSPORT_CORE
-    updateCamera();
     updateWatch(wall);
 #endif
     for (int i = 0; i < 2; ++i) {
