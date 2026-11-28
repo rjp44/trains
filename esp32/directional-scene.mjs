@@ -366,13 +366,39 @@ export function directionalScene(layout, markers, view) {
       Markers.push([ids.get(b.id), x - left, y, y - Math.round(17 * scale), b.bit ? Math.round(signalRadius(false) * scale) : 0]);
     }
   }
+  // A full-route screen covers twice the distance of a sectional screen.
+  // Project every track, hit target and legend interval onto the same grid.
+  const overview = view === 0;
+  if (overview) {
+    const half = (x) => Math.round(x / 2);
+    for (const line of Lines) {
+      line[0] = half(line[0]);
+      line[2] = half(line[2]);
+    }
+    for (const interval of Legend) {
+      interval[0] = half(interval[0]);
+      interval[1] = half(interval[1]);
+    }
+    for (const marker of Markers) marker[1] = half(marker[1]);
+    for (const stop of Stations) stop[2] = half(stop[2]);
+    let previousStation;
+    for (const label of Labels) {
+      label[0] = half(label[0]);
+      if (!label[7]) continue;
+      // Keep long neighbouring station names at their normal type size.
+      if (previousStation && Math.abs(label[1] - previousStation[1]) < 25 &&
+          label[0] - previousStation[0] < (label[2] + previousStation[2]) / 2 + 6)
+        label[1] = previousStation[1] - 28;
+      previousStation = label;
+    }
+  }
   return {
     Lines,
     Labels,
     Legend,
     LegendWidth: 90,
     Markers: Markers.sort((a, b) => a[2] - b[2] || a[1] - b[1]),
-    Width,
+    Width: overview ? Math.round(Width / 2) : Width,
     Stations,
     Space: [[0, 0, 0, 0], [0, 0, 0, 0], Math.round(trainWidth * scale), Math.round(trainHeight * scale)],
   };

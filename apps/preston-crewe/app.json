@@ -1,7 +1,7 @@
 {
   "id": "preston-crewe",
   "name": "Preston to Crewe",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "minCore": 9015,
   "adapter": "hemel-corridor/1",
   "presentation": "regional",

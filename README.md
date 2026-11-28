@@ -15,6 +15,8 @@ Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and 
 
 The public site opens the app directory. Choose **Open in browser** for any route. Each map has Settings at the top left and a sun/moon button at the top right. **App** holds views, filters and replay controls. **Downloads** lets you search the directory, save another app for offline use, check for updates and remove a saved copy. The bundled recordings work offline after the browser finishes downloading the app.
 
+On the two regional WCML diagrams, the full route shows twice as much track across the screen as either detailed section. On the web, pinch or use **−** and **+** beside **Location** to change the spacing. Click the percentage to reset. On the tablet, spread two fingers over a station to open its section, then pinch together to return to the overview.
+
 In **Settings → App → Train labels**, choose **Headcode** or **Operator + destination**. The latter pairs a coloured operator tag with the three-letter destination code. Tap a train for its headcode and service details. An unidentified service or destination keeps its headcode. The three signalling maps share this preference on the same tablet or browser.
 
 Tap a station and choose **Watch**, or use **Settings → App → Watch station**. Each map remembers its own station. On the three line diagrams, its name and track background are highlighted while the station watch is active. Reported trains bring up a service card. **Sound** can play a horn for every arrival or only confirmed stopping trains. **Follow** in a train’s detail card outlines the train, keeps it in view and pauses station cards and horns. **Stop following** or the train leaving the map restores the station watch.

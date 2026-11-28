@@ -16,6 +16,14 @@
       <header class="board-heading">
         <h1></h1>
         <p id="readout"></p>
+        <div class="map-controls" hidden>
+          <label class="jump">Location <select></select></label>
+          <div class="map-zoom" role="group" aria-label="Map zoom">
+            <button type="button" aria-label="Zoom out" title="Zoom out (−)">−</button>
+            <button type="button" aria-label="Reset map zoom" title="Reset map zoom (0)">100%</button>
+            <button type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+          </div>
+        </div>
       </header>
       <div id="tracks" aria-label="Train describer locations"></div>
     </main>

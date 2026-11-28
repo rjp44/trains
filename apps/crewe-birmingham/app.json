@@ -1,7 +1,7 @@
 {
   "id": "crewe-birmingham",
   "name": "Crewe to Birmingham International",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "minCore": 9015,
   "adapter": "hemel-corridor/1",
   "presentation": "regional",

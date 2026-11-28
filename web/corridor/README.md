@@ -14,7 +14,11 @@ Drag horizontally to follow the line. On the tablet, tap the bottom scroll bar o
 
 Both panels show mapped signal indications at the Crewe end. The Birmingham panel also covers New Street and the line east to International. A filled red lamp means the most restrictive indication, an open green ring means a less restrictive indication, and a grey ring means the state is unknown. A berth without an identified signal address has no lamp. Tap a lamp for its signal number, address and reported state. A disconnected area keeps the last-known train positions and clears its indications.
 
-Settings → App selects the full route, either section or seven minutes of recorded movements. Pinch to open the section under your fingers or return to the full route. The tablet and browser read the same diagram and recording from the signed app package. The automatic theme follows Wolverhampton or Warrington.
+The full route fits twice as much track across the screen as a sectional view. On the tablet, spread two fingers over a station to open its detailed section. Pinch together to return to the full route at that station.
+
+In the browser, use **−** and **+** beside **Location** to adjust the horizontal spacing. Click the percentage to reset. A two-finger pinch or Ctrl/⌘ + mouse wheel zooms around the point on the map. With the diagram focused, **−**, **+** and **0** also work. Each map remembers its own web zoom.
+
+Settings → App selects the full route, either section or seven minutes of recorded movements. The tablet and browser read the same diagram and recording from the signed app package. The automatic theme follows Wolverhampton or Warrington.
 
 The continuous railway is drawn from Network Rail’s route specifications and sectional diagrams. The named sections are crops of the same full-route drawing. The line through a station represents the selected corridor. Station reports alone do not identify every point, siding or route through a station throat. [Network Rail LNW route specifications](https://www.networkrail.co.uk/wp-content/uploads/2016/12/LNW-Route-Specification.pdf) · [Network Rail sectional appendix, NW1001](https://filestore.limitofshunt.org.uk.s3.amazonaws.com/sectional-appendices/nr/lnw-n/module-1-2009.pdf)
 

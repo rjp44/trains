@@ -16,7 +16,7 @@ const tracks = $('#tracks'),
 const directional = layout.diagram === 'directional';
 const tables = directional ? await json('native/tables.json') : null;
 const board = directional
-  ? lineBoard(tracks, layout, tables, (t, b, signal) => show(t, '', signal ? b : null, b))
+  ? lineBoard(tracks, layout, tables, id, (t, b, signal) => show(t, '', signal ? b : null, b))
   : null;
 const physical = new Map(layout.tracks.flatMap((t) => t.berths).map((b, i) => [b.id, i]));
 const focus = layout.tracks.findIndex((t) => t.id === layout.focus);
@@ -302,13 +302,9 @@ mapGestures(tracks, {
     if (board) tracks.scrollLeft += a.x - b.x;
   },
   pinch(a, b) {
+    if (board) return board.pinch(a, b);
     const ratio = b.span / a.span;
     if (ratio > 1.25 && view === 0) {
-      if (board) {
-        const station = board.station(b.x);
-        setView(layout.tracks.findIndex((t) => t.id === station) < focus ? 1 : 2, station);
-        return true;
-      }
       const at = document
         .elementFromPoint(b.x, b.y)
         ?.closest('.location')
@@ -317,7 +313,7 @@ mapGestures(tracks, {
       return true;
     }
     if (ratio < 0.8 && view) {
-      setView(0, board?.station(b.x));
+      setView(0);
       return true;
     }
     return false;

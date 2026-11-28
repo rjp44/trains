@@ -135,7 +135,9 @@ for (const id of ['crewe-birmingham', 'preston-crewe']) {
       }
       for (const [i, x, y] of s.Markers) {
         const original = full.Markers.find(([n]) => n === i);
-        assert.deepEqual([x + start, y], original.slice(1, 3));
+        assert.equal(y, original[2]);
+        // The overview covers twice the track distance, rounded to native pixels.
+        assert.ok(Math.abs((view ? x / 2 : x) + start - original[1]) <= 1);
         assert.ok(
             rails.some(([a, h, b, j]) => h === y && j === y && a <= x && b >= x),
             markers[i].id,

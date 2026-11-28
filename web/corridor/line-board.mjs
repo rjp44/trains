@@ -1,5 +1,6 @@
 import { isTrainCode } from './hemel.mjs';
 import { drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainWidth } from './rail-symbols.mjs';
+import { readSetting, saveSetting } from './panel/appearance.mjs';
 
 // Draw the same package geometry and physical marker indices as the CrowPanel.
 const ns = 'http://www.w3.org/2000/svg';
@@ -39,16 +40,17 @@ function action(el, description, callback) {
     }
   });
 }
-export function lineBoard(container, layout, tables, open) {
+export function lineBoard(container, layout, tables, id, open) {
   const inks = installPalette(container, tables);
   const stations = new Map(layout.tracks.map((t) => [t.name, t]));
   const byId = new Map(layout.tracks.flatMap((t) => t.berths.map((b) => [b.id, { t, b }])));
   const offsets = [];
-  const nav = document.createElement('label'),
-    select = document.createElement('select');
-  nav.className = 'jump';
-  nav.append('Location ', select);
-  document.querySelector('.board-heading').append(nav);
+  const controls = document.querySelector('.map-controls');
+  controls.hidden = false;
+  const select = controls.querySelector('select');
+  const [outButton, resetButton, inButton] = controls.querySelectorAll('.map-zoom button');
+  const minZoom = 0.65, maxZoom = 3, step = 1.25;
+  const savedZoom = readSetting(id + '.zoom', 1);
   container.className = 'line-board';
   container.tabIndex = 0;
   container.setAttribute('aria-label', 'Scrollable track diagram');
@@ -57,7 +59,7 @@ export function lineBoard(container, layout, tables, open) {
     role: 'group',
     'aria-label': 'Running lines',
   });
-  const drawing = svg(container, 'svg', { role: 'group', 'aria-label': layout.name });
+  const drawing = svg(container, 'svg', { role: 'group', 'aria-label': layout.name, preserveAspectRatio: 'none' });
   let view = -1,
     points = [],
     locations = [],
@@ -65,12 +67,14 @@ export function lineBoard(container, layout, tables, open) {
     stationPaint = [],
     legendWidth = 0,
     scale = 1,
+    zoom = Number.isFinite(savedZoom) ? Math.max(minZoom, Math.min(maxZoom, savedZoom)) : 1,
+    saveTimer,
     width;
   function stationAt(x) {
     return locations.findLast((s) => s[2] <= x) || locations[0];
   }
   function centre(x) {
-    container.scrollLeft = (x + legendWidth / 2) * scale - container.clientWidth / 2;
+    container.scrollLeft = x * scale * zoom - (container.clientWidth - legendWidth * scale) / 2;
   }
   function jump(id) {
     const stop = locations.find((s) => s[0] === id);
@@ -79,7 +83,7 @@ export function lineBoard(container, layout, tables, open) {
   }
   function sync() {
     if (!locations.length) return;
-    const left = container.scrollLeft / scale;
+    const left = container.scrollLeft / (scale * zoom);
     for (const { el, intervals } of legendRows) {
       const title = intervals.find(([from, to]) => from <= left && left < to)?.[3] || '';
       if (el.textContent !== title) el.textContent = title;
@@ -87,7 +91,7 @@ export function lineBoard(container, layout, tables, open) {
     const atEnd =
       container.scrollLeft > 0 && container.scrollLeft + container.clientWidth >= container.scrollWidth - 2;
     select.value = (
-      atEnd ? locations.at(-1) : stationAt(left + container.clientWidth / (2 * scale) - legendWidth / 2)
+      atEnd ? locations.at(-1) : stationAt(left + (container.clientWidth / scale - legendWidth) / (2 * zoom))
     )[0];
   }
   select.onchange = () => {
@@ -96,7 +100,54 @@ export function lineBoard(container, layout, tables, open) {
     sync();
   };
   container.addEventListener('scroll', sync, { passive: true });
+  function sizeDiagram() {
+    drawing.style.width = width * scale * zoom + 'px';
+    drawing.style.height = 570 * scale + 'px';
+    drawing.style.setProperty('--symbol-scale', 1 / zoom);
+    drawing.style.setProperty('--label-scale', 1 / Math.max(1, zoom));
+    legend.style.width = legendWidth * scale + 'px';
+    legend.style.height = drawing.style.height;
+    outButton.disabled = zoom <= minZoom;
+    inButton.disabled = zoom >= maxZoom;
+    resetButton.textContent = Math.round(zoom * 100) + '%';
+    resetButton.setAttribute('aria-label', 'Reset map zoom (' + resetButton.textContent + ')');
+  }
+  function saveZoom() {
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+    saveSetting(id + '.zoom', zoom);
+  }
+  window.addEventListener('pagehide', () => {
+    if (saveTimer !== undefined) saveZoom();
+  });
+  function zoomAt(next, from, to = from) {
+    const rect = container.getBoundingClientRect();
+    const railLeft = rect.left + legendWidth * scale;
+    const offset = (x) => x == null ? (container.clientWidth - legendWidth * scale) / 2 : Math.max(0, x - railLeft);
+    const world = (container.scrollLeft + offset(from)) / (scale * zoom);
+    zoom = Math.max(minZoom, Math.min(maxZoom, next));
+    sizeDiagram();
+    container.scrollLeft = world * scale * zoom - offset(to);
+    sync();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveZoom, 150);
+  }
+  outButton.onclick = () => zoomAt(zoom / step);
+  inButton.onclick = () => zoomAt(zoom * step);
+  resetButton.onclick = () => zoomAt(1);
+  container.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? container.clientHeight : 1;
+    zoomAt(zoom * Math.exp(-e.deltaY * unit * 0.006), e.clientX);
+  }, { passive: false });
   container.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (['+', '=', '-', '0'].includes(e.key)) {
+      e.preventDefault();
+      zoomAt(e.key === '0' ? 1 : e.key === '-' ? zoom / step : zoom * step);
+      return;
+    }
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
     if (e.key === 'End') container.scrollLeft = container.scrollWidth;
@@ -105,17 +156,14 @@ export function lineBoard(container, layout, tables, open) {
   });
   function resize() {
     if (!width) return;
-    const position = container.scrollLeft / scale;
+    const position = container.scrollLeft / (scale * zoom);
     scale = Math.max(0.72, Math.min(1.2, (innerHeight - container.getBoundingClientRect().top - 22) / 570));
-    drawing.style.width = width * scale + 'px';
-    drawing.style.height = 570 * scale + 'px';
-    legend.style.width = legendWidth * scale + 'px';
-    legend.style.height = drawing.style.height;
-    container.scrollLeft = position * scale;
+    sizeDiagram();
+    container.scrollLeft = position * scale * zoom;
     sync();
   }
   function paint(next, anchor) {
-    if (view >= 0) offsets[view] = container.scrollLeft / scale;
+    if (view >= 0) offsets[view] = container.scrollLeft / (scale * zoom);
     view = next;
     const key = keys[view];
     width = tables[key + 'Width'];
@@ -154,11 +202,13 @@ export function lineBoard(container, layout, tables, open) {
       }
     }
     for (const [x, y, width, size, ink, background, text, preset] of tables[key + 'Labels']) {
+      const anchor = svg(drawing, 'g', { transform: 'translate(' + x + ' ' + y + ')' });
+      const label = svg(anchor, 'g', { class: 'map-label' });
       let box;
       if (background >= 0)
-        box = svg(drawing, 'rect', {
-          x: x - width / 2,
-          y: y - size / 2 - 3,
+        box = svg(label, 'rect', {
+          x: -width / 2,
+          y: -size / 2 - 3,
           width,
           height: size + 6,
           rx: 3,
@@ -167,9 +217,9 @@ export function lineBoard(container, layout, tables, open) {
           'pointer-events': 'none',
         });
       const el = svg(
-        drawing,
+        label,
         'text',
-        { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': size, fill: inks[ink] },
+        { 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': size, fill: inks[ink] },
         text,
       );
       if (preset) {
@@ -188,21 +238,22 @@ export function lineBoard(container, layout, tables, open) {
       const centre = svg(berth, 'g', {
         transform: 'translate(' + x + ' ' + y + ') scale(' + unitScale + ')',
       });
-      const head = drawHeadcode(svg, centre, 0, 0, trainWidth);
+      const head = drawHeadcode(svg, svg(centre, 'g', { class: 'train-symbol' }), 0, 0, trainWidth);
       let signal, lamp;
       if (r) {
-        signal = svg(drawing, 'g', { class: 'signal', 'data-signal': b.signal });
+        signal = svg(drawing, 'g', { class: 'signal', 'data-signal': b.signal, transform: 'translate(' + x + ' ' + sy + ')' });
         action(signal, b.signal, () => open(t, b, true));
-        svg(signal, 'circle', { cx: x, cy: sy, r: 9, fill: 'transparent' });
-        lamp = drawSignalLamp(svg, signal, x, sy, r < 4);
+        const symbol = svg(signal, 'g', { class: 'signal-symbol' });
+        svg(symbol, 'circle', { r: 9, fill: 'transparent' });
+        lamp = drawSignalLamp(svg, symbol, 0, 0, r < 4);
         lamp.setAttribute('r', r);
       }
-      return { index, x, berth, head, signal, lamp };
+      return { index, x, y, berth, head, signal, lamp };
     });
     resize();
     const target = locations.find((s) => s[0] === anchor);
     if (target || offsets[next] == null) jump((target || locations[0])[0]);
-    else container.scrollLeft = offsets[next] * scale;
+    else container.scrollLeft = offsets[next] * scale * zoom;
     sync();
   }
   function update(rows, friendly, watchedStation, followedBerth) {
@@ -219,9 +270,20 @@ export function lineBoard(container, layout, tables, open) {
           'Berth register for ' + label.textContent + (watched ? ' · Watching' : ''),
         );
     }
-    for (const { index, berth, head, signal, lamp } of points) {
+    let previous;
+    const badgeWidth = tables[keys[view] + 'Space'][2];
+    for (const point of points) {
+      const { index, berth, head, signal, lamp } = point;
       const [aspect, kind, text] = rows[index];
       const visible = !!kind && isTrainCode(text);
+      if (visible) {
+        // Sorted by track and x. Neighbours only limit a badge while occupied.
+        const gap = previous?.y === point.y ? (point.x - previous.x - 2) / badgeWidth : Infinity;
+        const fit = Math.max(0.05, gap);
+        if (previous) previous.berth.style.setProperty('--badge-fit', Math.min(previous.fit, fit));
+        point.fit = Math.min(1, fit);
+        previous = point;
+      }
       berth.style.display = visible ? '' : 'none';
       const followed = visible && followedBerth === berth.dataset.berth;
       berth.classList.toggle('followed', followed);
@@ -237,6 +299,7 @@ export function lineBoard(container, layout, tables, open) {
         }
       }
     }
+    if (previous) previous.berth.style.setProperty('--badge-fit', previous.fit);
   }
   return {
     jump,
@@ -248,9 +311,10 @@ export function lineBoard(container, layout, tables, open) {
     paint,
     update,
     resize,
-    station(x) {
-      const local = (x - container.getBoundingClientRect().left) / scale - legendWidth;
-      return stationAt(container.scrollLeft / scale + Math.max(0, local))?.[0];
+    pinch(a, b) {
+      if (b.span <= 0) return false;
+      zoomAt(zoom * b.span / a.span, a.x, b.x);
+      return true;
     },
   };
 }
