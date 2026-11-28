@@ -26,7 +26,12 @@ bool regionalLayout();
 bool directionalLayout();
 bool dragCorridor(int dx,int startY);
 bool isLight();
-void pinchView(bool closer, int x);
+bool continuousZoom();
+void pinch(float ratio, int fromX, int toX);
+void finishPinch();
+void stepZoom(int direction);
+int zoomPercent();
+void pinchView(bool closer, int x); // Compatibility with installed pre-camera packages.
 #endif
 void light(bool enabled);
 void replay(Sample value);

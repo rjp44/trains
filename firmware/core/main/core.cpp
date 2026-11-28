@@ -36,6 +36,16 @@ void hemelOptions(lv_obj_t *parent) {
             hemel::view(static_cast<hemel::View>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             panel::refreshAppPage();
         }, i, i == static_cast<unsigned>(hemel::currentView()));
+    if (hemel::continuousZoom()) {
+        row=panel::optionRow(parent,"Track spacing");
+        for(int i=0;i<3;++i) {
+            std::string label=i==1?"Reset ("+std::to_string(hemel::zoomPercent())+"%)":i==0?"Zoom out":"Zoom in";
+            panel::option(row,label.c_str(),[](lv_event_t *e){
+                hemel::stepZoom(int(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)))-1);
+                panel::refreshAppPage();
+            },i,false);
+        }
+    }
     hemel::watchOptions(parent);
     row = panel::optionRow(parent, "Train labels");
     for (unsigned i = 0; i < 2; ++i)
@@ -110,9 +120,10 @@ void contacts(const TouchFrame &frame) {
             break;
         }
         float ratio = gesture.span / previousSpan;
-        if (!pinched && !pinchThreshold(previousSpan, gesture.span, isHemel)) break;
+        if (!pinched && !pinchThreshold(previousSpan, gesture.span, isHemel && !hemel::continuousZoom())) break;
         if (isHemel) {
-            if (!pinched) hemel::pinchView(ratio > 1, previousCentre.x);
+            if (hemel::continuousZoom()) hemel::pinch(ratio,previousCentre.x,gesture.centre.x);
+            else if (!pinched) hemel::pinchView(ratio > 1, previousCentre.x);
         } else lakes::pinch(ratio, previousCentre.x, previousCentre.y, gesture.centre.x, gesture.centre.y);
         previousSpan = gesture.span;
         previousCentre = gesture.centre;
@@ -121,6 +132,7 @@ void contacts(const TouchFrame &frame) {
     }
     case ContactEvent::PinchEnd:
         if (isLakes && pinched) lakes::finishPinch();
+        if (isHemel && pinched && hemel::continuousZoom()) hemel::finishPinch();
         break;
     case ContactEvent::SingleEnd: {
         if (scrolled) { scrolled = false; break; }

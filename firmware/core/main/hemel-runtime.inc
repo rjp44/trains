@@ -9,7 +9,20 @@ std::vector<OperatorTag> operatorTags;
 uint8_t labelMode = 0;
 struct StationOffset { const char *id,*name; int x; };
 struct TrackLegend { int from, to, y; const char *name; };
+struct Header {
+    unsigned label;
+    int primary, secondary, optional;
+};
 struct ViewTables {
+    bool camera=false;
+    float request=1, defaultZoom=1;
+    int focus=0;
+    rail::Axis axis;
+    std::vector<Header> headers;
+    std::vector<uint8_t> occupied;
+    std::vector<int> signalOffsets, labelY;
+    int drawnWidth() const { return axis.ready()?axis.width():width; }
+    int projected(int x) const { return std::lround(axis.project(x)); }
     int width = panelWidth, pan = 0, legendWidth = 0;
     int viewportWidth() const { return panelWidth - legendWidth; }
     std::vector<TrackLegend> legend;
@@ -154,6 +167,23 @@ bool loadHemel() {
                     }, 1024)) return false;
             }
         }
+        if (auto camera=field(tables,key("Camera").c_str())) {
+            auto headers=field(camera,"headers");
+            if(v.stations.empty() || !cJSON_IsArray(headers) || !cJSON_GetArraySize(headers) ||
+                cJSON_GetArraySize(headers)>int(v.labels.size()) || !value(field(camera,"focus"),v.focus) ||
+                v.focus<0 || v.focus>v.width || !value(field(camera,"zoom"),v.request) || v.request<0 || v.request>3) return false;
+            std::vector<bool> seen(v.labels.size());
+            for(auto h=headers->child;h;h=h->next){
+                Header item{};
+                if(!row(h,item.label,item.primary,item.secondary,item.optional) || item.label>=v.labels.size() ||
+                    seen[item.label] || item.primary<0 || item.primary>=600 || item.secondary<0 || item.secondary>=600 ||
+                    (item.optional!=0 && item.optional!=1)) return false;
+                seen[item.label]=true;
+                v.headers.push_back(item);
+            }
+            v.defaultZoom=v.request;
+            v.camera=true;
+        }
         indexStationPaint(v, regionalLayout());
         if(!v.stations.empty()) v.pan=std::clamp(stationCentre(v,v.stations.front())-v.viewportWidth()/2,0,v.width-v.viewportWidth());
         auto space = field(tables, key("Space").c_str());
@@ -171,6 +201,7 @@ bool loadHemel() {
         auto diagramY = [](int y) { return toolbarHeight + y * (panelHeight - toolbarHeight) / panelHeight; };
         for (auto &line : v.lines) { line.y1 = diagramY(line.y1); line.y2 = diagramY(line.y2); }
         for (auto &label : v.labels) label.y = diagramY(label.y);
+        for (auto &h:v.headers) { h.primary=diagramY(h.primary); h.secondary=diagramY(h.secondary); }
         for (auto &label : v.legend) label.y = diagramY(label.y);
         for (auto &marker : v.markers) { marker.y = diagramY(marker.y); marker.signalY = diagramY(marker.signalY); }
         for (auto *card : {&s.fast, &s.slow}) { card->top = diagramY(card->top); card->bottom = diagramY(card->bottom); }

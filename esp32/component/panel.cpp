@@ -9,6 +9,7 @@
 
 #ifdef TRANSPORT_CORE
 #include "rows.h"
+#include "rail-spacing.h"
 #include "watch-picker.h"
 #include "core.h"
 #include "esp_rom_crc.h"
@@ -63,6 +64,7 @@ struct Label {
 struct Marker {
     uint16_t id;
     int16_t x, y, signalY, radius;
+    int16_t signalOffset = 0;
 };
 struct CardSpace {
     int centre, left, top, bottom;
@@ -208,7 +210,7 @@ void text(lv_layer_t *layer, int x, int cy, int w, const char *s, int size, int 
 }
 void signal(lv_layer_t *layer, const Marker &m, uint8_t aspect) {
     const int r = m.radius, ink = aspect == 1 ? On : aspect == 2 ? Off : Unknown;
-    box(layer, m.x - r, m.signalY - r, 2 * r + 1, 2 * r + 1, aspect == 1 ? ink : Board, ink,
+    box(layer, m.x + m.signalOffset - r, m.signalY - r, 2 * r + 1, 2 * r + 1, aspect == 1 ? ink : Board, ink,
         LV_RADIUS_CIRCLE);
 }
 void badge(lv_layer_t *layer, const Marker &m, int width) {
@@ -530,7 +532,7 @@ void tap(int x, int y) {
     int distance = 500;
     for (const auto &m : scene->markers)
         if (m.radius) {
-            const int dx = m.x - x, dy = m.signalY - y, d = dx * dx + dy * dy,
+            const int dx = m.x + m.signalOffset - x, dy = m.signalY - y, d = dx * dx + dy * dy,
                       radius = std::max(9, int(m.radius) + 3);
             if (d <= radius * radius && d < distance) {
                 nearest = &m;
@@ -558,6 +560,14 @@ void tap(int x, int y) {
             view(label.preset == 1 ? View::Hemel : View::Watford);
             return;
         }
+#ifdef TRANSPORT_CORE
+    if(continuousZoom()) for(const auto &band:scene->lines)
+        if(band.station && band.x1==band.x2 && std::abs(x-band.x1)<=band.width/2 &&
+            y>=std::min(band.y1,band.y2) && y<=std::max(band.y1,band.y2)){
+            if(!openRegister(watchStations[band.station-1].name)) promptStation=band.station-1;
+            invalidate();return;
+        }
+#endif
 }
 void touch(lv_event_t *e) {
     lv_point_t p;
@@ -723,11 +733,41 @@ void pinchView(bool closer, int x) {
     }
     view(target);
 }
-bool directionalLayout() { return !activeCorridor().stations.empty(); }
+bool continuousZoom() { return activeCorridor().camera; }
+bool directionalLayout() { return regionalLayout() && !activeCorridor().stations.empty(); }
+int zoomPercent() { return std::lround(activeCorridor().axis.zoom*100); }
+static bool cameraBlocked() {return registerIndex>=0 || promptStation>=0 || selected.index>=0;}
+static void cameraZoom(float request, int fromX, int toX) {
+    auto &v=activeCorridor();
+    if(!v.camera || !v.axis.ready() || !std::isfinite(request)) return;
+    float anchor=v.axis.unproject(v.pan+std::max(0,fromX-v.legendWidth));
+    v.request=request<=v.axis.minZoom?0:std::min(3.f,request);
+    v.axis.setZoom(v.request);
+    arrangeHeaders(v);
+    panTo(std::lround(v.axis.project(anchor))-std::max(0,toX-v.legendWidth));
+}
+void pinch(float ratio, int fromX, int toX) {
+    if(!cameraBlocked()) cameraZoom(activeCorridor().axis.zoom*ratio,fromX,toX);
+}
+static std::string zoomKey() {
+    const char *id=transport::activeApp();
+    return "rz"+std::to_string(esp_rom_crc32_le(0,reinterpret_cast<const uint8_t*>(id),strlen(id)));
+}
+void finishPinch() {
+    if(!continuousZoom()) return;
+    std::array<float,3> zoom;
+    for(int i=0;i<3;++i) zoom[i]=viewTables[i].request;
+    transport::saveView(zoomKey().c_str(),zoom);
+}
+void stepZoom(int direction) {
+    auto &v=activeCorridor();int middle=v.legendWidth+v.viewportWidth()/2;
+    cameraZoom(direction?v.axis.zoom*(direction>0?1.25f:0.8f):v.defaultZoom,middle,middle);
+    finishPinch();
+}
 bool dragCorridor(int dx, int startY) {
-    if (!directionalLayout() || registerIndex>=0 || selected.index>=0 || startY<transport::toolbarHeight) return false;
+    if ((!continuousZoom() && !directionalLayout()) || cameraBlocked() || startY<transport::toolbarHeight) return false;
     const auto &v=activeCorridor();
-    if (startY>=scrollY) panTo(v.pan + int(std::lround(dx * double(v.width-v.viewportWidth()) / scrollWidth)));
+    if (directionalLayout() && startY>=scrollY) panTo(v.pan + int(std::lround(dx * double(v.drawnWidth()-v.viewportWidth()) / scrollWidth)));
     else panTo(v.pan-dx);
     return true;
 }
@@ -773,6 +813,10 @@ void restoreView(View fallback){
     char saved[16]={};
     watching=watchNumber(transport::loadView(watchKey().c_str(),saved) ? saved : id);
     transport::loadView("rail_labels", labelMode);
+    std::array<float,3> zoom;
+    if (transport::loadView(zoomKey().c_str(),zoom))
+        for(int i=0;i<3;++i) if(viewTables[i].camera && std::isfinite(zoom[i]) && zoom[i]>=0 && zoom[i]<=3)
+            viewTables[i].request=zoom[i];
     SchematicSettings s{static_cast<unsigned>(fallback),0};
     transport::loadView(viewKey().c_str(),s);restoringView=true;
     view(s.view<=2?static_cast<View>(s.view):fallback);light(s.light==1);restoringView=false;
@@ -785,7 +829,8 @@ void view(View value) {
     dismiss();
     scene = value == View::Hemel ? &hemelScene : value == View::Watford ? &watfordScene : &sectorScene;
 #ifdef TRANSPORT_CORE
-    if (directionalLayout()) panTo(activeCorridor().pan);
+    if (continuousZoom()) updateCamera(true);
+    else if (directionalLayout()) panTo(activeCorridor().pan);
     saveSchematic();
 #endif
     invalidate();
@@ -835,6 +880,7 @@ void seek(uint32_t position, uint32_t wall) {
 }
 void refreshCards(uint32_t wall) {
 #ifdef TRANSPORT_CORE
+    updateCamera();
     updateWatch(wall);
 #endif
     for (int i = 0; i < 2; ++i) {

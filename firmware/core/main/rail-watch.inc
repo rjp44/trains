@@ -23,14 +23,16 @@ void centreStation() {
     restoreSector(); lastFocus=-1;
     if(watching<0) return;
     const auto &s=watchStations[watching];
-    if(!directionalLayout()) {
+    if(!directionalLayout() && !continuousZoom()) {
         view(!strcmp(s.id,"HML")?View::Hemel:!strcmp(s.id,"WFJ")?View::Watford:View::Sector);
         return;
     }
+    if(continuousZoom() && !regionalLayout())
+        view(!strcmp(s.id,"HML")?View::Hemel:!strcmp(s.id,"WFJ")?View::Watford:View::Sector);
     auto jump=[&](){
         auto &v=activeCorridor();
         for(const auto &stop:v.stations) if(!strcmp(stop.id,s.id)) {
-            panTo(stationCentre(v,stop)-v.viewportWidth()/2); return true;
+            panTo(v.projected(stationCentre(v,stop))-v.viewportWidth()/2); return true;
         }
         return false;
     };
@@ -49,17 +51,17 @@ void watchLocation(const char *name) {
 void focusTrain(int index) {
     if(lastFocus==index) return;
     lastFocus=index;
-    if(directionalLayout()) {
+    if(directionalLayout() || continuousZoom()) {
         auto jump=[&]() {
             auto &v=activeCorridor();
-            for(const auto &m:v.markers) if(m.id==index) {panTo(m.x-v.viewportWidth()/2);return true;}
+            for(const auto &m:v.markers) if(m.id==index) {panTo(v.projected(m.x)-v.viewportWidth()/2);return true;}
             return false;
         };
         if(!jump() && currentView()!=View::Sector){view(View::Sector);jump();}
         // Unassigned berths are only located to their reporting station.
         if(std::none_of(activeCorridor().markers.begin(),activeCorridor().markers.end(),[&](auto &m){return m.id==index;})){
             for(const auto &s:watchStations) if(std::find(s.markers.begin(),s.markers.end(),unsigned(index))!=s.markers.end())
-                for(const auto &stop:activeCorridor().stations) if(!strcmp(s.id,stop.id)) panTo(stationCentre(activeCorridor(),stop)-activeCorridor().viewportWidth()/2);
+                for(const auto &stop:activeCorridor().stations) if(!strcmp(s.id,stop.id)) panTo(activeCorridor().projected(stationCentre(activeCorridor(),stop))-activeCorridor().viewportWidth()/2);
         }
         return;
     }
@@ -149,7 +151,17 @@ bool watchTap(int x,int y) {
         int n=promptStation;promptStation=-1;
         if(promptBox.contains(x,y) && y>promptBox.y+43){
             if(x<promptBox.x+140) selectWatch(n);
-            else {auto id=watchStations[n].id; if(!strcmp(id,"HML")) view(View::Hemel);else if(!strcmp(id,"WFJ")) view(View::Watford);}
+            else {
+                auto id=watchStations[n].id;
+                if(!strcmp(id,"HML") || !strcmp(id,"WFJ")) {
+                    view(!strcmp(id,"HML") ? View::Hemel : View::Watford);
+                    if(continuousZoom()) {
+                        stepZoom(0);
+                        auto &v=activeCorridor();
+                        panTo(v.projected(v.focus)-v.viewportWidth()/2);
+                    }
+                }
+            }
         }
         invalidate(); return true;
     }

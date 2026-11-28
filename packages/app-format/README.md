@@ -6,6 +6,8 @@ The compiler reads `apps/<id>/app.json` and `credits.md`, adds the project licen
 
 ## Versions and verification
 
+For native rail diagrams, each named view can include a `<view>Camera` object in `native/tables.json`. Its `focus` is the initial horizontal map coordinate and `zoom` is the default spacing. Each entry in `headers` gives a label index, primary row, alternate row and an optional-label flag. Core 0.9.16 reads these fields to reflow the diagram. Packages that omit them retain their original view controls.
+
 Authors use a stable `major.minor.patch` version. The packaged manifest and signed entry contain the human-readable `versionName` and the numeric `version` used by older OTA clients. Its value is `major × 1,000,000 + minor × 1,000 + patch`. For example, 0.9.0 is 9000 and 0.10.0 is 10000. Minor and patch are each 0–999. Valid new release codes are 9000 through 2147483646. Earlier build numbers keep their original ordering and remain installable when compatible. `minCore` uses the same numeric comparison.
 
 The schema-2 catalogue contains a base64 payload and an ECDSA signature over its decoded bytes. The payload identifies the board and records the version, minimum core, length and SHA-256 of each artifact. App records also include the adapter, name and description. A per-app signed descriptor permits independent browser installation. The public `directory.json` presents sizes and links for browsing. The clients verify the signed records and package bytes before use. [Public directory](https://transport.pickering.org/directory.json)

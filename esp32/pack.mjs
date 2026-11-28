@@ -1,6 +1,6 @@
 import { watchStations } from '../public/rail-watch.mjs';
 import { operatorTags } from '../public/train-label.mjs';
-import { approachRoadName } from './station-approaches.mjs';
+import { stationApproaches, approachRoadName } from './station-approaches.mjs';
 import { laneName } from './directional-scene.mjs';
 import { trainWidth, trainHeight, signalRadius } from '../public/rail-symbols.mjs';
 import { regionalScene } from './regional-scene.mjs';
@@ -132,10 +132,13 @@ function compileView(view) {
   const zoom = view === 'sector' ? 1008 / ((diagram.end - diagram.start) * 64) : view === 'hemel' ? 1 : 2;
   const centre = view === 'sector' ? (diagram.start + diagram.end) / 2 : view === 'hemel' ? home : 0;
   const pitch = (64 * zoom * (mapWidth - 132)) / 1008;
-  const x = (slot) => (111 + (mapWidth - 132) / 2 + (slot - centre) * pitch) * scale;
-  const left = 103 * scale,
-    right = width - scale;
-  const visible = (at) => at >= 109 * scale && at <= width - 19 * scale;
+  const camera = process.argv[5] === '--tables';
+  const worldWidth = Math.round((diagram.end - diagram.start) * 40 + 192);
+  const fixedX = (slot) => (111 + (mapWidth - 132) / 2 + (slot - centre) * pitch) * scale;
+  const x = camera ? slot => 96 + (slot - diagram.start) * 40 : fixedX;
+  const left = camera ? 0 : 103 * scale, right = camera ? worldWidth : width - scale;
+  const visible = (at) => camera ? at >= left && at <= right : at >= 109 * scale && at <= width - 19 * scale;
+  const headers = [], legend = [];
   const lane = (n) => (64 + 44 * n) * vertical;
   const mainY = (i) => (merged ? lane(5 + i) : (97 + i * 66) * vertical);
   const segments = [],
@@ -167,6 +170,10 @@ function compileView(view) {
   }
   function label(cx, cy, text, pixels, boxWidth, fg = 'board-text', bg = null, preset = 0) {
     const font = Math.min(16, Math.max(8, round(pixels / 2) * 2));
+    if (camera && !preset && cx < 65 * scale) {
+      legend.push([0, worldWidth, round(cy), text]);
+      return;
+    }
     labels.push([round(cx), round(cy), round(boxWidth), font, colour(fg), bg ? colour(bg) : -1, text, preset]);
   }
   function names(stations, y, rowStep) {
@@ -174,6 +181,16 @@ function compileView(view) {
     const items = stations
       .map((station) => ({ station, x: x(diagram.columns.get(station.code)) / scale }))
       .filter((s) => visible(s.x * scale));
+    if (camera) {
+      const primary = Math.max(14, Math.min(582, round(y - 7)));
+      const second = Math.max(14, Math.min(584, primary + (rowStep > 0 ? 26 : -26)));
+      for (const { station, x: at } of items) {
+        headers.push([labels.length, primary, second, 0]);
+        label(at * scale, primary, station.name, 16, station.name.length * 12 + 16, 'board-text', 'board',
+          { HML: 1, WFJ: 2 }[station.code] ?? 3 + stationNumber.get(station.code));
+      }
+      return Math.min(primary, second) - 12;
+    }
     const measure = (text, size) => (text.length * Math.max(8, round((size * scale) / 2) * 2) * 0.63) / scale;
     for (const item of fitStationNames(items, 105, mapWidth - 4, measure)) {
       const cy = y + rowStep * item.row - (item.size * scale) / 2;
@@ -196,7 +213,7 @@ function compileView(view) {
     mainStations = [],
     [dc, abbey] = layout.branches;
   const stations = layout.stations.filter(
-    (s) => visible(x(diagram.columns.get(s.code))) && (merged || ['APS', 'HML', 'BKM'].includes(s.code)),
+    (s) => visible(x(diagram.columns.get(s.code))) && (camera || merged || ['APS', 'HML', 'BKM'].includes(s.code)),
   );
   for (const s of stations) {
     const at = x(diagram.columns.get(s.code)),
@@ -209,7 +226,7 @@ function compileView(view) {
       at,
       (junction ? lane(10) : mainY(3)) + 24 * scale,
       junction ? 'junction-band' : !packageTables && s.code === 'HML' ? 'hemel-band' : 'station-band',
-      junction ? 1.5 * pitch : 24,
+      junction ? (camera ? 36 : 1.5 * pitch) : 24,
       s.code,
     );
   }
@@ -265,7 +282,7 @@ function compileView(view) {
       const y = lane(i + 1),
         ink = i < 4 ? 'route-dc' : i === 9 ? 'route-abbey' : 'platform';
       line(x(-0.75), y + 6 * scale, x(0.75), y + 6 * scale, ink, 4);
-      label(x(0), y + 18 * scale, 'P' + p.number, 11 * scale, 35 * scale, ink);
+      label(x(0), y + (camera && p.number === '11' ? 23 : 18) * scale, 'P' + p.number, 11 * scale, 35 * scale, ink);
       if (i < 4 || p.number === '10') line(x(1), y - 4 * scale, x(1), y + 4 * scale, ink);
     });
     for (const [n, t, ink] of [
@@ -277,12 +294,16 @@ function compileView(view) {
     ])
       label(48 * scale, lane(n), t, 12 * scale, 93 * scale, ink);
   }
-  label(left + 55 * scale, height - 13 * scale, '< LONDON EUSTON', 10 * scale, 115 * scale, 'board-muted');
-  label(width - 70 * scale, height - 13 * scale, 'MILTON KEYNES >', 10 * scale, 134 * scale, 'board-muted');
+  if (!camera) label(left + 55 * scale, height - 13 * scale, '< LONDON EUSTON', 10 * scale, 115 * scale, 'board-muted');
+  if (!camera) label(width - 70 * scale, height - 13 * scale, 'MILTON KEYNES >', 10 * scale, 134 * scale, 'board-muted');
   for (const [index, b] of markers.entries()) {
-    const at = x(diagram.positions.get(b.id)),
+    // The Abbey station report and the physical platform 11 berth share a
+    // timetable position. Give them distinct anchors on the same platform
+    // so the camera can make room when both report a train.
+    const reportOffset = camera && b.kind === 'station-report' && b.station === 'WFJ' ? 0.25 : 0;
+    const at = x(diagram.positions.get(b.id) + reportOffset),
       branch = b.track.branch;
-    if (!visible(at) || (!merged && (branch || !b.pilot))) continue;
+    if (!visible(at) || (!merged && (branch || (!camera && !b.pilot)))) continue;
     const n = b.platform
       ? layout.junction.platforms.findIndex((p) => p.number === b.platform) + 1
       : branch === 'abbey'
@@ -303,14 +324,25 @@ function compileView(view) {
     ]);
   }
   placed.sort((a, b) => a[2] - b[2] || a[1] - b[1]);
+  if (camera) {
+    const ordered = labels.filter(l => l[7]).sort((a, b) => a[0] - b[0]);
+    tables[view + 'Stations'] = ordered.map((l, i) => [
+      (l[7] === 1 ? 'HML' : l[7] === 2 ? 'WFJ' : tables.watchStations[l[7] - 3][0]),
+      l[6], i ? round((ordered[i - 1][0] + l[0]) / 2) : 0,
+    ]);
+    tables[view + 'Width'] = worldWidth;
+    tables[view + 'LegendWidth'] = round(103 * scale);
+    tables[view + 'Legend'] = legend;
+    tables[view + 'Camera'] = { headers, focus: round(x(centre)), zoom: { sector: 0.48, hemel: 1.4, watford: 2.75 }[view] };
+  }
   array('Segment', view + 'Lines', segments);
   array('Label', view + 'Labels', labels);
   array('Marker', view + 'Markers', placed);
-  const anchor = visible(x(home)) ? x(home) : width / 2;
-  const cardLeft = merged ? Math.max(4, Math.min(x(1) + 8, width - 280 * scale)) : 4;
+  const anchor = fixedX(home) >= 109 * scale && fixedX(home) <= width - 19 * scale ? fixedX(home) : width / 2;
+  const cardLeft = merged ? Math.max(4, Math.min(fixedX(1) + 8, width - 280 * scale)) : 4;
   // Beyond St Albans Abbey the lower card can extend past the Abbey track height.
   // In the Watford close-up the branch continues to the edge, so stay above its badges.
-  const abbeyEnd = x(diagram.columns.get('SAA')) + 32 * scale;
+  const abbeyEnd = fixedX(diagram.columns.get('SAA')) + 32 * scale;
   const besideAbbey = merged && width - Math.max(cardLeft, abbeyEnd) >= 235 * scale;
   const fastTop = merged ? 3 : stationLabelBottom + 3;
   const fastEdge = fastBottom - (merged ? 16 : 10) * scale;
@@ -343,7 +375,20 @@ function compileView(view) {
 }
 for (const [i,view] of ['sector','hemel','watford'].entries()) {
   if (regional) {
-    for (const [key,value] of Object.entries(regionalScene(layout,markers,i))) tables[view+key]=value;
+    const scene = regionalScene(layout, markers, i);
+    for (const [key,value] of Object.entries(scene)) tables[view+key]=value;
+    if (layout.diagram === 'directional') {
+      const approaches = new Set(layout.tracks.flatMap(t => Object.values(stationApproaches(t.id)).map(z => z.name)));
+      const sections = new Set(layout.slowSections.flatMap(s => [s.entry, s.exit]).filter(Boolean));
+      const headers = [];
+      scene.Labels.forEach((l, n) => {
+        const station = l[7] && layout.tracks.find(t => t.name === l[6]);
+        if (station) headers.push([n, 59, 32, Number(/\b(?:Jn|Junction)$/i.test(station.name) && !station.berths.some(b => b.platform))]);
+        else if (approaches.has(l[6])) headers.push([n, 80, 80, 1]);
+        else if (sections.has(l[6])) headers.push([n, 12, 12, 1]);
+      });
+      tables[view + 'Camera'] = { headers, focus: scene.Labels.find(l => l[7])[0], zoom: 1 };
+    }
   } else compileView(view);
 }
 if (regional) {
