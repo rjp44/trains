@@ -28,7 +28,7 @@ function abbeyURL(service) {
 const feed = createLiveFeed(layout, { abbeyURL, onFrame: arrivals.accept, onReset: arrivals.reset });
 const { project, fingerprint } = createProjection(layout);
 const schedules = scheduleCache((html) => parseHTML(html).document.documentElement, formatDay);
-const encode = encoder(fingerprint);
+const encode = encoder(fingerprint, true);
 export const start = () => feed.start();
 export function status() {
   const { status, error } = feed.snapshot();

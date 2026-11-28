@@ -1,8 +1,24 @@
+import { isTrainCode } from './hemel.mjs';
+import { drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainWidth } from './rail-symbols.mjs';
+
 // Draw the same package geometry and physical marker indices as the CrowPanel.
 const ns = 'http://www.w3.org/2000/svg';
 const keys = ['sector', 'hemel', 'watford'];
-const inks = ['var(--bg)', 'var(--fg)', 'var(--muted)', 'var(--rail)', 'var(--fg)'];
-inks[8] = 'var(--edge)';
+// The package contains the same two Hemel palettes used by the LCD.
+function installPalette(container, tables) {
+  const inks = tables.darkPalette.map((_, i) => 'var(--diagram-' + i + ')');
+  const rules = (palette) =>
+    palette.map((colour, i) => '--diagram-' + i + ':#' + colour.toString(16).padStart(6, '0')).join(';');
+  const style = document.createElement('style');
+  style.textContent =
+    '#tracks.line-board{' +
+    rules(tables.darkPalette) +
+    '} :root[data-theme="light"] #tracks.line-board{' +
+    rules(tables.lightPalette) +
+    '}';
+  container.append(style);
+  return inks;
+}
 function svg(parent, tag, attributes, value) {
   const el = document.createElementNS(ns, tag);
   for (const [key, v] of Object.entries(attributes)) el.setAttribute(key, v);
@@ -24,6 +40,7 @@ function action(el, description, callback) {
   });
 }
 export function lineBoard(container, layout, tables, open) {
+  const inks = installPalette(container, tables);
   const stations = new Map(layout.tracks.map((t) => [t.name, t]));
   const byId = new Map(layout.tracks.flatMap((t) => t.berths.map((b) => [b.id, { t, b }])));
   const offsets = [0, 0, 0];
@@ -35,10 +52,17 @@ export function lineBoard(container, layout, tables, open) {
   container.className = 'line-board';
   container.tabIndex = 0;
   container.setAttribute('aria-label', 'Scrollable track diagram');
+  const legend = svg(container, 'svg', {
+    class: 'track-legend',
+    role: 'group',
+    'aria-label': 'Running lines',
+  });
   const drawing = svg(container, 'svg', { role: 'group', 'aria-label': layout.name });
   let view = -1,
     points = [],
     locations = [],
+    legendRows = [],
+    legendWidth = 0,
     scale = 1,
     width;
   function stationAt(x) {
@@ -46,6 +70,11 @@ export function lineBoard(container, layout, tables, open) {
   }
   function sync() {
     if (!locations.length) return;
+    const left = container.scrollLeft / scale;
+    for (const { el, intervals } of legendRows) {
+      const title = intervals.find(([from, to]) => from <= left && left < to)?.[3] || '';
+      if (el.textContent !== title) el.textContent = title;
+    }
     const atEnd =
       container.scrollLeft > 0 && container.scrollLeft + container.clientWidth >= container.scrollWidth - 2;
     select.value = (atEnd ? locations.at(-1) : stationAt((container.scrollLeft + 2) / scale))[0];
@@ -69,6 +98,8 @@ export function lineBoard(container, layout, tables, open) {
     scale = Math.max(0.72, Math.min(1.2, (innerHeight - container.getBoundingClientRect().top - 22) / 570));
     drawing.style.width = width * scale + 'px';
     drawing.style.height = 570 * scale + 'px';
+    legend.style.width = legendWidth * scale + 'px';
+    legend.style.height = drawing.style.height;
     container.scrollLeft = position * scale;
     sync();
   }
@@ -78,12 +109,41 @@ export function lineBoard(container, layout, tables, open) {
     const key = keys[view];
     width = tables[key + 'Width'];
     locations = tables[key + 'Stations'];
+    legendWidth = tables[key + 'LegendWidth'] || 0;
+    const intervals = tables[key + 'Legend'] || [];
+    legend.replaceChildren();
+    legend.style.display = legendWidth ? 'block' : 'none';
+    if (legendWidth) legend.setAttribute('viewBox', '0 0 ' + legendWidth + ' 570');
+    legendRows = [...new Set(intervals.map((r) => r[2]))]
+      .sort((a, b) => a - b)
+      .map((y) => ({
+        el: svg(legend, 'text', {
+          x: legendWidth / 2,
+          y,
+          'text-anchor': 'middle',
+          'dominant-baseline': 'central',
+          'font-size': 12,
+          fill: inks[1],
+        }),
+        intervals: intervals.filter((r) => r[2] === y),
+      }));
     select.replaceChildren(...locations.map(([id, name]) => new Option(name, id)));
     drawing.replaceChildren();
     drawing.setAttribute('viewBox', '0 0 ' + width + ' 570');
     for (const [x1, y1, x2, y2, ink, weight] of tables[key + 'Lines'])
       svg(drawing, 'line', { x1, y1, x2, y2, stroke: inks[ink], 'stroke-width': weight });
-    for (const [x, y, , size, ink, , text, preset] of tables[key + 'Labels']) {
+    for (const [x, y, width, size, ink, background, text, preset] of tables[key + 'Labels']) {
+      if (background >= 0)
+        svg(drawing, 'rect', {
+          x: x - width / 2,
+          y: y - size / 2 - 3,
+          width,
+          height: size + 6,
+          rx: 3,
+          fill: inks[background],
+          stroke: inks[background === 9 ? 12 : 11],
+          'pointer-events': 'none',
+        });
       const el = svg(
         drawing,
         'text',
@@ -99,38 +159,41 @@ export function lineBoard(container, layout, tables, open) {
     points = tables[key + 'Markers'].map(([index, x, y, sy, r]) => {
       const { t, b } = byId.get(tables.markerInfo[index][0]);
       const berth = svg(drawing, 'g', { 'data-berth': b.id, class: 'berth' });
-      action(berth, 'Berth ' + b.id, () => open(t, b));
-      svg(berth, 'rect', { x: x - 31, y: y - 11, width: 62, height: 22, rx: 3 });
-      const head = svg(berth, 'text', { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
-      svg(berth, 'rect', {
-        x: x - 36,
-        y: y + 10,
-        width: 72,
-        height: 18,
-        fill: 'transparent',
-        class: 'tap-area',
-      });
-      let signal;
+      action(berth, 'Train', () => open(t, b));
+      const unitScale = tables[key + 'Space'][2] / trainWidth;
+      const centre = svg(berth, 'g', { transform: 'translate(' + x + ' ' + y + ') scale(' + unitScale + ')' });
+      const head = drawHeadcode(svg, centre, 0, 0, trainWidth);
+      let signal, lamp;
       if (r) {
         signal = svg(drawing, 'g', { class: 'signal', 'data-signal': b.signal });
         action(signal, b.signal, () => open(t, b, true));
         svg(signal, 'circle', { cx: x, cy: sy, r: 9, fill: 'transparent' });
-        svg(signal, 'circle', { cx: x, cy: sy, r, class: 'lamp' });
+        lamp = drawSignalLamp(svg, signal, x, sy, r < 4);
+        lamp.setAttribute('r', r);
       }
-      return { index, berth, head, signal };
+      return { index, berth, head, signal, lamp };
     });
     resize();
     const target = locations.find((s) => s[0] === anchor);
     container.scrollLeft = (target ? target[2] : offsets[next]) * scale;
     sync();
   }
-  function update(rows) {
-    for (const { index, berth, head, signal } of points) {
+  function update(rows, friendly) {
+    for (const { index, berth, head, signal, lamp } of points) {
       const [aspect, kind, text] = rows[index];
-      if (head.textContent !== text) head.textContent = text;
-      berth.classList.toggle('head', !!kind);
+      const visible = !!kind && isTrainCode(text);
+      berth.style.display = visible ? '' : 'none';
+      if (visible) berth.setAttribute('aria-label', 'Train ' + text);
+      showHeadcode(head, visible ? text : '', visible ? kind : 0, visible && friendly ? rows[index][6] : '');
+      berth.classList.toggle('head', visible);
       berth.classList.toggle('stale', kind === 3);
-      if (signal) signal.dataset.value = ['unknown', 'on', 'off'][aspect];
+      if (signal) {
+        const value = ['unknown', 'on', 'off'][aspect];
+        if (signal.dataset.value !== value) {
+          signal.dataset.value = value;
+          showSignalAspect(lamp, value);
+        }
+      }
     }
   }
   return {
@@ -138,7 +201,8 @@ export function lineBoard(container, layout, tables, open) {
     update,
     resize,
     station(x) {
-      return stationAt((container.scrollLeft + x - container.getBoundingClientRect().left) / scale)?.[0];
+      const local = (x - container.getBoundingClientRect().left) / scale - legendWidth;
+      return stationAt(container.scrollLeft / scale + Math.max(0, local))?.[0];
     },
   };
 }

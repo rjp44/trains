@@ -183,55 +183,62 @@ button {
 }
 
 #tracks.line-board {
-  display: block;
+  --board: var(--diagram-0);
+  --signal-on: var(--diagram-13);
+  --signal-off: var(--diagram-14);
+  --signal-unknown: var(--diagram-15);
+  --train-fill: var(--diagram-16);
+  --train-text: var(--diagram-17);
+  --other-description: var(--diagram-18);
+  --stale-description: var(--diagram-19);
+  --marker-focus: #fff;
+  display: flex;
+  gap: 0;
   overflow-x: auto;
   padding: 0;
   max-width: 100%;
   touch-action: pan-y;
   overscroll-behavior-x: contain;
-  scrollbar-color: var(--rail) var(--edge);
+  scrollbar-color: var(--diagram-3) var(--diagram-8);
+  background: var(--diagram-0);
+}
+:root[data-theme='light'] #tracks.line-board {
+  --marker-focus: #122f32;
 }
 .line-board svg {
   display: block;
+  flex: none;
   max-width: none;
   user-select: none;
 }
+.line-board .track-legend {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--diagram-0);
+}
 .line-board svg text {
-  font-family: ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
 }
 .line-board svg .station {
-  font-family: inherit;
-  font-weight: 650;
+  font-family: 'DM Sans', 'Avenir Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 600;
   cursor: pointer;
 }
 .line-board .berth,
 .line-board .signal {
   cursor: pointer;
 }
-.line-board .berth rect {
-  fill: transparent;
+.line-board .berth {
+  letter-spacing: normal;
 }
-.line-board .berth.head rect:first-child {
-  fill: var(--head);
+.line-board .berth.stale {
+  opacity: 1;
 }
-.line-board .berth text {
-  fill: var(--ink);
-  font-size: 14px;
-  font-weight: 650;
-}
-.line-board .berth:hover rect:first-child,
-.line-board .berth:focus rect:first-child {
-  stroke: var(--rail);
-}
-.line-board .lamp {
-  fill: var(--muted);
-  stroke: var(--bg);
-}
-.line-board [data-value='on'] .lamp {
-  fill: #eb705d;
-}
-.line-board [data-value='off'] .lamp {
-  fill: #56b688;
+.line-board .berth:hover .ring,
+.line-board .berth:focus .ring {
+  stroke: var(--marker-focus);
+  stroke-width: 1.5;
 }
 .jump {
   display: inline-flex;

@@ -22,7 +22,7 @@ bool number(Field field, uint32_t &value) {
     auto parsed = std::from_chars(field.data(), end, value);
     return parsed.ec == std::errc{} && parsed.ptr == end;
 }
-unsigned fields(Field line, std::array<Field, 8> &out) {
+template <size_t N> unsigned fields(Field line, std::array<Field, N> &out) {
     unsigned count = 0;
     while (count < out.size()) {
         const auto pos = line.find('\t');
@@ -47,16 +47,18 @@ bool rows(Field remaining, bool apply) {
         auto end = remaining.find('\n');
         if (end == Field::npos)
             return false;
-        std::array<Field, 8> f;
+        std::array<Field, 9> f{};
         unsigned count = fields(remaining.substr(0, end), f);
         remaining.remove_prefix(end + 1);
         uint32_t i, aspect, kind, identity;
         if (count < 2 || !number(f[1], i))
             return false;
         if (f[0] == "M") {
-            if (count != 8 || i >= input::markers() || !number(f[2], aspect) || aspect > 2 ||
+            if ((count != 8 && count != 9) || i >= input::markers() || !number(f[2], aspect) || aspect > 2 ||
                 !number(f[3], kind) || kind > 3 || (kind == 0) != f[4].empty() || f[4].size() > 12 ||
-                f[5].size() > 24 || f[6].size() > 128 || f[7].size() > 128)
+                f[5].size() > 24 || f[6].size() > 128 || f[7].size() > 128 ||
+                (count == 9 && ((f[8].size() != 3 && f[8].size() != 5) || f[5].empty() ||
+                                f[8].find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ") != Field::npos)))
                 return false;
             if (apply)
                 input::marker(i, aspect, kind, &f[4]);

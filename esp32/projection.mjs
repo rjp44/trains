@@ -1,4 +1,5 @@
 import { regionalMarkers, regionalRows } from '../public/regional.mjs';
+import { trainLabel } from '../public/train-label.mjs';
 // The asset packer and live bridge must agree on the marker index and its meaning.
 import { crc32 } from 'node:zlib';
 import { corridorTracks, withStationReports } from '../rail.mjs';
@@ -43,8 +44,8 @@ export function createProjection(layout) {
     const markers = regionalMarkers(layout);
     const fingerprint = crc32(JSON.stringify(layout.tracks));
     const project = (board, lookup, live=false) => ({
-      rows: regionalRows(layout, board, live).map(([aspect, kind, head, service, route, info]) =>
-        [aspect, kind, plain(head,12), plain(service,24), plain(route), plain(info)]),
+      rows: regionalRows(layout, board, live).map(([aspect, kind, head, service, route, info, label = '']) =>
+        [aspect, kind, plain(head,12), plain(service,24), plain(route), plain(info), label]),
       cards:Array.from({length:4},()=>['','','','',0]),
       observed:Math.floor((board.observed || 0)/1000),
     });
@@ -67,7 +68,8 @@ export function createProjection(layout) {
         current = fresh(area);
       const aspect = current ? ({ on: 1, off: 2 }[state.values[b.bit]] ?? 0) : 0;
       const kind = !head ? 0 : !current ? 3 : isTrainCode(head) ? 1 : 2;
-      return [aspect, kind, head, ...detail(head && state.services[area + '/' + head])];
+      const service = head && state.services[area + '/' + head];
+      return [aspect, kind, head, ...detail(service), trainLabel(service)];
     });
     const groups = fresh('R1') ? hemelTrains(berths, state, fresh) : { fast: [], slow: [] };
     const cards = Object.values(groups).flatMap((trains) => {
@@ -92,7 +94,7 @@ export function createProjection(layout) {
 
 // Each packet is an atomic full snapshot or a delta against the previous sequence.
 // A periodic snapshot also repairs a one-way serial link without a return channel.
-export function encoder(fingerprint) {
+export function encoder(fingerprint, includeTrainLabels = false) {
   let sequence = 0,
     previous;
   return ({ rows, cards, observed }, status, forceFull = false, arrivals = '') => {
@@ -101,7 +103,11 @@ export function encoder(fingerprint) {
     const lines = [];
     const changed = (a, b) => a.some((v, i) => v !== b[i]);
     rows.forEach((r, i) => {
-      if (full ? r[0] || r[1] : changed(r, previous.rows[i])) lines.push(['M', i, ...r].join('\t'));
+      if (full ? r[0] || r[1] : changed(r, previous.rows[i])) {
+        // Older H1 receivers accept exactly six marker fields. Only paired readers opt in.
+        const fields = includeTrainLabels && r[6] ? r : r.slice(0, 6);
+        lines.push(['M', i, ...fields].join('\t'));
+      }
     });
     cards.forEach((c, i) => {
       if (full ? c[4] : changed(c, previous.cards[i])) lines.push(['C', i, ...c].join('\t'));

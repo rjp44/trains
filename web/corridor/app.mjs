@@ -2,7 +2,7 @@ import { lineBoard } from './line-board.mjs';
 import { Corridor } from './rail.mjs';
 import { createLiveFeed } from './live.mjs';
 import { regionalRows, locationArrivals, slots } from './regional.mjs';
-import { panelSettings, settingGroup } from './panel/settings.mjs';
+import { panelSettings, settingGroup, trainLabelControl } from './panel/settings.mjs';
 import { readSetting, saveSetting } from './panel/appearance.mjs';
 import { mapGestures } from './panel/gestures.mjs';
 const { id, manifest, json } = globalThis.transportApp;
@@ -65,6 +65,7 @@ const sources = options('Data source', ['Live', 'Recorded movements'], (i) => {
   else feed.start();
   draw();
 });
+const labels = trainLabelControl(() => { last = ''; draw(); });
 const ui = panelSettings({
   id,
   name: manifest.name,
@@ -73,7 +74,7 @@ const ui = panelSettings({
   map: $('main'),
   initialTheme: 'dark',
   applyTheme: (v) => (document.documentElement.dataset.theme = v),
-  appControls: [views.group, sources.group],
+  appControls: [views.group, labels.group, sources.group],
 });
 views.mark(view);
 board?.paint(view);
@@ -119,8 +120,9 @@ function details() {
     rowDetails(row[2] || b.id, t.name, [
       tables.markerInfo[index][3],
       'Berth ' + b.id + (b.lines?.length ? ' · Line code ' + b.lines.join('/') : ''),
-      row[2] ? row[4] : 'Berth clear',
+      row[2] ? row[4] : 'No description reported',
       row[2] ? row[5] : '',
+      b.bit ? '' : 'Signal indication unavailable',
       !fresh(b) ? 'Last known position' : '',
       ...moves.map(([a, z, dir]) => (dir === 'up' ? 'Up' : 'Down') + ' · ' + a + ' → ' + z),
     ]);
@@ -195,7 +197,7 @@ function draw() {
   if (key === last) return;
   last = key;
   if (board) {
-    board.update(rows);
+    board.update(rows, labels.friendly);
     details();
     return;
   }

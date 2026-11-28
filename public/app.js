@@ -1,6 +1,8 @@
-import {panelSettings, settingGroup} from './panel/settings.mjs';
+import {panelSettings, settingGroup, trainLabelControl} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
 import {readSetting, saveSetting} from './panel/appearance.mjs';
+import {trainLabel} from './train-label.mjs';
+import {drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainWidth} from './rail-symbols.mjs';
 import {
   Corridor,
   locateTrain,
@@ -272,21 +274,7 @@ function drawSignal(plot, m, x, y, values, small) {
       stroke: selected && !small ? 'var(--selection)' : 'transparent',
       'stroke-dasharray': selected ? '3 2' : '',
     });
-    const colour =
-      indication === 'on'
-        ? 'var(--signal-on)'
-        : indication === 'off'
-          ? 'var(--signal-off)'
-          : 'var(--signal-unknown)';
-    shape(signal, 'circle', {
-      cx: 0,
-      cy: 0,
-      r: small ? 2.7 : 5.3,
-      fill: indication === 'on' ? colour : 'var(--board)',
-      stroke: colour,
-      'stroke-width': small ? 1.2 : 2,
-      'stroke-dasharray': indication ? '' : '2 2',
-    });
+    showSignalAspect(drawSignalLamp(shape, signal, 0, 0, small), indication);
     if (!small && !m.platform && (zoom >= 3 || selected))
       shape(
         plot,
@@ -296,14 +284,14 @@ function drawSignal(plot, m, x, y, values, small) {
       );
   }
 }
-function drawTrains(trainsLayer, occupied, values) {
+function drawTrains(trainsLayer, occupied, values, services) {
   occupied.sort((a, b) => a.y - b.y || a.x - b.x);
   for (const [i, { m, x, y }] of occupied.entries()) {
     const prev = occupied[i - 1],
       next = occupied[i + 1];
     const left = prev?.y === y && prev.x < x ? x - prev.x : Infinity;
     const right = next?.y === y && next.x > x ? next.x - x : Infinity;
-    const width = Math.min(50, left - 2, right - 2);
+    const width = Math.min(trainWidth, left - 2, right - 2);
     const stale = !fresh(m.id.slice(0, 2)),
       head = values[m.id];
     const train = activate(
@@ -313,36 +301,9 @@ function drawTrains(trainsLayer, occupied, values) {
       head + ' · ' + m.track.name + ' · ' + markerLocation(m),
       head,
     );
-    shape(train, 'rect', {
-      x: -width / 2,
-      y: -10.5,
-      width,
-      height: 21,
-      rx: 3,
-      fill: stale
-        ? 'var(--stale-description)'
-        : isTrainCode(head)
-          ? 'var(--train-fill)'
-          : 'var(--other-description)',
-      stroke:
-        trainSelection?.head === head && trainSelection?.berth === m.id ? 'var(--marker-focus)' : 'none',
-      'stroke-width': 2,
-      class: 'ring',
-    });
-    shape(
-      train,
-      'text',
-      {
-        x: 0,
-        y: 0,
-        'dominant-baseline': 'central',
-        'text-anchor': 'middle',
-        fill: 'var(--train-text)',
-        'font-size': Math.min(13, width / 2.85),
-        'font-weight': 700,
-      },
-      head,
-    );
+    const selected = trainSelection?.head === head && trainSelection?.berth === m.id;
+    const friendly = labels.friendly ? trainLabel(services[m.id.slice(0, 2) + '/' + head]) : '';
+    showHeadcode(drawHeadcode(shape, train, 0, 0, width, selected), head, stale ? 3 : 1, friendly);
   }
 }
 
@@ -511,11 +472,11 @@ function drawJunction(plot, values, occupied) {
     const x = position(marker.x),
       y = laneY(berthLane(marker));
     drawSignal(plot, marker, x, y, values, zoom < 1.7);
-    if (values[marker.id]) occupied.push({ m: marker, x, y });
+    if (isTrainCode(values[marker.id])) occupied.push({ m: marker, x, y });
   }
   plot.append(labels);
 }
-function drawMap(values) {
+function drawMap(values, services) {
   const svg = $('map'),
     focusKey = document.activeElement?.dataset.key;
   const merged = showBranches(),
@@ -634,7 +595,7 @@ function drawMap(values) {
       if (!visible(m)) continue;
       const x = position(m.x);
       drawSignal(plot, m, x, y, values, zoom < 0.6);
-      if (values[m.id]) occupied.push({ m, x, y });
+      if (isTrainCode(values[m.id])) occupied.push({ m, x, y });
     }
   }
   if (merged) {
@@ -649,7 +610,7 @@ function drawMap(values) {
       textAt(svg, 17, laneY(lane) + 3, label, { 'text-anchor': 'start', fill: colour, 'font-size': 12 });
     }
   }
-  drawTrains(shape(plot, 'g', {}), occupied, values);
+  drawTrains(shape(plot, 'g', {}), occupied, values, services);
   const y = height - 13;
   textAt(svg, 109, y, '← LONDON EUSTON', {
     'text-anchor': 'start',
@@ -927,7 +888,7 @@ function render(force = false) {
   if (!force && signature === lastDraw) return;
   lastDraw = signature;
   if (trainSelection) trainDetails(board);
-  drawMap(board.values);
+  drawMap(board.values, board.services);
   positionPopout();
   {
     const m = byBit.get(selection) || byBerth.get(selection);
@@ -1144,18 +1105,20 @@ viewLink.addEventListener('click', (event) => {
 window.addEventListener('popstate', updateDisplay);
 let initialTheme = 'dark';
 try { if (localStorage.getItem('traintimes.diagramTheme') === 'light') initialTheme = 'light'; } catch {}
+const labels = trainLabelControl(() => render(true));
 const settings = panelSettings({
   id:'hemel', name:'Hemel rail monitor', toolbar:document.querySelector('.diagram-tools'),
   status:document.querySelector('.source-status'), map:drawing, initialTheme,
   applyTheme(value) { panel.dataset.theme = value; },
   appControls:[
     settingGroup('Diagram view', $('sector'), $('home'), $('junction')),
+    labels.group,
     settingGroup('Zoom', $('zoomout'), $('zoomin')),
     settingGroup('Data source', $('live'), $('replay')), $('replaybar'),
     settingGroup('Layout', viewLink), $('areas'), $('notice'), $('branch-status')
   ],
   installHelp:document.querySelector('.mobile-install'),
-  credits:'Network Rail via Signal Maps; schedules from Open Rail, Abbey reports from Railinfo and mappings from EASMData.'
+  credits:'Network Rail via Signal Maps; schedules from Open Rail, Abbey reports from Railinfo, mappings from EASMData and station codes from the Office of Rail and Road.'
 });
 document.querySelector('.zoom').remove();
 document.querySelector('.modebox').remove();

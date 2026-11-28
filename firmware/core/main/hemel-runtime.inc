@@ -5,9 +5,14 @@ uint32_t layoutFingerprint, darkPalette[20], lightPalette[20];
 std::vector<MarkerInfo> markerInfo;
 std::vector<Card> cards;
 std::vector<Detail> details;
+std::vector<OperatorTag> operatorTags;
+uint8_t labelMode = 0;
 struct StationOffset { const char *id,*name; int x; };
+struct TrackLegend { int from, to, y; const char *name; };
 struct ViewTables {
-    int width = panelWidth, pan = 0;
+    int width = panelWidth, pan = 0, legendWidth = 0;
+    int viewportWidth() const { return panelWidth - legendWidth; }
+    std::vector<TrackLegend> legend;
     std::vector<StationOffset> stations;
     std::vector<Segment> lines;
     std::vector<Label> labels;
@@ -27,8 +32,18 @@ bool loadHemel() {
             [](auto p, MarkerInfo &m) { return row(p, m.id, m.signal, m.bit, m.track); }, 1024) ||
         !load("cards", cards,
               [](auto p, Card &c) { return row(p, c.head, c.context, c.route, c.running, c.identity); }) ||
-        !load("details", details, [](auto p, Detail &d) { return row(p, d.service, d.route, d.running); }))
+        !load("details", details, [](auto p, Detail &d) {
+            d.label = "";
+            return cJSON_GetArraySize(p) == 3 ? row(p, d.service, d.route, d.running)
+                                              : row(p, d.service, d.route, d.running, d.label);
+        }))
         return false;
+    operatorTags.clear();
+    if (field(tables, "operatorTags") && !load("operatorTags", operatorTags, [](auto p, OperatorTag &tag) {
+            return row(p, tag.code, tag.name, tag.background, tag.foreground) &&
+                   strlen(tag.code) == 2 && strlen(tag.name) >= 1 && strlen(tag.name) <= 3 &&
+                   tag.background <= 0xffffff && tag.foreground <= 0xffffff;
+        }, 128)) return false;
     markerCount = markerInfo.size();
     for (int i = 0; i < 2; i++) {
         auto a = field(tables, i ? "lightPalette" : "darkPalette");
@@ -81,6 +96,13 @@ bool loadHemel() {
                     return row(p,stop.id,stop.name,stop.x) && stop.x>=0 && stop.x<v.width;
                 },256) || v.stations.front().x!=0) return false;
             for (size_t j=1;j<v.stations.size();++j) if(v.stations[j].x<=v.stations[j-1].x) return false;
+            if (auto legendWidth = field(tables, key("LegendWidth").c_str())) {
+                if (!value(legendWidth, v.legendWidth) || v.legendWidth < 1 || v.legendWidth > panelWidth / 4 ||
+                    !load(key("Legend").c_str(), v.legend, [&](auto p, TrackLegend &l) {
+                        return row(p, l.from, l.to, l.y, l.name) && l.from >= 0 && l.from < l.to &&
+                               l.to <= v.width && l.y >= 0 && l.y < panelHeight;
+                    }, 1024)) return false;
+            }
         }
         auto space = field(tables, key("Space").c_str());
         auto rect = [&](int j, CardSpace &a) {
@@ -97,6 +119,7 @@ bool loadHemel() {
         auto diagramY = [](int y) { return toolbarHeight + y * (panelHeight - toolbarHeight) / panelHeight; };
         for (auto &line : v.lines) { line.y1 = diagramY(line.y1); line.y2 = diagramY(line.y2); }
         for (auto &label : v.labels) label.y = diagramY(label.y);
+        for (auto &label : v.legend) label.y = diagramY(label.y);
         for (auto &marker : v.markers) { marker.y = diagramY(marker.y); marker.signalY = diagramY(marker.signalY); }
         for (auto *card : {&s.fast, &s.slow}) { card->top = diagramY(card->top); card->bottom = diagramY(card->bottom); }
         s.lines = span(v.lines);

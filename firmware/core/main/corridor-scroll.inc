@@ -12,29 +12,38 @@ size_t stationAt(int x) {
 }
 void panTo(int x) {
     auto &v=activeCorridor();
-    int left=v.pan=std::clamp(x,0,v.width-panelWidth), right=left+panelWidth;
+    int left=v.pan=std::clamp(x,0,v.width-v.viewportWidth()), right=left+v.viewportWidth();
+    int offset=v.legendWidth-left;
     visibleRails.clear();visibleNames.clear();visibleBerths.clear();
     for(auto line:v.lines) if(std::max(line.x1,line.x2)>=left && std::min(line.x1,line.x2)<=right) {
-        line.x1-=left;line.x2-=left;visibleRails.push_back(line);
+        line.x1+=offset;line.x2+=offset;visibleRails.push_back(line);
     }
     for(auto label:v.labels) if(label.x+label.width/2>=left && label.x-label.width/2<=right) {
-        label.x-=left;visibleNames.push_back(label);
+        label.x+=offset;visibleNames.push_back(label);
     }
     for(auto marker:v.markers) if(marker.x+32>=left && marker.x-32<=right) {
-        marker.x-=left;visibleBerths.push_back(marker);
+        marker.x+=offset;visibleBerths.push_back(marker);
     }
     Scene *target[]={&sectorScene,&hemelScene,&watfordScene};
     auto &s=*target[static_cast<unsigned>(currentView())];
     s.lines=span(visibleRails);s.labels=span(visibleNames);s.markers=span(visibleBerths);
     invalidate();
 }
+void drawCorridorLegend(lv_layer_t *layer) {
+    const auto &v=activeCorridor();
+    if (!v.legendWidth) return;
+    box(layer,0,transport::toolbarHeight,v.legendWidth,scrollY-transport::toolbarHeight,Board);
+    for (const auto &label : v.legend)
+        if (label.from<=v.pan && v.pan<label.to)
+            text(layer,3,label.y,v.legendWidth-6,label.name,12,Text);
+}
 void drawScrollBar(lv_layer_t *layer) {
     auto &v=activeCorridor();
     text(layer,98,scrollY+9,58,"< Stop",12,Text);
     text(layer,885,scrollY+9,102,"Stop >",12,Text);
     box(layer,scrollLeft,scrollY+7,scrollWidth,4,Edge);
-    int thumb=std::max(20,panelWidth*scrollWidth/v.width);
-    int offset=v.width==panelWidth?0:v.pan*(scrollWidth-thumb)/(v.width-panelWidth);
+    int thumb=std::max(20,v.viewportWidth()*scrollWidth/v.width);
+    int offset=v.width==v.viewportWidth()?0:v.pan*(scrollWidth-thumb)/(v.width-v.viewportWidth());
     box(layer,scrollLeft+offset,scrollY+2,thumb,14,Rail,-1,5);
 }
 bool scrollBarTap(int x,int y) {
@@ -45,9 +54,9 @@ bool scrollBarTap(int x,int y) {
         if(v.pan<=v.stations[i].x+3 && i>0) --i;
         panTo(v.stations[i].x);
     } else if(x>scrollLeft+scrollWidth) {
-        panTo(i+1<v.stations.size()?v.stations[i+1].x:v.width-panelWidth);
+        panTo(i+1<v.stations.size()?v.stations[i+1].x:v.width-v.viewportWidth());
     } else {
-        panTo((x-scrollLeft)*v.width/scrollWidth-panelWidth/2);
+        panTo((x-scrollLeft)*v.width/scrollWidth-v.viewportWidth()/2);
     }
     return true;
 }

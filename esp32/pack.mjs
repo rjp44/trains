@@ -1,4 +1,7 @@
+import { operatorTags } from '../public/train-label.mjs';
+import { approachRoadName } from './station-approaches.mjs';
 import { laneName } from './directional-scene.mjs';
+import { trainWidth, trainHeight, signalRadius } from '../public/rail-symbols.mjs';
 import { regionalScene } from './regional-scene.mjs';
 import { resolve } from 'node:path';
 // Build-time only. The device consumes const geometry and timestamped marker changes.
@@ -16,7 +19,10 @@ const layout = data('corridor'),
 const home = diagram?.columns.get('HML'),
   round = Math.round;
 const { markers, project, fingerprint } = createProjection(layout);
-const tables = { layoutFingerprint: fingerprint };
+const tables = {
+  layoutFingerprint: fingerprint,
+  operatorTags: Object.entries(operatorTags).map(([code, tag]) => [code, ...tag]),
+};
 const out = ['// Generated from corridor.json, the panel stylesheet and bundled recordings.'];
 const c = (value) => (Array.isArray(value) ? '{' + value.map(c).join(', ') + '}' : JSON.stringify(value));
 function array(type, name, rows) {
@@ -46,6 +52,8 @@ const stationsByCode = new Map(
 );
 function directionalTrack(berth) {
   if (layout.diagram !== 'directional') return '';
+  const approach = approachRoadName(berth.track.id, berth.id);
+  if (approach) return approach;
   const direction = { up: 'Up', down: 'Down', both: 'Up / Down' }[berth.direction];
   const line = laneName(berth.track, berth);
   return [direction, line === 'P' + berth.platform ? '' : line].filter(Boolean).join(' ');
@@ -272,7 +280,7 @@ function compileView(view) {
       round(at),
       round(y),
       round(y - (small ? 15 : 17) * scale),
-      b.bit ? Math.max(2, round((small ? 2.7 : 5.3) * scale)) : 0,
+      b.bit ? Math.max(2, round(signalRadius(small) * scale)) : 0,
     ]);
   }
   placed.sort((a, b) => a[2] - b[2] || a[1] - b[1]);
@@ -299,7 +307,7 @@ function compileView(view) {
     Math.max(slowTop, mainY(3) + 12 * scale),
     slowBottom,
   ];
-  tables[view + 'Space'] = [fast.map(round), slow.map(round), round(50 * scale), round(21 * scale)];
+  tables[view + 'Space'] = [fast.map(round), slow.map(round), round(trainWidth * scale), round(trainHeight * scale)];
   out.push(
     'static constexpr Scene ' +
       view +
@@ -310,7 +318,7 @@ function compileView(view) {
       'Labels), list(' +
       view +
       'Markers), ' +
-      [c(fast.map(round)), c(slow.map(round)), round(50 * scale), round(21 * scale)].join(', ') +
+      [c(fast.map(round)), c(slow.map(round)), round(trainWidth * scale), round(trainHeight * scale)].join(', ') +
       '};',
   );
 }
@@ -326,7 +334,7 @@ if (regional) {
 }
 
 const cards = [['', '', '', '', 0]],
-  details = [['', '', '']];
+  details = [['', '', '', '']];
 function intern(table, keyMap, row) {
   const key = JSON.stringify(row);
   if (!keyMap.has(key)) {

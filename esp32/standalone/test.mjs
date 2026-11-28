@@ -60,7 +60,7 @@ try {
   msg('TD_UPDATE', {});
   msg('TRUST_ALL', { '001A880125': { ti: '001A880125', t: ['R1'], sk: 'X12345', st: now,
     ol: 'WATFORD JUNCTION', dl: 'TRING', tc: 'LM' } });
-  frame();
+  assert.match(frame(), /\tTRILM$/m);
   assert.match(f.request(), /X12345\/25\/11\/26$/);
   const heading = 'Location|P|WTT|Public|Actual|WTT|Actual|WTT|Public|Actual|Path-Line|Allowances|Activities|P|Notes';
   function timetableRow(location, depart, activity) {

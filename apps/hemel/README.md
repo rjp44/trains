@@ -10,6 +10,8 @@ On first use the map opens at **15-mile sector**, showing the WCML, Watford DC a
 
 Open the gear at the top left for **App** settings. Choose a named view, select **Live** or play a recording, or choose **Show dashboard** for the train list and recent changes. Spread two fingers near Hemel or Watford in the sector diagram to enter that close-up. Pinch together to return to the sector. The browser remembers the view. Bookmarks can specify the [Hemel close-up](https://transport.pickering.org/apps/hemel/?view=hemel) or [Watford Junction](https://transport.pickering.org/apps/hemel/?view=watford).
 
+In **Settings → App → Train labels**, choose **Headcode** or **Operator + destination**. The latter pairs a coloured operator tag with the three-letter destination code. Tap a train for its headcode and service details. An unidentified service or destination keeps its headcode. The three signalling maps share this preference on the same tablet or browser.
+
 The top-right sun/moon switches theme. **Display → Sunrise / sunset** follows Hemel Hempstead and **Sound** controls the directional train horn. The diagram shows a labelled recording while the live feed connects. Select **Recorded replay** to keep playing a recording. Click or tap a train to open its details inside the diagram.
 
 - The DC diagram covers both directions between Watford Junction and the sector edge south of Kenton. The terminal fans out to platforms 1–4. The connection towards the main line via platform 6 is shown separately. The map includes the Harrow reversing siding. Platforms 6–9 serve the four WCML running lines. Platform 10 is the south-facing bay. The Abbey single line at platform 11 runs to St Albans Abbey, with the yard connection drawn to the Up Slow.

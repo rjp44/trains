@@ -10,6 +10,17 @@ const routes = {
     name: 'Crewe to Birmingham International',
     sections: ['Crewe to Wolverhampton', 'Wolverhampton to International'],
     focus: 'WVRMPTN',
+    // The selected route leaves the four-track WCML at Stafford for the
+    // Wolverhampton line. Endpoint names refer to the running-line diagram.
+    slowSections: [
+      {
+        from: 'start',
+        to: 'STAFFRD:exit',
+        directions: ['down', 'up'],
+        exit: 'Towards Wolverhampton',
+        diverges: true,
+      },
+    ],
     places:
       'CREWE MADELEY NTNB STAFFRD PNKRDG FRASL BSBYJN WVRMPTN COSELEY TIPTON DUDLPT SNDWDUD GALTILL SMTHKRS BHAMNWS ADERLYP STECHFD LEAHALL MRSTNGR BHAMINT',
   },
@@ -17,6 +28,21 @@ const routes = {
     name: 'Preston to Crewe',
     sections: ['Preston to Warrington', 'Warrington to Crewe'],
     focus: 'WRGTNBQ',
+    // Network Rail LNW North sectional appendix, NW1001 sequences 010–023.
+    // Schematic anchors are relative to a reporting location, not mileages.
+    slowSections: [
+      { from: 'start', to: 'EUXT:exit', directions: ['down', 'up'], exit: 'Balshaw Lane Jn' },
+      { from: 'WIGANNW:exit', to: 'GOLBRNJ:centre', directions: ['down', 'up'], entry: 'Springs Branch Jn' },
+      { from: 'WINWCKJ:centre', to: 'WRGTNBQ:exit', directions: ['down', 'up'], exit: 'Warrington South Jn' },
+      {
+        from: 'ACBG:entry',
+        to: 'ACBG:exit',
+        directions: ['up'],
+        entry: 'Acton Bridge Jn',
+        exit: 'Hartford Jn',
+      },
+      { from: 'WNSFD:exit', to: 'end', directions: ['down', 'up'], entry: 'Winsford South Jn' },
+    ],
     places:
       'PRST LEYLAND EUXT WIGANNW BMFRLNJ GOLBRNJ WINWCKJ WRGTNBQ ACGJN WEAVERJ ACBG HARTFD WNSFD CREWECY CREWE',
   },
@@ -26,6 +52,30 @@ const names = {
   GALTILL: 'Smethwick Galton Bridge',
   WRGTNBQ: 'Warrington Bank Quay',
 };
+async function reference(file, url) {
+  if (process.argv[2]) return JSON.parse(await fs.readFile(join(process.argv[2], file)));
+  const response = await fetch(url);
+  if (!response.ok) throw Error(file + ' ' + response.status);
+  return response.json();
+}
+const crewe = await reference(
+  'CE.json',
+  'https://raw.githubusercontent.com/TrainlyHQ/td-sop-tables/eb36261ac75374d5d7c7083c2465e3ea55be5d7b/sop-tables/CE.json',
+);
+const creweSignals = new Map();
+for (const [address, bits] of Object.entries(crewe.mappings)) {
+  for (const [bit, indication] of Object.entries(bits)) {
+    if (indication.type !== 'SIG' || indication.set_state !== 'OFF' || !/^\d{4}$/.test(indication.berth))
+      continue;
+    // SOP numbers bits 0–7, least significant first. The relay uses 1–8.
+    const id = 'CE' + indication.berth;
+    if (creweSignals.has(id)) throw Error('Ambiguous Crewe signal mapping for ' + id);
+    creweSignals.set(id, {
+      signal: 'CE' + Number(indication.berth),
+      bit: 'CE' + address + ':' + (Number(bit) + 1),
+    });
+  }
+}
 for (const [id, route] of Object.entries(routes)) {
   const tracks = [],
     owners = new Map(),
@@ -73,13 +123,12 @@ for (const [id, route] of Object.entries(routes)) {
       }
     }
   }
-  const signals = new Map();
+  const signals = new Map(creweSignals);
   if (id === 'crewe-birmingham') {
-    const diagram = process.argv[2]
-      ? JSON.parse(await fs.readFile(join(process.argv[2], 'newstreet.json')))
-      : await fetch(
-          'https://raw.githubusercontent.com/Shwam3/EASMData/76ad5669ce8e351716a1b5b79e8c12fad60dd89b/data/newstreet.json',
-        ).then((r) => r.json());
+    const diagram = await reference(
+      'newstreet.json',
+      'https://raw.githubusercontent.com/Shwam3/EASMData/76ad5669ce8e351716a1b5b79e8c12fad60dd89b/data/newstreet.json',
+    );
     for (const b of diagram.berths) {
       if (b.i.length !== 1 || !/^[A-Z]{2}\d{4}$/.test(b.i[0])) continue;
       const key = b.i[0],
@@ -116,6 +165,7 @@ for (const [id, route] of Object.entries(routes)) {
     name: route.name,
     views: [route.name, ...route.sections],
     focus: route.focus,
+    slowSections: route.slowSections,
     areas: [...new Set([...owners.keys()].map((id) => id.slice(0, 2)))].sort(),
     tracks,
     branches: [],

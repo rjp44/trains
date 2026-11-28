@@ -36,6 +36,12 @@ void hemelOptions(lv_obj_t *parent) {
             hemel::view(static_cast<hemel::View>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             panel::refreshAppPage();
         }, i, i == static_cast<unsigned>(hemel::currentView()));
+    row = panel::optionRow(parent, "Train labels");
+    for (unsigned i = 0; i < 2; ++i)
+        panel::option(row, i ? "Operator + destination" : "Headcode", [](lv_event_t *e) {
+            hemel::setFriendlyLabels(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)) != 0);
+            panel::refreshAppPage();
+        }, i, hemel::friendlyLabels() == (i == 1));
     row = panel::optionRow(parent, "Data source");
     constexpr const char *sources[] = {"Live", "Sector replay", "Hemel replay", "Watford replay"};
     for (int i = 0; i < (hemel::regionalLayout() ? 2 : 4); ++i) {

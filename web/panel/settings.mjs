@@ -13,6 +13,37 @@ export function settingGroup(title, ...controls) {
   section.append(heading, row);
   return section;
 }
+export function trainLabelControl(redraw) {
+  const key = 'rail.trainLabel';
+  let friendly = readSetting(key) === 'destination';
+  const buttons = ['Headcode', 'Operator + destination'].map((caption, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = caption;
+    button.onclick = () => {
+      friendly = index === 1;
+      saveSetting(key, friendly ? 'destination' : 'headcode');
+      update();
+    };
+    return button;
+  });
+  function mark() {
+    buttons.forEach((button, index) => button.setAttribute('aria-pressed', friendly === (index === 1)));
+  }
+  function update() {
+    mark();
+    redraw();
+  }
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'transport.' + key || event.key === null) {
+      friendly = readSetting(key) === 'destination';
+      update();
+    }
+  });
+  mark();
+  return {group: settingGroup('Train labels', ...buttons), get friendly() { return friendly; }};
+}
+
 export function panelSettings({
   id,
   name,

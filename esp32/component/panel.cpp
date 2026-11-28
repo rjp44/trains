@@ -93,7 +93,11 @@ struct Card {
     uint32_t identity;
 };
 struct Detail {
-    const char *service, *route, *running;
+    const char *service, *route, *running, *label = "";
+};
+struct OperatorTag {
+    const char *code, *name;
+    uint32_t background, foreground;
 };
 struct MarkerInfo {
     const char *id, *signal, *bit, *track;
@@ -131,7 +135,7 @@ lv_point_t pointerPoint{}, startPoint{};
 bool pressed = false, dragged = false;
 struct Selection {
     int index = -1, x = 0, y = 0;
-    bool signal = false, berth = false, present = false;
+    bool signal = false, present = false;
     std::string head, service, route, running;
 };
 Selection selected;
@@ -160,13 +164,13 @@ const lv_font_t *font(int pixels) {
     return &lv_font_montserrat_8;
 }
 int textWidth(const char *s, const lv_font_t *f) { return lv_text_get_width(s, std::strlen(s), f, 0); }
-void box(lv_layer_t *layer, int x, int y, int w, int h, int fill, int edge = -1, int radius = 0) {
+void box(lv_layer_t *layer, int x, int y, int w, int h, int fill, int edge = -1, int radius = 0, int rgb = -1) {
     if (w <= 0 || h <= 0)
         return;
     lv_area_t bounds{x, y, x + w - 1, y + h - 1};
     lv_draw_rect_dsc_t d;
     lv_draw_rect_dsc_init(&d);
-    d.bg_color = colour(fill);
+    d.bg_color = rgb < 0 ? colour(fill) : lv_color_hex(rgb);
     d.radius = radius;
     if (edge >= 0) {
         d.border_color = colour(edge);
@@ -174,7 +178,7 @@ void box(lv_layer_t *layer, int x, int y, int w, int h, int fill, int edge = -1,
     }
     lv_draw_rect(layer, &d, &bounds);
 }
-void text(lv_layer_t *layer, int x, int cy, int w, const char *s, int size, int ink, bool centred = true) {
+void text(lv_layer_t *layer, int x, int cy, int w, const char *s, int size, int ink, bool centred = true, int rgb = -1) {
     const lv_font_t *f = font(size);
     while (size > 8 && textWidth(s, f) > w) {
         size -= 2;
@@ -187,7 +191,7 @@ void text(lv_layer_t *layer, int x, int cy, int w, const char *s, int size, int 
     d.text = s;
     d.text_local = true;
     d.font = f;
-    d.color = colour(ink);
+    d.color = rgb < 0 ? colour(ink) : lv_color_hex(rgb);
     const int excess = textWidth(s, f) - w;
     if (excess > 0 && std::strlen(s) > 1) {
         const int gaps = static_cast<int>(std::strlen(s)) - 1;
@@ -212,7 +216,28 @@ void badge(lv_layer_t *layer, const Marker &m, int width) {
         : train.kind == 2 ? Other
                           : Stale,
         -1, 3);
-    text(layer, x, m.y, width, train.head, std::min(16, h - 2), TrainText);
+    const int size = std::min(16, h - 2);
+#ifdef TRANSPORT_CORE
+    const char *label = train.detail.label;
+    const size_t length = strlen(label);
+    if (labelMode == 1 && *train.detail.service && (length == 3 || length == 5)) {
+        const char crs[] = {label[0], label[1], label[2], 0};
+        if (length == 5 && width >= 30) {
+            const auto tag = std::find_if(operatorTags.begin(), operatorTags.end(),
+                [&](const OperatorTag &op) { return !strcmp(op.code, label + 3); });
+            const bool known = tag != operatorTags.end();
+            const int chip = (width * 36 + 50) / 100;
+            box(layer, x + 1, m.y - h / 2 + 1, chip, h - 2, Board, -1, 2, known ? tag->background : 0x374247);
+            text(layer, x + 1, m.y, chip, known ? tag->name : label + 3, std::min(12, h - 4), Text,
+                 true, known ? tag->foreground : 0xf4f5f6);
+            x += chip + 1;
+            width -= chip + 1;
+        }
+        text(layer, x, m.y, width, crs, size, TrainText);
+        return;
+    }
+#endif
+    text(layer, x, m.y, width, train.head, size, TrainText);
 }
 struct Rect {
     int x, y, w, h;
@@ -251,14 +276,28 @@ void card(lv_layer_t *layer, int line, const Card &c) {
     text(layer, x + 8, y + rowH + rowH / 2, w - 16, c.route, layout.bodySize, Text, false);
     text(layer, x + 8, y + 2 * rowH + rowH / 2, w - 16, c.running, layout.bodySize, Text, false);
 }
+#ifdef TRANSPORT_CORE
+// Stale readings share a wire kind, so check their text as well as fresh status.
+bool passengerMapDescription(const Reading &r) {
+    if (r.kind != 3) return r.kind == 1;
+    std::string_view h(r.head);
+    auto digit = [](char c) { return c >= '0' && c <= '9'; };
+    auto letter = [](char c) { return c >= 'A' && c <= 'Z'; };
+    return h.size() == 4 && digit(h[2]) && digit(h[3]) &&
+           ((digit(h[0]) && letter(h[1])) || (letter(h[0]) && digit(h[1])));
+}
+#endif
 template <class Visitor> void visitBadges(Visitor visit) {
     const Marker *prev = nullptr;
     int prevWidth = 0;
     // Marker coordinates are ordered by lane, then column. Size a badge to
     // the closest occupied neighbour on either side, preserving its centre.
+#ifdef TRANSPORT_CORE
+    const bool overview = regionalLayout() && !directionalLayout();
+#endif
     for (const Marker &m : scene->markers) {
 #ifdef TRANSPORT_CORE
-        if (m.radius && regionalLayout() && !directionalLayout()) continue;
+        if (overview ? m.radius != 0 : !passengerMapDescription(current[m.id])) continue;
 #endif
         if (!current[m.id].kind)
             continue;
@@ -288,7 +327,7 @@ Rect popup() {
             w, h};
 }
 void follow() {
-    if (selected.index < 0 || selected.signal || selected.berth)
+    if (selected.index < 0 || selected.signal)
         return;
     const auto compatible = [&](int i) {
         const auto &r = current[i];
@@ -328,6 +367,7 @@ void chooseTrain(int id, int x, int y);
 #endif
 void drawControls(lv_layer_t *layer) {
 #ifdef TRANSPORT_CORE
+    drawCorridorLegend(layer);
     box(layer, 0, 0, panelWidth, transport::toolbarHeight, Board);
     const char *viewName = hemel::viewName(currentView());
     text(layer, 60, transport::toolbarHeight / 2, panelWidth - 120, viewName, 16, Text);
@@ -370,12 +410,7 @@ void drawControls(lv_layer_t *layer) {
     if (selected.signal || !regionalLayout())
 #endif
         where += std::string(" | ") + m.id;
-    if (selected.berth) {
-        text(layer, x, r.y + 17, w - 35, m.id, 16, Text, false);
-        const auto &row = current[selected.index];
-        text(layer, x, r.y + 44, w, *row.head ? row.head : "No description reported", 14, Text, false);
-        text(layer, x, r.y + 70, w, where.c_str(), 12, Muted, false);
-    } else if (selected.signal) {
+    if (selected.signal) {
         const unsigned aspect = offline ? 0 : current[selected.index].aspect;
         text(layer, x, r.y + 17, w - 35, m.signal, 16, Text, false);
         text(layer, x, r.y + 44, w,
@@ -423,6 +458,7 @@ void tap(int x, int y) {
     }
 #ifdef TRANSPORT_CORE
     if (registerTap(x,y) || scrollBarTap(x,y)) return;
+    if (x < activeCorridor().legendWidth) return;
 #endif
 #ifndef TRANSPORT_CORE
     if (button(0).contains(x, y)) {
@@ -483,22 +519,6 @@ void tap(int x, int y) {
         invalidate();
         return;
     }
-#ifdef TRANSPORT_CORE
-    if (directionalLayout()) {
-        for (const auto &m : scene->markers) {
-            if (std::abs(x - m.x) > 34 || y < m.y - 9 || y > m.y + 25) continue;
-            if (current[m.id].kind) chooseTrain(m.id, x, y);
-            else {
-                selected.index = m.id;
-                selected.x = x;
-                selected.y = y;
-                selected.berth = true;
-                invalidate();
-            }
-            return;
-        }
-    }
-#endif
     for (const auto &label : scene->labels)
         if (std::abs(x - label.x) <= label.width / 2 && std::abs(y - label.y) <= 12) {
 #ifdef TRANSPORT_CORE
@@ -624,7 +644,7 @@ void pinchView(bool closer, int x) {
     if (directionalLayout()) {
         auto &v = activeCorridor();
         if ((closer && currentView()!=View::Sector) || (!closer && currentView()==View::Sector)) return;
-        const auto &stop = v.stations[stationAt(v.pan+x)];
+        const auto &stop = v.stations[stationAt(v.pan+std::max(0,x-v.legendWidth))];
         View target = View::Sector;
         if (closer) {
             const auto &second=viewTables[2].stations;
@@ -656,7 +676,7 @@ bool directionalLayout() { return !activeCorridor().stations.empty(); }
 bool dragCorridor(int dx, int startY) {
     if (!directionalLayout() || registerIndex>=0 || selected.index>=0 || startY<transport::toolbarHeight) return false;
     const auto &v=activeCorridor();
-    if (startY>=scrollY) panTo(v.pan + int(std::lround(dx * double(v.width-panelWidth) / scrollWidth)));
+    if (startY>=scrollY) panTo(v.pan + int(std::lround(dx * double(v.width-v.viewportWidth()) / scrollWidth)));
     else panTo(v.pan-dx);
     return true;
 }
@@ -677,7 +697,14 @@ static bool restoringView;
 static void saveSchematic(){
     if(!restoringView)transport::saveView(viewKey().c_str(),SchematicSettings{scene==&hemelScene?1u:scene==&watfordScene?2u:0u,palette==lightPalette});
 }
+bool friendlyLabels() { return labelMode == 1; }
+void setFriendlyLabels(bool enabled) {
+    labelMode = enabled ? 1 : 0;
+    transport::saveView("rail_labels", labelMode);
+    invalidate();
+}
 void restoreView(View fallback){
+    transport::loadView("rail_labels", labelMode);
     SchematicSettings s{static_cast<unsigned>(fallback),0};
     transport::loadView(viewKey().c_str(),s);restoringView=true;
     view(s.view<=2?static_cast<View>(s.view):fallback);light(s.light==1);restoringView=false;
@@ -773,22 +800,22 @@ void startFrame(bool full) {
         std::fill_n(choices, 4, nullptr);
     }
 }
-static void storeText(std::string &storage, const Field *fields, const char **parts) {
+template <size_t N> static void storeText(std::string &storage, const Field *fields, const char *(&parts)[N]) {
     storage.clear();
-    for (int i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < N; ++i) {
         storage.append(fields[i]);
         storage.push_back(0);
     }
     const char *p = storage.data();
-    for (int i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < N; ++i) {
         parts[i] = p;
         p += fields[i].size() + 1;
     }
 }
 void marker(unsigned i, unsigned aspect, unsigned kind, const Field *fields) {
-    const char *p[4];
+    const char *p[5];
     storeText(liveText[i], fields, p);
-    current[i] = {aspect, kind, p[0], {p[1], p[2], p[3]}};
+    current[i] = {aspect, kind, p[0], {p[1], p[2], p[3], p[4]}};
     frameDirty = true;
 }
 void card(unsigned i, const Field *fields, uint32_t identity) {

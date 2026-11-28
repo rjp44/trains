@@ -15,6 +15,8 @@ bool attach(lv_display_t *display);
 void view(View value);
 #ifdef TRANSPORT_CORE
 void restoreView(View fallback);
+bool friendlyLabels();
+void setFriendlyLabels(bool enabled);
 View currentView();
 const char *viewName(View value);
 bool regionalLayout();

@@ -1,11 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { trainLabel } from './public/train-label.mjs';
 import { Corridor } from './rail.mjs';
 import { hemelBerths, hemelTrains, cardCandidates, cardRotation, schedulePath, hemelCall, callText } from './public/hemel.mjs';
 
 const layout = JSON.parse(readFileSync(new URL('./public/data/corridor.json', import.meta.url)));
 const berths = hemelBerths(layout);
+
+test('friendly train labels use a matched destination, preserving headcodes for uncertain matches', () => {
+  const service = { id: '001V220126', destination: 'Hereford', operator: 'LM' };
+  assert.equal(trainLabel(service), 'HFDLM');
+  assert.equal(trainLabel({ ...service, destination: 'Watford Junction DC', operator: 'LO' }), 'WFJLO');
+  assert.equal(trainLabel({ ...service, operator: 'ZZ' }), 'HFD');
+  assert.equal(trainLabel({ ...service, operator: null }), 'HFD');
+  assert.equal(trainLabel({ ...service, ambiguous: true }), '');
+  assert.equal(trainLabel({ ...service, id: '' }), '');
+  assert.equal(trainLabel({ ...service, destination: 'Ulverston Goods Sidings' }), '');
+});
 
 test('Hemel maps the four station berths and searches only their inbound sides', () => {
   const nearest = layout.tracks.map((track) => {

@@ -1,6 +1,7 @@
 // Marker order is shared by live packets, recorded frames and the native scene.
 // Older station-overview packages also reserve summary positions at each stop.
 import { isTrainCode, operators, stationName } from './hemel.mjs';
+import { trainLabel } from './train-label.mjs';
 export const slots = 8;
 export function regionalMarkers(layout) {
   return layout.tracks.flatMap((track) => [
@@ -29,7 +30,7 @@ export function regionalRows(layout, state, live = false) {
     const info = [b.platform && 'P' + b.platform, b.id, operators[s?.operator] || s?.operator, timing, delay]
       .filter(Boolean)
       .join(' | ');
-    return [0, train.fresh ? 1 : 3, head, s?.id || '', route, info];
+    return [0, train.fresh ? 1 : 3, head, s?.id || '', route, info, trainLabel(s)];
   }
   function overviewRows(track) {
     const occupied = new Map();

@@ -8,12 +8,14 @@ Transport Display runs live transport maps on a 10.1-inch Elecrow CrowPanel and 
 | --- | --- |
 | [Hemel rail monitor](https://transport.pickering.org/apps/hemel/) | Live trains, signals and booked calls around Hemel Hempstead and Watford Junction, with three recorded journeys through the diagram. |
 | [Lakes Transit](https://transport.pickering.org/apps/lakes/) | Lake District buses, coastal trains and the Lancaster–Carlisle WCML on a relief map. Avanti, TransPennine Express and Lumo trains have their own liveries. |
-| [Crewe to Birmingham International](https://transport.pickering.org/apps/crewe-birmingham/) | Scrollable Up and Down berth diagram via Stafford, Wolverhampton and Birmingham New Street. Includes mapped signal indications around Birmingham. |
-| [Preston to Crewe](https://transport.pickering.org/apps/preston-crewe/) | Scrollable Up and Down berth diagram via Wigan North Western, Warrington Bank Quay and Winsford. |
+| [Crewe to Birmingham International](https://transport.pickering.org/apps/crewe-birmingham/) | Scrollable track diagram via Stafford, Wolverhampton and Birmingham New Street, with train descriptions on running lines and platform roads and mapped signal indications at Crewe and around Birmingham. |
+| [Preston to Crewe](https://transport.pickering.org/apps/preston-crewe/) | Scrollable track diagram via Wigan North Western and Warrington Bank Quay, with individual running lines, platform berths and signal indications at Crewe. |
 
 ## Get the apps
 
 The public site opens the app directory. Choose **Open in browser** for any route. Each map has Settings at the top left and a sun/moon button at the top right. **App** holds views, filters and replay controls. **Downloads** lets you search the directory, save another app for offline use, check for updates and remove a saved copy. The bundled recordings work offline after the browser finishes downloading the app.
+
+In **Settings → App → Train labels**, choose **Headcode** or **Operator + destination**. The latter pairs a coloured operator tag with the three-letter destination code. Tap a train for its headcode and service details. An unidentified service or destination keeps its headcode. The three signalling maps share this preference on the same tablet or browser.
 
 In **Display**, choose **Sunrise / sunset** to follow the active map’s UK location or adjust map brightness. **Sound** controls train horns, **Wi-Fi** reports browser connectivity, and **About** credits the data sources. [App directory](https://transport.pickering.org/apps/) · [Machine-readable directory](https://transport.pickering.org/directory.json)
 
