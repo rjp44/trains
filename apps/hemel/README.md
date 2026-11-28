@@ -10,7 +10,9 @@ On first use the map opens at **15-mile sector**, showing the WCML, Watford DC a
 
 Open the gear at the top left for **App** settings. Choose a named view, select **Live** or play a recording. On the tablet, pinch to adjust the spacing around your fingers, or use the track-spacing buttons in settings. Drag to pan. Station names move onto a second row only where they would overlap. Each named view remembers its own spacing.
 
-In the browser, pinch or use Ctrl/⌘ + mouse wheel to zoom around a point on the track. The toolbar’s **−** and **+** buttons adjust spacing around the centre. Click the percentage to reset to 100%. With the diagram focused, **−**, **+** and **0** also work. The browser remembers the view, spacing and position. Choose **Show dashboard** for the train list and recent changes. Bookmarks can specify the [Hemel close-up](https://transport.pickering.org/apps/hemel/?view=hemel) or [Watford Junction](https://transport.pickering.org/apps/hemel/?view=watford).
+In the browser, **15-mile sector** fits the whole route in the panel. All main-line stations and St Albans Abbey keep their names. Other DC and Abbey stops appear wherever their names fit, and a watched stop keeps its label. Train and signal details remain available at every spacing.
+
+Pinch or use Ctrl/⌘ + mouse wheel to zoom around a point on the track. The toolbar’s **−** and **+** buttons adjust spacing around the centre. Click the percentage to reset to 100%. With the diagram focused, **−**, **+** and **0** also work. The browser remembers the view, spacing and position. Choose **Show dashboard** for the train list and recent changes. Bookmarks can specify the [Hemel close-up](https://transport.pickering.org/apps/hemel/?view=hemel) or [Watford Junction](https://transport.pickering.org/apps/hemel/?view=watford).
 
 In **Settings → App → Train labels**, choose **Headcode** or **Operator + destination**. The latter pairs a coloured operator tag with the three-letter destination code. Tap a train for its headcode and service details. An unidentified service or destination keeps its headcode. The three signalling maps share this preference on the same tablet or browser.
 

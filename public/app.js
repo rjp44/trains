@@ -2,7 +2,7 @@ import {railMonitor} from './rail-monitor.mjs';
 import {watchAction, stationPrompt} from './panel/watch.mjs';
 import {panelSettings, settingGroup, trainLabelControl} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
-import {corridorSpacing} from './rail-spacing.mjs';
+import {corridorSpacing, placeRailSigns, railViewProjection} from './rail-spacing.mjs';
 import {readSetting, saveSetting} from './panel/appearance.mjs';
 import {trainLabel} from './train-label.mjs';
 import {drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainWidth} from './rail-symbols.mjs';
@@ -12,6 +12,7 @@ import {
   corridorTracks,
   withStationReports,
   berthDiagram,
+  fitStationNames,
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
@@ -58,7 +59,7 @@ let mode = 'live',
   rate = 1;
 const slotWidth = 64;
 const baseWidth = 1140;
-let mapWidth = baseWidth,
+let viewportWidth = baseWidth, mapWidth = baseWidth, symbolScale = 1,
   verticalScale = 1;
 let cardSpace, cardFrame;
 let inspectedSignal = false;
@@ -108,6 +109,13 @@ const stationBands = {
   dc: dc.stations.filter(s => !layout.stations.some(main => main.code === s.code)),
   abbey: abbey.stations.filter(s => !layout.stations.some(main => main.code === s.code)),
 };
+// Branch stops omitted by the original compact Hemel diagram. Shared WCML
+// stations and the Abbey terminus keep their labels at every spacing.
+const optionalStops = new Set([
+  'KNT', 'HDL', 'HTE', 'CPK', 'WFH', // Watford DC
+  'WFN', 'GSN', 'BWO', 'HWW', 'PKT', // Abbey line
+]);
+const optionalSign = s => optionalStops.has(s.code) && s.code !== monitor.watchedStation;
 function node(tag, text, cls) {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -132,9 +140,9 @@ function clampCentre() {
   centre = routeSlot(axis.unproject(x));
 }
 function projectView() {
-  minZoom = Math.max(spacing.minZoom, (mapWidth - 4 - railLeft) / spacing.normalWidth);
-  axis = spacing.at(Math.max(minZoom, requestedZoom));
-  zoom = axis.zoom;
+  ({minZoom, axis, zoom, scale: symbolScale} =
+    railViewProjection(spacing, requestedZoom, viewportWidth, railLeft + 4, activeView === 'sector'));
+  mapWidth = viewportWidth / symbolScale;
   clampCentre();
 }
 function saveView() {
@@ -354,28 +362,30 @@ const signWidth = s => measureLabel(s.name, 15) + 8;
 const orderedStations = stops => [...stops].sort((a, b) => diagram.columns.get(a.code) - diagram.columns.get(b.code));
 function updateSpacing(values) {
   const occupied = markers.filter(m => (!m.track.branch || showBranches()) && isTrainCode(values[m.id]));
-  const key = [activeView, ...occupied.map(m => m.id)].join('/');
+  const key = [activeView, monitor.watchedStation, ...occupied.map(m => m.id)].join('/');
   if (key !== spacingKey) {
     const boxes = [], spans = [];
-    // Strip coordinates only identify features on the same track. The map's
-    // vertical layout, font size and signal diameters are independent of zoom.
+    // Use the rendered symbol footprints to find the minimum width at normal size.
+    // Strip coordinates identify features on the same track.
     const strip = m => m.track.branch ? berthLane(m) : 5 + layout.tracks.findIndex(t => t.id === m.track.id);
     for (const m of markers) if (m.bit && (!m.track.branch || showBranches())) {
-      const y = strip(m) * 44 - 17;
-      boxes.push({x: routeX(m.x), left: -9, right: 9, top: y - 8, bottom: y + 8});
+      const small = activeView === 'sector', r = small ? 4 : 9;
+      const y = strip(m) * 44 - (small ? 15 : 17);
+      const halfHeight = small ? 7 : 8;
+      boxes.push({x: routeX(m.x), left: -r, right: r, top: y - halfHeight, bottom: y + halfHeight});
     }
     for (const m of occupied) {
       const y = strip(m) * 44;
       boxes.push({x: routeX(m.x), left: -trainWidth/2, right: trainWidth/2, top: y - 11, bottom: y + 11});
     }
     for (const band of showBranches() ? Object.values(stationBands) : [layout.stations]) {
-      const sorted = orderedStations(band);
+      const sorted = orderedStations(band.filter(s => !optionalSign(s)));
       for (const [i, s] of sorted.entries()) {
         const x = routeX(diagram.columns.get(s.code)), r = signWidth(s) / 2;
         spans.push([0, x, r + 4], [x, routeWidth, r + 4]);
         if (i > 0) spans.push([routeX(diagram.columns.get(sorted[i-1].code)), x, 26]);
-        if (i > 1) {
-          const prev = sorted[i-2];
+        for (let j = 0; j < i - 1; ++j) {
+          const prev = sorted[j];
           spans.push([routeX(diagram.columns.get(prev.code)), x, signWidth(prev) / 2 + r + 6]);
         }
       }
@@ -392,20 +402,39 @@ function updateSpacing(values) {
   }
   projectView();
 }
-function stationLabels(plot, stations, y, rowOffset) {
-  const bounds = { top: Infinity, bottom: 0 };
-  const ends = [-Infinity, -Infinity];
+function stationSigns(stations) {
   const signs = stations.map(station => {
-    const column = diagram.columns.get(station.code), labelX = position(column), width = signWidth(station);
-    return {station, column, labelX, width, left: labelX - width / 2, right: labelX + width / 2};
-  }).sort((a,b) => a.left - b.left);
+    const column = diagram.columns.get(station.code);
+    return {station, column, x: axis.project(routeX(column)), width: signWidth(station),
+      label: station.name, size: 15, optional: optionalSign(station)};
+  });
+  if (symbolScale < 1) {
+    // Preserve legible lettering when a narrow overview needs smaller track
+    // symbols. The original Hemel fitter can shift or shorten required signs
+    // within their station columns. Extra stops never force abbreviations.
+    const width = axis.width * symbolScale;
+    const compact = signs.map(s => ({...s, x: s.x * symbolScale}));
+    let placed = placeRailSigns(compact, width);
+    if (!placed) {
+      const required = compact.filter(s => !s.optional);
+      const fitted = fitStationNames(required, 4, width - 4, measureLabel);
+      if (fitted.length === required.length) {
+        placed = placeRailSigns([...fitted.map(s => ({...s, x: s.labelX})), ...compact.filter(s => s.optional)], width);
+      }
+    }
+    if (placed) return placed.map(s => ({...s, x: s.x / symbolScale, width: s.width / symbolScale, size: s.size / symbolScale}));
+  }
+  return placeRailSigns(signs, axis.width);
+}
+function stationLabels(plot, signs, y, rowOffset) {
+  const bounds = { top: Infinity, bottom: 0 };
+  const rowStep = Math.sign(rowOffset) * Math.max(Math.abs(rowOffset), ...signs.map(s => s.size + 7 / symbolScale));
   for (const sign of signs) {
-    const row = sign.left >= ends[0] + 4 ? 0 : 1;
-    ends[row] = sign.right;
-    if (sign.right < railLeft || sign.left > mapWidth - 4) continue;
-    const baseline = y + row * rowOffset;
-    stationLabel(plot, {...sign, label: sign.station.name, size: 15}, baseline);
-    bounds.top = Math.min(bounds.top, baseline - 15);
+    const labelX = railMidpoint() + sign.x - axis.project(routeX(centre));
+    if (labelX + sign.width / 2 < railLeft || labelX - sign.width / 2 > mapWidth - 4) continue;
+    const baseline = y + sign.row * rowStep;
+    stationLabel(plot, {...sign, labelX}, baseline);
+    bounds.top = Math.min(bounds.top, baseline - sign.size);
     bounds.bottom = Math.max(bounds.bottom, baseline + 5);
   }
   return bounds;
@@ -447,7 +476,7 @@ function berthLane(marker) {
   if (marker.track.id === 'harrow') return 2.5;
   return marker.track.id === 'down' ? 2 : 3;
 }
-function drawJunction(plot, values, occupied) {
+function drawJunction(plot, values, occupied, upperLabelBottom) {
   const wx = position(junction);
   for (const path of layout.junction.paths) {
     const d = junctionPathSlots(diagram, path)
@@ -480,8 +509,10 @@ function drawJunction(plot, values, occupied) {
   const labels = shape(plot, 'g', {});
   for (const branch of [dc, abbey]) {
     const isDC = branch === dc;
+    const signs = stationSigns(stationBands[branch.id]);
+    const labelled = new Set(signs.map(sign => sign.station.code));
     for (const s of branch.stations) {
-      if (s.code === 'WFJ') continue;
+      if (s.code === 'WFJ' || (optionalSign(s) && !labelled.has(s.code))) continue;
       const x = position(diagram.columns.get(s.code));
       if (!inView(x)) continue;
       for (const lane of isDC ? [2, 3] : [10]) {
@@ -496,11 +527,10 @@ function drawJunction(plot, values, occupied) {
         });
       }
     }
-    const named = stationBands[branch.id];
     const top = isDC
-      ? Math.max(65 * verticalScale, 20 * verticalScale + 44, 41 * verticalScale + 22)
+      ? Math.max(65 * verticalScale, upperLabelBottom + 21 / symbolScale)
       : Math.max(laneY(10) + 41, 536 * verticalScale);
-    stationLabels(labels, named, top, Math.max(22, (isDC ? 89 : 556) * verticalScale - top));
+    stationLabels(labels, signs, top, Math.max(22, (isDC ? 89 : 556) * verticalScale - top));
   }
   for (const [p, lane] of laneByPlatform) {
     const y = laneY(lane),
@@ -553,7 +583,7 @@ function drawMap(values, services) {
   const merged = showBranches(),
     naturalHeight = merged ? 592 : 368;
   let height = naturalHeight;
-  mapWidth = baseWidth;
+  viewportWidth = baseWidth;
   if (diagramOnly) {
     const { clientWidth: w, clientHeight: h } = drawing;
     if (w > 0 && h > 0) {
@@ -562,12 +592,13 @@ function drawMap(values, services) {
       // On phones, give names and train badges more of the available width.
       const designWidth = w < 600 ? 460 : 840;
       const scale = Math.min(w / designWidth, h / (naturalHeight * 0.82), 1.5);
-      mapWidth = w / scale;
+      viewportWidth = w / scale;
       height = h / scale;
     }
   }
-  verticalScale = height / naturalHeight;
   updateSpacing(values);
+  height /= symbolScale;
+  verticalScale = height / naturalHeight;
   svg.setAttribute('viewBox', '0 0 ' + mapWidth + ' ' + height);
   svg.replaceChildren();
   const defs = shape(svg, 'defs', {});
@@ -611,11 +642,11 @@ function drawMap(values, services) {
       'pointer-events': 'none',
     });
   }
-  const upperNames = stationLabels(plot, merged ? stationBands.upper : layout.stations, 20 * verticalScale, Math.max(22, 21 * verticalScale));
+  const upperNames = stationLabels(plot, stationSigns(merged ? stationBands.upper : layout.stations), 20 * verticalScale, Math.max(22, 21 * verticalScale));
   // Keep both label rows above the Down Fast signal hit targets. A crowded
   // second row grows away from the track, even on a short display.
   const signalHitTop = mainY(0) - (activeView === 'sector' ? 22 : 30);
-  const wcmlNames = stationLabels(plot, merged ? stationBands.main : [], signalHitTop - 9, -22);
+  const wcmlNames = stationLabels(plot, merged ? stationSigns(stationBands.main) : [], signalHitTop - 9, -22);
   // These are empty regions in the existing track geometry, in SVG units.
   // Cards use the right of the junction fan whenever that part of the map is visible.
   const fanEnd = position(junction + 1);
@@ -672,7 +703,7 @@ function drawMap(values, services) {
     }
   }
   if (merged) {
-    drawJunction(plot, values, occupied);
+    drawJunction(plot, values, occupied, upperNames.bottom);
     for (const [lane, label, colour] of [
       [1, 'Watford DC', routeColours.dc],
       [2, '→ Down DC', routeColours.dc],
@@ -1126,10 +1157,13 @@ $('sector').onclick = () => selectView('sector');
 $('junction').onclick = () => selectView('watford');
 $('home').onclick = () => selectView('hemel');
 const svg = $('map');
+function cameraUnitsPerPixel() {
+  // Several pointer moves may arrive before the next painted SVG viewBox.
+  return mapWidth / svg.viewBox.baseVal.width / svg.getScreenCTM().a;
+}
 function svgX(clientX) {
   if (clientX == null) return railMidpoint();
-  const matrix = svg.getScreenCTM();
-  return Math.max(railLeft, Math.min(mapWidth - 4, (clientX - matrix.e) / matrix.a));
+  return Math.max(railLeft, Math.min(mapWidth - 4, (clientX - svg.getScreenCTM().e) * cameraUnitsPerPixel()));
 }
 let paintRequest, saveTimer;
 function paintCamera() {
@@ -1195,7 +1229,7 @@ svg.addEventListener('keydown', e => {
 mapGestures(svg, {
   drag(from, to) {
     if (!axis) return;
-    const dx = (to.x - from.x) / svg.getScreenCTM().a;
+    const dx = (to.x - from.x) * cameraUnitsPerPixel();
     centre = routeSlot(axis.unproject(axis.project(routeX(centre)) - dx));
     clampCentre(); paintCamera();
   },

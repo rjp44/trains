@@ -85,3 +85,48 @@ function interpolate(x, from, to) {
   }
   return to[lo] + (to[hi] - to[lo]) * (x - from[lo]) / (from[hi] - from[lo]);
 }
+
+// Lay out a whole station band, including off-screen stops. Required signs
+// have space reserved by the track layout. Optional signs may use either row
+// wherever they fit without displacing a required sign.
+export function placeRailSigns(signs, routeWidth) {
+  const gap = 4, tolerance = 0.01;
+  function place(items) {
+    const ends = [-Infinity, -Infinity], result = [];
+    for (const sign of items) {
+      const left = sign.x - sign.width / 2, right = sign.x + sign.width / 2;
+      if (left < gap - tolerance || right > routeWidth - gap + tolerance) return null;
+      const row = ends.findIndex(end => end + gap <= left + tolerance);
+      if (row < 0) return null;
+      ends[row] = right;
+      result.push({...sign, row});
+    }
+    return result;
+  }
+  const sorted = [...signs].sort((a, b) => (a.x - a.width / 2) - (b.x - b.width / 2));
+  const all = place(sorted);
+  if (all) return all;
+  const kept = new Set(sorted.filter(s => !s.optional));
+  let placed = place([...kept]);
+  if (!placed) return null;
+  for (const sign of sorted) {
+    if (!sign.optional) continue;
+    const trial = place(sorted.filter(s => s === sign || kept.has(s)));
+    if (trial) { kept.add(sign); placed = trial; }
+  }
+  return placed;
+}
+
+// At the sector overview every track must fit. First exhaust empty space at
+// normal symbol size. If traffic still needs more room, shrink uniformly,
+// including the frozen legend, until the complete drawing fits the panel.
+export function railViewProjection(spacing, request, viewport, margin, fitSector) {
+  const tight = spacing.normalWidth * spacing.minZoom;
+  const crowded = viewport < tight + margin;
+  const minZoom = crowded
+    ? spacing.minZoom * (fitSector ? viewport / (tight + margin) : 1)
+    : (viewport - margin) / spacing.normalWidth;
+  const zoom = Math.max(minZoom, request);
+  const axis = spacing.at(zoom);
+  return {axis, zoom, minZoom, scale: zoom / axis.zoom};
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { corridorSpacing } from '../public/rail-spacing.mjs';
+import { corridorSpacing, placeRailSigns, railViewProjection } from '../public/rail-spacing.mjs';
 import { placeStationLabels, stationLabelSpans } from '../web/corridor/station-labels.mjs';
 
 const badge = (x, y, half = 30) => ({ x, left: -half, right: half, top: y - 10, bottom: y + 10 });
@@ -24,6 +24,39 @@ test('a junction caption that cannot fit hides all junction names, including rep
   assert.deepEqual([...placeStationLabels({ width: 900, project: x => x }, names).keys()], [names[0]]);
   assert.equal(placeStationLabels({ width: 2700, project: x => 3 * x }, names).size, names.length);
   assert.deepEqual(stationLabelSpans(900, names), stationLabelSpans(900, [names[0]]));
+});
+
+test('optional branch signs yield both rows to required signs and return as track space opens', () => {
+  const signs = [
+    {name: 'Watford North', x: 115, width: 100, optional: true},
+    {name: 'Garston', x: 125, width: 80, optional: true},
+    {name: 'St Albans Abbey', x: 140, width: 110},
+    {name: 'Far stop', x: 260, width: 70, optional: true},
+  ];
+  const compact = placeRailSigns(signs, 350);
+  assert.deepEqual(compact.map(s => s.name), ['Watford North', 'St Albans Abbey', 'Far stop']);
+  assert.notEqual(compact[0].row, compact[1].row);
+  assert.equal(compact[2].row, 0);
+  const expanded = placeRailSigns(signs.map((s,i) => ({...s, x: 80 + 130*i})), 600);
+  assert.equal(expanded.length, signs.length);
+  assert.ok(expanded.every(s => s.row === 0));
+});
+
+test('sector fits both endpoints even when trains need more space than the viewport', () => {
+  const plan = corridorSpacing(1200, [badge(100, 20, 100), badge(200, 20, 100), badge(300, 20, 100)], []);
+  const margin = 107;
+  for (const viewport of [350, 600, 840, 1140]) {
+    const fit = railViewProjection(plan, 0, viewport, margin, true);
+    assert.ok(Math.abs((fit.axis.width + margin) * fit.scale - viewport) < 1e-6);
+    assert.equal(fit.axis.project(0), 0);
+    assert.equal(fit.axis.project(1200), fit.axis.width);
+    const detail = railViewProjection(plan, 1, viewport, margin, true);
+    assert.equal(detail.scale, 1);
+    assert.equal(detail.axis.width, plan.normalWidth);
+  }
+  const closeup = railViewProjection(plan, 0, 350, margin, false);
+  assert.equal(closeup.scale, 1);
+  assert.ok(closeup.axis.width + margin > 350);
 });
 
 test('tight spacing is set by occupied rows, including the outer edges', () => {
