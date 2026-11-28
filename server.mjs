@@ -45,6 +45,7 @@ const files = {
   '/station-codes.mjs': ['station-codes.mjs', 'text/javascript'],
   '/rail-monitor.mjs': ['rail-monitor.mjs','text/javascript'],
   '/rail-watch.mjs': ['rail-watch.mjs', 'text/javascript'],
+  '/rail-spacing.mjs': ['rail-spacing.mjs', 'text/javascript'],
   '/rail-symbols.mjs': ['rail-symbols.mjs', 'text/javascript'],
   '/style.css': ['style.css', 'text/css'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],

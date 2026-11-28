@@ -57,6 +57,7 @@ export function corridorSpacing(routeWidth, footprints, spans) {
   const minZoom = minimum / normalWidth;
   return {
     minZoom,
+    normalWidth,
     at(requestedZoom) {
       const zoom = Math.max(minZoom, requestedZoom);
       const width = normalWidth * zoom;

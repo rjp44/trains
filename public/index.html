@@ -44,8 +44,8 @@
       </div>
       <div class="zoom" hidden role="group" aria-label="Diagram view and zoom">
         <button id="sector">15-mile sector</button><button id="junction">Watford Junction</button
-        ><button id="zoomout" aria-label="Zoom out">−</button><button id="home">Hemel Hempstead</button
-        ><button id="zoomin" aria-label="Zoom in">+</button>
+        ><button id="zoomout" data-zoom="out" aria-label="Zoom out">−</button><button id="home">Hemel Hempstead</button
+        ><button id="zoomin" data-zoom="in" aria-label="Zoom in">+</button>
       </div>
       <section class="panel" aria-label="Track diagram">
         <div class="diagram-tools">
@@ -59,11 +59,18 @@
             Show dashboard
           </a>
         </div>
+        <div id="map-zoom" role="group" aria-label="Map zoom">
+          <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out (−)">−</button>
+          <button type="button" data-zoom="reset" aria-label="Reset map zoom" title="Reset map zoom (0)">100%</button>
+          <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in (+)">+</button>
+        </div>
         <div id="drawing">
           <svg
             id="map"
+            tabindex="0"
+            aria-keyshortcuts="+ - 0"
             viewBox="0 0 1140 368"
-            aria-label="Interactive WCML, Watford DC and Abbey line track diagram. Select a station to zoom, or a train or signal for details."
+            aria-label="WCML, Watford DC and Abbey line track diagram. Pinch or use plus and minus to zoom. Select a station, train or signal for details."
           ></svg>
           <aside id="hemel-fast" class="hemel-card" aria-label="Hemel fast lines" hidden></aside>
           <aside id="hemel-slow" class="hemel-card" aria-label="Hemel slow lines" hidden></aside>

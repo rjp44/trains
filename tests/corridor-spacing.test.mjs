@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { corridorSpacing } from '../web/corridor/spacing.mjs';
+import { corridorSpacing } from '../public/rail-spacing.mjs';
 import { placeStationLabels, stationLabelSpans } from '../web/corridor/station-labels.mjs';
 
 const badge = (x, y, half = 30) => ({ x, left: -half, right: half, top: y - 10, bottom: y + 10 });

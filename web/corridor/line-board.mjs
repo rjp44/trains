@@ -1,4 +1,4 @@
-import { corridorSpacing } from './spacing.mjs';
+import { corridorSpacing } from './rail-spacing.mjs';
 import { stationLabelSpans, placeStationLabels } from './station-labels.mjs';
 import { stationApproaches } from './station-approaches.mjs';
 import { isTrainCode } from './hemel.mjs';

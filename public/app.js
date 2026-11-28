@@ -2,6 +2,7 @@ import {railMonitor} from './rail-monitor.mjs';
 import {watchAction, stationPrompt} from './panel/watch.mjs';
 import {panelSettings, settingGroup, trainLabelControl} from './panel/settings.mjs';
 import {mapGestures} from './panel/gestures.mjs';
+import {corridorSpacing} from './rail-spacing.mjs';
 import {readSetting, saveSetting} from './panel/appearance.mjs';
 import {trainLabel} from './train-label.mjs';
 import {drawHeadcode, drawSignalLamp, showHeadcode, showSignalAspect, trainWidth} from './rail-symbols.mjs';
@@ -11,7 +12,6 @@ import {
   corridorTracks,
   withStationReports,
   berthDiagram,
-  fitStationNames,
   junctionPathSlots,
 } from '/rail.mjs';
 import { createLiveFeed } from '/live.mjs';
@@ -57,17 +57,16 @@ let mode = 'live',
   cursor = 0,
   rate = 1;
 const slotWidth = 64;
-const plotHalfWidth = 504;
 const baseWidth = 1140;
 let mapWidth = baseWidth,
   verticalScale = 1;
 let cardSpace, cardFrame;
-const slotPitch = () => (slotWidth * zoom * (mapWidth - 132)) / (2 * plotHalfWidth);
 let inspectedSignal = false;
 let trainSelection = null;
-let zoom = 1,
-  centre,
-  selection = 'R103:7';
+let activeView = 'sector', requestedZoom = 0, zoom = 1, minZoom = 0;
+let spacing, axis, spacingKey, centre, selection = 'R103:7';
+const maxZoom = 4, railLeft = 103;
+const railMidpoint = () => (railLeft + mapWidth - 4) / 2;
 let lastDraw = '';
 const request = async (path) => {
   if (globalThis.transportApp && path.startsWith('/data/')) return transportApp.json(path);
@@ -86,21 +85,29 @@ const diagram = berthDiagram(layout);
 const home = diagram.columns.get('HML');
 const junction = diagram.columns.get(watford.code);
 const overview = (diagram.start + diagram.end) / 2;
-const minZoom = (2 * plotHalfWidth) / ((diagram.end - diagram.start) * slotWidth);
+const routeX = slot => (slot - diagram.start + 1.5) * slotWidth;
+const routeSlot = x => x / slotWidth + diagram.start - 1.5;
+const routeWidth = routeX(diagram.end + 1.5);
 centre = home;
 const markers = corridorTracks(layout).flatMap((track) =>
   track.berths.map((berth) => ({
     ...berth,
     track,
-    x: diagram.positions.get(berth.id),
+    // The Abbey station report and platform 11 berth can both be occupied.
+    x: diagram.positions.get(berth.id) + (berth.kind === 'station-report' && berth.station === 'WFJ' ? 0.25 : 0),
   })),
 );
 const byBit = new Map(markers.filter((m) => m.bit).map((m) => [m.bit, m]));
 const byBerth = new Map(markers.map((m) => [m.id, m]));
 const hemel = hemelBerths(layout);
 const state = () => withStationReports(mode === 'live' ? live : replayBoard);
-const showBranches = () =>
-  !(centre === home && zoom >= 1) && centre - plotHalfWidth / (slotWidth * zoom) <= diagram.abbeyEnd + 0.5;
+const showBranches = () => activeView !== 'hemel';
+const stationBands = {
+  upper: layout.stations.filter(s => s.code === 'WFJ' || dc.stations.some(b => b.code === s.code)),
+  main: layout.stations.filter(s => s.code !== 'WFJ' && !dc.stations.some(b => b.code === s.code)),
+  dc: dc.stations.filter(s => !layout.stations.some(main => main.code === s.code)),
+  abbey: abbey.stations.filter(s => !layout.stations.some(main => main.code === s.code)),
+};
 function node(tag, text, cls) {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -115,18 +122,33 @@ function shape(parent, tag, attrs, text) {
   return el;
 }
 function position(x) {
-  return 111 + (mapWidth - 132) / 2 + (x - centre) * slotPitch();
+  return railMidpoint() + axis.project(routeX(x)) - axis.project(routeX(centre));
 }
-const inView = (x) => x >= 109 && x <= mapWidth - 19;
+const inView = x => x >= railLeft && x <= mapWidth - 4;
 function clampCentre() {
-  const half = plotHalfWidth / (slotWidth * zoom);
-  centre = zoom === minZoom ? overview : Math.max(diagram.start + half, Math.min(diagram.end - half, centre));
+  if (!axis) return;
+  const half = railMidpoint() - railLeft;
+  const x = Math.max(half, Math.min(axis.width - half, axis.project(routeX(centre))));
+  centre = routeSlot(axis.unproject(x));
 }
-function setZoom(value) {
-  zoom = Math.max(minZoom, Math.min(4, value));
+function projectView() {
+  minZoom = Math.max(spacing.minZoom, (mapWidth - 4 - railLeft) / spacing.normalWidth);
+  axis = spacing.at(Math.max(minZoom, requestedZoom));
+  zoom = axis.zoom;
   clampCentre();
-  saveSetting('hemel.view', {zoom, centre});
+}
+function saveView() {
+  saveSetting('hemel.view', {view: activeView, zoom: requestedZoom, centre});
+}
+function preset(view, column) {
+  activeView = view;
+  centre = column ?? ({sector: overview, hemel: home, watford: junction})[view];
+  requestedZoom = {sector: 0, hemel: 1, watford: 2}[view];
+}
+function selectView(view, column) {
+  preset(view, column);
   render(true);
+  saveView();
 }
 const popout = $('train-popout');
 const drawing = $('drawing');
@@ -228,8 +250,7 @@ function fresh(area) {
     : live.areaStatus[area] === 'Live';
 }
 function visible(m) {
-  if (m.track?.branch) return showBranches() && inView(position(m.x));
-  return (zoom < 1 || centre !== home || m.pilot) && inView(position(m.x));
+  return (!m.track.branch || showBranches()) && inView(position(m.x));
 }
 function activate(parent, xy, key, label, shownHead) {
   const el = shape(parent, 'g', {
@@ -287,13 +308,7 @@ function drawSignal(plot, m, x, y, values, small) {
   }
 }
 function drawTrains(trainsLayer, occupied, values, services) {
-  occupied.sort((a, b) => a.y - b.y || a.x - b.x);
-  for (const [i, { m, x, y }] of occupied.entries()) {
-    const prev = occupied[i - 1],
-      next = occupied[i + 1];
-    const left = prev?.y === y && prev.x < x ? x - prev.x : Infinity;
-    const right = next?.y === y && next.x > x ? next.x - x : Infinity;
-    const width = Math.min(trainWidth, left - 2, right - 2);
+  for (const { m, x, y } of occupied) {
     const stale = !fresh(m.id.slice(0, 2)),
       head = values[m.id];
     const train = activate(
@@ -309,7 +324,7 @@ function drawTrains(trainsLayer, occupied, values, services) {
     }
     const selected = trainSelection?.head === head && trainSelection?.berth === m.id;
     const friendly = labels.friendly ? trainLabel(services[m.id.slice(0, 2) + '/' + head]) : '';
-    showHeadcode(drawHeadcode(shape, train, 0, 0, width, selected), head, stale ? 3 : 1, friendly);
+    showHeadcode(drawHeadcode(shape, train, 0, 0, trainWidth, selected), head, stale ? 3 : 1, friendly);
   }
 }
 
@@ -335,18 +350,62 @@ function measureLabel(label, size) {
   }
   return labelWidths.get(key);
 }
+const signWidth = s => measureLabel(s.name, 15) + 8;
+const orderedStations = stops => [...stops].sort((a, b) => diagram.columns.get(a.code) - diagram.columns.get(b.code));
+function updateSpacing(values) {
+  const occupied = markers.filter(m => (!m.track.branch || showBranches()) && isTrainCode(values[m.id]));
+  const key = [activeView, ...occupied.map(m => m.id)].join('/');
+  if (key !== spacingKey) {
+    const boxes = [], spans = [];
+    // Strip coordinates only identify features on the same track. The map's
+    // vertical layout, font size and signal diameters are independent of zoom.
+    const strip = m => m.track.branch ? berthLane(m) : 5 + layout.tracks.findIndex(t => t.id === m.track.id);
+    for (const m of markers) if (m.bit && (!m.track.branch || showBranches())) {
+      const y = strip(m) * 44 - 17;
+      boxes.push({x: routeX(m.x), left: -9, right: 9, top: y - 8, bottom: y + 8});
+    }
+    for (const m of occupied) {
+      const y = strip(m) * 44;
+      boxes.push({x: routeX(m.x), left: -trainWidth/2, right: trainWidth/2, top: y - 11, bottom: y + 11});
+    }
+    for (const band of showBranches() ? Object.values(stationBands) : [layout.stations]) {
+      const sorted = orderedStations(band);
+      for (const [i, s] of sorted.entries()) {
+        const x = routeX(diagram.columns.get(s.code)), r = signWidth(s) / 2;
+        spans.push([0, x, r + 4], [x, routeWidth, r + 4]);
+        if (i > 0) spans.push([routeX(diagram.columns.get(sorted[i-1].code)), x, 26]);
+        if (i > 1) {
+          const prev = sorted[i-2];
+          spans.push([routeX(diagram.columns.get(prev.code)), x, signWidth(prev) / 2 + r + 6]);
+        }
+      }
+    }
+    for (const path of layout.junction.paths) if (showBranches()) {
+      const slots = junctionPathSlots(diagram, path);
+      for (let i = 1; i < slots.length; ++i) {
+        const [a, y] = slots[i-1], [b, z] = slots[i];
+        if (a !== b) spans.push([routeX(Math.min(a,b)), routeX(Math.max(a,b)), 10 + Math.abs(z-y)*12]);
+      }
+    }
+    spacing = corridorSpacing(routeWidth, boxes, spans);
+    spacingKey = key;
+  }
+  projectView();
+}
 function stationLabels(plot, stations, y, rowOffset) {
-  const items = stations
-    .map((station) => {
-      const column = diagram.columns.get(station.code);
-      return { station, column, x: position(column) };
-    })
-    .filter((s) => inView(s.x));
   const bounds = { top: Infinity, bottom: 0 };
-  for (const item of fitStationNames(items, 105, mapWidth - 4, measureLabel)) {
-    const baseline = y + item.row * rowOffset;
-    stationLabel(plot, item, baseline);
-    bounds.top = Math.min(bounds.top, baseline - item.size);
+  const ends = [-Infinity, -Infinity];
+  const signs = stations.map(station => {
+    const column = diagram.columns.get(station.code), labelX = position(column), width = signWidth(station);
+    return {station, column, labelX, width, left: labelX - width / 2, right: labelX + width / 2};
+  }).sort((a,b) => a.left - b.left);
+  for (const sign of signs) {
+    const row = sign.left >= ends[0] + 4 ? 0 : 1;
+    ends[row] = sign.right;
+    if (sign.right < railLeft || sign.left > mapWidth - 4) continue;
+    const baseline = y + row * rowOffset;
+    stationLabel(plot, {...sign, label: sign.station.name, size: 15}, baseline);
+    bounds.top = Math.min(bounds.top, baseline - 15);
     bounds.bottom = Math.max(bounds.bottom, baseline + 5);
   }
   return bounds;
@@ -362,8 +421,12 @@ function stationLabel(plot, { station, column, labelX, width, size, label }, y) 
   });
   shape(button, 'title', {}, name + ' · ' + station.code);
   const visit = () => stationPrompt(name,()=>monitor.watch(station.code),()=>{
-    centre = column;
-    setZoom(station.code === 'WFJ' ? 2 : 1.5);
+    if (station.code === 'WFJ' || station.code === 'HML')
+      selectView(station.code === 'WFJ' ? 'watford' : 'hemel');
+    else {
+      centre = column; requestedZoom = 1.5;
+      render(true); saveView();
+    }
   });
   button.addEventListener('click', visit);
   button.addEventListener('keydown', (e) => {
@@ -400,8 +463,9 @@ function drawJunction(plot, values, occupied) {
     });
     shape(el, 'title', {}, path.name);
   }
-  if (zoom >= 1.35 && inView(wx)) {
-    const x = position(junction - 1.7);
+  const approachX = position(junction - 1.7);
+  if (zoom >= 1.35 && inView(wx) && approachX - 125 >= railLeft) {
+    const x = approachX;
     textAt(plot, x, laneY(4.15), 'DC connection to P6', {
       'text-anchor': 'end',
       'font-size': 12,
@@ -432,7 +496,7 @@ function drawJunction(plot, values, occupied) {
         });
       }
     }
-    const named = branch.stations.filter((s) => !layout.stations.some((main) => main.code === s.code));
+    const named = stationBands[branch.id];
     const top = isDC
       ? Math.max(65 * verticalScale, 20 * verticalScale + 44, 41 * verticalScale + 22)
       : Math.max(laneY(10) + 41, 536 * verticalScale);
@@ -477,14 +541,15 @@ function drawJunction(plot, values, occupied) {
     if (!marker.track.branch || !visible(marker)) continue;
     const x = position(marker.x),
       y = laneY(berthLane(marker));
-    drawSignal(plot, marker, x, y, values, zoom < 1.7);
+    drawSignal(plot, marker, x, y, values, activeView !== 'watford');
     if (isTrainCode(values[marker.id])) occupied.push({ m: marker, x, y });
   }
   plot.append(labels);
 }
 function drawMap(values, services) {
   const svg = $('map'),
-    focusKey = document.activeElement?.dataset.key;
+    focusKey = document.activeElement?.dataset.key,
+    focusStation = document.activeElement?.dataset.station;
   const merged = showBranches(),
     naturalHeight = merged ? 592 : 368;
   let height = naturalHeight;
@@ -495,23 +560,20 @@ function drawMap(values, services) {
       // Reflow the track coordinates along both axes. A uniform SVG scale
       // keeps the lettering, signal circles and train badges in proportion.
       // On phones, give names and train badges more of the available width.
-      const designWidth = w < 600 ? (zoom === minZoom ? 590 : 460) : 840;
+      const designWidth = w < 600 ? 460 : 840;
       const scale = Math.min(w / designWidth, h / (naturalHeight * 0.82), 1.5);
       mapWidth = w / scale;
       height = h / scale;
     }
   }
   verticalScale = height / naturalHeight;
+  updateSpacing(values);
   svg.setAttribute('viewBox', '0 0 ' + mapWidth + ' ' + height);
   svg.replaceChildren();
   const defs = shape(svg, 'defs', {});
   shape(shape(defs, 'clipPath', { id: 'plot' }), 'rect', { x: 103, y: 0, width: mapWidth - 104, height });
   const plot = shape(svg, 'g', { 'clip-path': 'url(#plot)' });
-  const stations = layout.stations.filter(
-    (s) =>
-      inView(position(diagram.columns.get(s.code))) &&
-      (zoom < 1 || centre !== home || ['APS', 'HML', 'BKM'].includes(s.code)),
-  );
+  const stations = layout.stations.filter(s => inView(position(diagram.columns.get(s.code))));
   if (merged) {
     for (const branch of [dc, abbey]) {
       const stop = branch.stations.find(s => s.code === monitor.watchedStation);
@@ -524,13 +586,10 @@ function drawMap(values, services) {
   }
   const occupied = [];
   const mainY = (i) => (merged ? laneY(5 + i) : (97 + i * 66) * verticalScale);
-  const upperLabels = [], wcmlLabels = [];
   for (const s of stations) {
     const column = diagram.columns.get(s.code);
     const atJunction = merged && s.code === watford.code;
     const sharedDC = merged && dc.stations.some((stop) => stop.code === s.code);
-    if (merged && !atJunction && !sharedDC) wcmlLabels.push(s);
-    else upperLabels.push(s);
     const top = atJunction ? 50 * verticalScale : (sharedDC ? laneY(2) : mainY(0)) - 26;
     const bottom = atJunction ? laneY(10) + 24 : mainY(3) + 24;
     const d = 'M' + position(column) + ' ' + top + 'V' + bottom;
@@ -540,7 +599,7 @@ function drawMap(values, services) {
       stroke: s.code === monitor.watchedStation ? 'var(--hemel-band)'
         : atJunction ? 'var(--junction-band)' : 'var(--station-band)',
       'data-station-band': s.code,
-      'stroke-width': atJunction ? 1.5 * slotPitch() : 24,
+      'stroke-width': atJunction ? position(junction + 0.75) - position(junction - 0.75) : 24,
       'stroke-linejoin': 'round',
       'pointer-events': 'none',
     });
@@ -552,11 +611,11 @@ function drawMap(values, services) {
       'pointer-events': 'none',
     });
   }
-  const upperNames = stationLabels(plot, upperLabels, 20 * verticalScale, Math.max(22, 21 * verticalScale));
+  const upperNames = stationLabels(plot, merged ? stationBands.upper : layout.stations, 20 * verticalScale, Math.max(22, 21 * verticalScale));
   // Keep both label rows above the Down Fast signal hit targets. A crowded
   // second row grows away from the track, even on a short display.
-  const signalHitTop = mainY(0) - (zoom < 0.6 ? 22 : 30);
-  const wcmlNames = stationLabels(plot, wcmlLabels, signalHitTop - 9, -22);
+  const signalHitTop = mainY(0) - (activeView === 'sector' ? 22 : 30);
+  const wcmlNames = stationLabels(plot, merged ? stationBands.main : [], signalHitTop - 9, -22);
   // These are empty regions in the existing track geometry, in SVG units.
   // Cards use the right of the junction fan whenever that part of the map is visible.
   const fanEnd = position(junction + 1);
@@ -608,7 +667,7 @@ function drawMap(values, services) {
       const m = byBerth.get(berth.id);
       if (!visible(m)) continue;
       const x = position(m.x);
-      drawSignal(plot, m, x, y, values, zoom < 0.6);
+      drawSignal(plot, m, x, y, values, activeView === 'sector');
       if (isTrainCode(values[m.id])) occupied.push({ m, x, y });
     }
   }
@@ -638,6 +697,8 @@ function drawMap(values, services) {
   });
   if (focusKey)
     svg.querySelector('[data-key="' + CSS.escape(focusKey) + '"]')?.focus({ preventScroll: true });
+  else if (focusStation)
+    (svg.querySelector('[data-station="' + CSS.escape(focusStation) + '"]') ?? svg).focus({preventScroll: true});
   const reports = (mode === 'live' ? live : replayBoard).abbey;
   $('branch-status').hidden = !merged;
   $('branch-status').textContent =
@@ -648,23 +709,20 @@ function drawMap(values, services) {
         : reports?.reports.length
           ? 'Abbey markers show the last reported station call.'
           : 'Awaiting the next Abbey station report.';
-  $('zoomin').disabled = zoom === 4;
-  $('zoomout').disabled = zoom === minZoom;
-  for (const [id, selected] of [['sector',zoom === minZoom],['home',centre === home && zoom === 1],['junction',centre === junction && zoom === 2]])
-    $(id).setAttribute('aria-pressed',String(selected));
+  for (const button of document.querySelectorAll('[data-zoom]')) {
+    if (button.dataset.zoom === 'reset') button.textContent = Math.round(zoom * 100) + '%';
+    if (button.dataset.zoom === 'out') button.disabled = zoom <= minZoom;
+    if (button.dataset.zoom === 'in') button.disabled = zoom >= maxZoom;
+  }
+  for (const [id, view] of [['sector','sector'],['home','hemel'],['junction','watford']])
+    $(id).setAttribute('aria-pressed', String(activeView === view));
   const target = new URL(viewLink.href);
-  if (centre === home && zoom === 1) target.searchParams.set('view', 'hemel');
-  else if (centre === junction && zoom === 2) target.searchParams.set('view', 'watford');
+  if (activeView !== 'sector') target.searchParams.set('view', activeView);
   else target.searchParams.delete('view');
   viewLink.href = target.href;
-  $('extent').textContent =
-    zoom === minZoom
-      ? '15 rail miles each way · WCML, Watford DC & Abbey line'
-      : zoom === 1 && centre === home
-        ? 'Apsley to Berkhamsted · Four running lines'
-        : Math.abs(centre - junction) < 0.01
-          ? 'Watford Junction · DC, main-line and Abbey platforms'
-          : 'Hemel sector · WCML';
+  $('extent').textContent = activeView === 'hemel' ? 'Hemel Hempstead · Four running lines'
+    : activeView === 'watford' ? 'Watford Junction · DC, main-line and Abbey platforms'
+    : '15 rail miles each way · WCML, Watford DC & Abbey line';
 }
 
 function trainDetails(board) {
@@ -889,7 +947,7 @@ function render(force = false) {
         : 'Waiting for the public feed. You can also open the recorded replay.'
       : mode === 'live' && board.status === 'Partial'
         ? 'Partial live coverage · check feed status for each area.'
-        : mode !== 'live' && (zoom < 1 || centre !== home) && !board.areaTimes.WJ
+        : mode !== 'live' && showBranches() && !board.areaTimes.WJ
           ? 'Recorded coverage is Rugby R1. Watford WJ has no observations in this sample.'
           : '';
   const signature = JSON.stringify([
@@ -1016,9 +1074,8 @@ async function switchMode(next, fitRecording = false) {
     replayStart = recording.startTime ?? recording.frames[0].time;
     if (fitRecording) {
       const watfordSample = sample.includes('watford'), hemelSample = sample.includes('/hemel-');
-      centre = watfordSample ? junction : hemelSample ? home : overview;
-      zoom = watfordSample ? 2 : hemelSample ? 1 : minZoom;
-      saveSetting('hemel.view', {zoom, centre});
+      preset(watfordSample ? 'watford' : hemelSample ? 'hemel' : 'sector');
+      saveView();
     }
   }
   if (requestId !== modeRequest) return;
@@ -1065,41 +1122,89 @@ setInterval(() => {
     else {playing = false; $('run').textContent = 'Play again';}
   }
 }, 250);
-$('sector').onclick = () => {
-  centre = overview;
-  setZoom(minZoom);
-};
-$('junction').onclick = () => {
-  centre = junction;
-  setZoom(2);
-};
-$('zoomin').onclick = () => setZoom(zoom * 1.5);
-$('zoomout').onclick = () => setZoom(zoom / 1.5);
-$('home').onclick = () => {
-  centre = home;
-  setZoom(1);
-};
+$('sector').onclick = () => selectView('sector');
+$('junction').onclick = () => selectView('watford');
+$('home').onclick = () => selectView('hemel');
 const svg = $('map');
-
-let stepped = false;
+function svgX(clientX) {
+  if (clientX == null) return railMidpoint();
+  const matrix = svg.getScreenCTM();
+  return Math.max(railLeft, Math.min(mapWidth - 4, (clientX - matrix.e) / matrix.a));
+}
+let paintRequest, saveTimer;
+function paintCamera() {
+  if (!paintRequest) paintRequest = requestAnimationFrame(() => {
+    paintRequest = null;
+    render(true);
+  });
+}
+function zoomAt(next, from, to = from) {
+  if (!axis) return;
+  const world = axis.unproject(axis.project(routeX(centre)) + svgX(from) - railMidpoint());
+  requestedZoom = next <= minZoom ? 0 : Math.min(maxZoom, next);
+  projectView();
+  centre = routeSlot(axis.unproject(axis.project(world) - svgX(to) + railMidpoint()));
+  clampCentre();
+  paintCamera();
+}
+function saveSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveView, 150);
+}
+window.addEventListener('pagehide', saveView);
+function zoomAction(action) {
+  zoomAt(action === 'reset' ? 1 : action === 'out' ? zoom / 1.25 : zoom * 1.25);
+  saveView();
+}
+for (const button of document.querySelectorAll('[data-zoom]'))
+  button.onclick = () => zoomAction(button.dataset.zoom);
+// Desktop WebKit can report a trackpad pinch as a GestureEvent. Touchscreens
+// already provide both contacts through mapGestures.
+let trackpadGesture;
+if (!navigator.maxTouchPoints) {
+  svg.addEventListener('gesturestart', e => {
+    e.preventDefault();
+    trackpadGesture = {scale: 1, x: e.clientX};
+  }, {passive: false});
+  window.addEventListener('gesturechange', e => {
+    if (!trackpadGesture || !(e.scale > 0)) return;
+    e.preventDefault();
+    zoomAt(zoom * e.scale / trackpadGesture.scale, trackpadGesture.x, e.clientX);
+    trackpadGesture = {scale: e.scale, x: e.clientX};
+  }, {passive: false});
+  window.addEventListener('gestureend', e => {
+    if (!trackpadGesture) return;
+    e.preventDefault();
+    trackpadGesture = null;
+    saveView();
+  }, {passive: false});
+}
+svg.addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  if (trackpadGesture) return;
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? svg.clientHeight : 1;
+  zoomAt(zoom * Math.exp(-e.deltaY * unit * 0.006), e.clientX);
+  saveSoon();
+}, {passive: false});
+svg.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const action = {'+': 'in', '=': 'in', '-': 'out', '0': 'reset'}[e.key];
+  if (action) { e.preventDefault(); zoomAction(action); }
+});
 mapGestures(svg, {
   drag(from, to) {
-    if (zoom === minZoom) return;
-    centre -= (to.x - from.x) / svg.getScreenCTM().a / slotPitch();
-    clampCentre(); render(true);
+    if (!axis) return;
+    const dx = (to.x - from.x) / svg.getScreenCTM().a;
+    centre = routeSlot(axis.unproject(axis.project(routeX(centre)) - dx));
+    clampCentre(); paintCamera();
   },
   pinch(from, to) {
-    const ratio = to.span / from.span;
-    if (stepped || Math.abs(to.span - from.span) < 18 || (ratio < 1.25 && ratio > .8)) return false;
-    stepped = true;
-    if (to.span < from.span) $('sector').click();
-    else if (zoom === minZoom) {
-      const x = new DOMPoint(from.x,from.y).matrixTransform(svg.getScreenCTM().inverse()).x;
-      $(Math.abs(x-position(home)) <= Math.abs(x-position(junction)) ? 'home' : 'junction').click();
-    }
+    if (!axis || !(to.span > 0)) return false;
+    zoomAt(zoom * to.span / from.span, from.x, to.x);
     return true;
   },
-  finish() { stepped = false; saveSetting('hemel.view',{zoom,centre}); }
+  finish: saveView,
 });
 function updateDisplay() {
   diagramOnly = readDisplayMode();
@@ -1135,7 +1240,14 @@ function followColumn(column) {
 }
 const monitor=railMonitor({id:'hemel',layout,host:drawing,ids:[...byBerth.keys()],defaultStation:'HML',
   live:()=>mode==='live',fresh,play:{mode:()=>settings.sound.mode,sound:(down,stop)=>settings.sound.play(down,stop)},
-  focus:key=>{if(zoom<1){zoom=1;lastDraw="";} followColumn(byBerth.get(key)?.x);},stationFocus:s=>followColumn(diagram.columns.get(s?.id)),
+  focus: key => {
+    const m = byBerth.get(key);
+    if (m?.track.branch && !showBranches()) { preset('sector', m.x); lastDraw = ''; }
+    followColumn(m?.x);
+  }, stationFocus: s => {
+    if (s && !showBranches() && !layout.stations.some(stop => stop.code === s.id)) preset('sector');
+    followColumn(diagram.columns.get(s?.id));
+  },
   draw:()=>render(true)});
 const settings = panelSettings({
   id:'hemel', name:'Hemel rail monitor', toolbar:document.querySelector('.diagram-tools'),
@@ -1151,7 +1263,9 @@ const settings = panelSettings({
   installHelp:document.querySelector('.mobile-install'),
   credits:'Network Rail via Signal Maps; schedules from Open Rail, Abbey reports from Railinfo, mappings from EASMData and station codes from the Office of Rail and Road.'
 });
-document.querySelector('.zoom').remove();
+document.querySelector('.zoom[hidden]').remove();
+const toolbar = document.querySelector('.diagram-tools');
+toolbar.insertBefore($('map-zoom'), toolbar.lastElementChild);
 document.querySelector('.modebox').remove();
 new ResizeObserver(() => {
   if (diagramOnly) render(true);
@@ -1162,16 +1276,15 @@ new ResizeObserver(() => {
 }).observe(drawing);
 new ResizeObserver(positionPopout).observe(popout);
 const initialView = new URLSearchParams(location.search).get('view') ?? globalThis.transportApp?.manifest?.defaultView ?? 'sector';
-if (initialView === 'sector') {
-  centre = overview;
-  zoom = minZoom;
-} else if (initialView === 'watford') {
-  centre = junction;
-  zoom = 2;
-}
+preset(['hemel','watford'].includes(initialView) ? initialView : 'sector');
 const saved = readSetting('hemel.view');
 if (!new URLSearchParams(location.search).has('view') && Number.isFinite(saved?.centre) && Number.isFinite(saved.zoom)) {
-  centre = saved.centre; zoom = Math.max(minZoom,Math.min(4,saved.zoom)); clampCentre();
+  // Before continuous zoom, only the exact Hemel and Watford presets had names.
+  activeView = ['sector','hemel','watford'].includes(saved.view) ? saved.view
+    : saved.centre === home && saved.zoom === 1 ? 'hemel'
+    : saved.centre === junction && saved.zoom === 2 ? 'watford' : 'sector';
+  centre = saved.centre;
+  requestedZoom = Math.max(0, Math.min(maxZoom, saved.zoom));
 }
 if (initialView === 'watford') $('sample').value = '/data/watford-replay.json';
 if (initialView === 'hemel') $('sample').value = '/data/hemel-replay.json';

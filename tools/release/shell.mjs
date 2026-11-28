@@ -20,7 +20,7 @@ export function writeAppShell(dir, id, entry, signedEntry, publicKey) {
       fs.copyFileSync(path.join(root, n), path.join(appDir, n));
     if (regional) {
       fs.copyFileSync(path.join(root, 'esp32/station-approaches.mjs'), path.join(appDir, 'station-approaches.mjs'));
-      for (const name of ['icons','manifest.webmanifest','hemel.mjs','regional.mjs','rail-symbols.mjs','rail-watch.mjs','rail-monitor.mjs','train-label.mjs','station-codes.mjs'])
+      for (const name of ['icons','manifest.webmanifest','hemel.mjs','regional.mjs','rail-symbols.mjs','rail-spacing.mjs','rail-watch.mjs','rail-monitor.mjs','train-label.mjs','station-codes.mjs'])
         fs.cpSync(path.join(root,'public',name),path.join(appDir,name),{recursive:true});
     } else write('app.js', read('app.js').replaceAll("from '/", "from './"));
   } else
